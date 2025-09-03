@@ -1,0 +1,106 @@
+/// File: models/proof_of_service/proof_of_service_detail_model.dart
+
+import 'package:hive/hive.dart';
+
+// Tambahkan baris 'part' ini. Nama file harus sesuai.
+part 'proof_of_service_detail_model.g.dart';
+
+@HiveType(typeId: 10) // <-- Tambahkan anotasi HiveType dengan ID unik
+class ProofOfServiceDetailModel {
+  @HiveField(0) // <-- Tambahkan anotasi HiveField untuk setiap properti
+  final ProofOfServiceHeader header;
+
+  @HiveField(1)
+  final List<ProofOfServiceItemDetail> detail;
+
+  ProofOfServiceDetailModel({
+    required this.header,
+    required this.detail,
+  });
+
+  // Biarkan factory fromJson tetap ada untuk parsing data dari API
+  factory ProofOfServiceDetailModel.fromJson(Map<String, dynamic> json) {
+    return ProofOfServiceDetailModel(
+      header: ProofOfServiceHeader.fromJson(json['header'] ?? {}),
+      detail: (json['detail'] as List<dynamic>? ?? [])
+          .map((item) => ProofOfServiceItemDetail.fromJson(item))
+          .toList(),
+    );
+  }
+}
+
+@HiveType(typeId: 11) // <-- ID unik lainnya
+class ProofOfServiceHeader {
+  @HiveField(0)
+  final String transNo;
+  @HiveField(1)
+  final String poDate;
+  @HiveField(2)
+  final String shipToCode;
+  @HiveField(3)
+  final String shipToName;
+  @HiveField(4)
+  final String shipToAddress;
+  @HiveField(5)
+  final String branchCode;
+  @HiveField(6)
+  final String branchName;
+  @HiveField(7)
+  final String storeEmail;
+
+  ProofOfServiceHeader({
+    required this.transNo,
+    required this.poDate,
+    required this.shipToCode,
+    required this.shipToName,
+    required this.shipToAddress,
+    required this.branchCode,
+    required this.branchName,
+    required this.storeEmail,
+  });
+
+  factory ProofOfServiceHeader.fromJson(Map<String, dynamic> json) {
+    return ProofOfServiceHeader(
+      transNo: json['trans_no'] ?? '',
+      poDate: json['po_date'] ?? '',
+      shipToCode: json['ship_to_code'] ?? '',
+      shipToName: json['ship_to_name'] ?? '',
+      shipToAddress: json['ship_to_address'] ?? '',
+      branchCode: json['branch_code'] ?? '',
+      branchName: json['branch_name'] ?? '',
+      storeEmail: json['store_email'] ?? '',
+    );
+  }
+}
+
+@HiveType(typeId: 12) // <-- ID unik lainnya
+class ProofOfServiceItemDetail {
+  @HiveField(0)
+  final String articleNo;
+  @HiveField(1)
+  final String articleDesc;
+  @HiveField(2)
+  final String unitDesc;
+  @HiveField(3)
+  final String serialNo;
+  @HiveField(4)
+  final String unitType;
+
+  ProofOfServiceItemDetail({
+    required this.articleNo,
+    required this.articleDesc,
+    required this.unitDesc,
+    required this.serialNo,
+    required this.unitType,
+  });
+
+  factory ProofOfServiceItemDetail.fromJson(Map<String, dynamic> json) {
+    return ProofOfServiceItemDetail(
+      articleNo: json['article_no'] ?? '',
+      articleDesc: json['description'] ?? '',
+      unitDesc: json['article_name_unit'] ?? '',
+      serialNo: json['serial_no'] ?? '',
+      unitType: json['unit_type'] ?? '',
+    );
+  }
+}
