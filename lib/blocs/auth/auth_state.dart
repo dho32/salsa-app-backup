@@ -23,3 +23,11 @@ class AuthRequiresMaintenanceSelection extends AuthState {
 
   AuthRequiresMaintenanceSelection(this.maintenanceOptions, this.token);
 }
+
+class AuthUpdateRequired extends AuthState {
+  final String newVersionUrl; // URL ke Play Store / App Store
+
+  AuthUpdateRequired(this.newVersionUrl);
+
+  List<Object> get props => [newVersionUrl];
+}

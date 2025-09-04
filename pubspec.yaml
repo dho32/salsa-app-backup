@@ -66,6 +66,7 @@ dependencies:
   bloc_concurrency: ^0.3.0 # untuk concurrency BLoC
   upgrader: ^11.4.0 # untuk cek version di playstore / appstore
   flutter_launcher_icons: ^0.14.4 # untuk generate icon launcher
+  package_info_plus: ^8.3.1 #untuk cek version app
   qr_code_scanner:
     git:
       url: https://github.com/RomyITCM/qr_code_scanner.git

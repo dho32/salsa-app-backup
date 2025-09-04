@@ -1,8 +1,12 @@
+// auth_gate.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/screens/common/login/login_screen.dart';
 import 'package:salsa/screens/common/main_navigation/main_navigation.dart';
-import 'package:upgrader/upgrader.dart';
+// Hapus 'package:upgrader/upgrader.dart';
+import 'package:url_launcher/url_launcher.dart'; // Tambahkan ini
+
 import '../../../blocs/auth/auth_bloc.dart';
 import '../../../blocs/auth/auth_state.dart';
 
@@ -11,35 +15,55 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return UpgradeAlert(
-      upgrader: Upgrader(
-          countryCode: 'ID',
-          minAppVersion: '1.0.2',
-          debugLogging: false,
-          storeController: UpgraderStoreController(
-            onAndroid: () => UpgraderAppcastStore(
-                appcastURL:
-                'https://raw.githubusercontent.com/RomyITCM/salsa/main/appcast.xml'),
-            oniOS: () => UpgraderAppcastStore(
-                appcastURL:
-                'https://raw.githubusercontent.com/RomyITCM/salsa/main/appcast.xml'),
-          )),
-      child: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, state) {
-          if (state is AuthAuthenticated) {
-            return const MainNavigationScreen();
-          }
+    // Hapus widget UpgradeAlert. Kita ganti dengan BlocConsumer.
+    return BlocConsumer<AuthBloc, AuthState>(
+      listener: (context, state) {
+        // Listener akan bereaksi sekali terhadap state baru, cocok untuk dialog/snackbar
+        if (state is AuthUpdateRequired) {
+          showDialog(
+            context: context,
+            barrierDismissible: false, // Wajibkan pengguna berinteraksi
+            builder: (BuildContext dialogContext) {
+              return AlertDialog(
+                title: const Text('Versi Aplikasi Usang'),
+                content: const Text(
+                  'Anda harus memperbarui aplikasi ke versi terbaru untuk dapat melanjutkan.',
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    child: const Text('UPDATE SEKARANG'),
+                    onPressed: () {
+                      // Buka URL Play Store / App Store
+                      launchUrl(
+                        Uri.parse(state.newVersionUrl),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+        }
+      },
+      builder: (context, state) {
+        // Builder akan membangun ulang UI setiap kali state berubah
+        if (state is AuthAuthenticated) {
+          return const MainNavigationScreen();
+        }
 
-          if (state is AuthFirstLoading) {
-            return const Scaffold(
-              backgroundColor: Color(0xFFEAF3FB),
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+        if (state is AuthFirstLoading || state is AuthInitial) {
+          return const Scaffold(
+            backgroundColor: Color(0xFFEAF3FB),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-          return const LoginScreen();
-        },
-      ),
+        // Untuk state: AuthUnauthenticated, AuthFailure, AuthUpdateRequired
+        // kita tetap tampilkan LoginScreen.
+        // Dialog untuk AuthUpdateRequired akan muncul di atasnya karena di-handle oleh listener.
+        return const LoginScreen();
+      },
     );
   }
 }

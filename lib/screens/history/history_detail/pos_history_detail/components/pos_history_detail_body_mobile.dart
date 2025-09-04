@@ -82,71 +82,88 @@ class PosHistoryDetailBodyMobile extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
+            // Row(
+            //   crossAxisAlignment: CrossAxisAlignment.start,
+            //   children: [
+            //     Expanded(
+            //       child: Column(
+            //         crossAxisAlignment: CrossAxisAlignment.start,
+            //         children: [
+            //           _buildTitledInfo("Nama Lengkap", data.name),
+            //           _buildTitledInfo("Nomor Telepon", data.phone),
+            //         ],
+            //       ),
+            //     ),
+            //     const SizedBox(width: 16),
+            //     Padding(
+            //       padding: const EdgeInsets.only(right: 16.0),
+            //       child: GestureDetector(
+            //         onTap: () {
+            //           // 2. Buat objek CapturedImageDetail "palsu"
+            //           final dummyDetail = CapturedImageDetail(
+            //             imagePath: data.imageUrl,
+            //             // Isi field lain dengan data kosong atau default
+            //             timestamp: DateTime.now(),
+            //             latitude: 0.0,
+            //             longitude: 0.0,
+            //             address: 'Alamat tidak tersedia',
+            //             technicianName: 'N/A',
+            //             deviceModel: 'N/A',
+            //             transNo: 'N/A',
+            //           );
+            //           // 3. Navigasi ke FullScreenImageViewer
+            //           Navigator.push(
+            //             context,
+            //             MaterialPageRoute(
+            //               builder: (_) => FullScreenImageViewer(
+            //                 imageDetail: dummyDetail,
+            //                 isNetworkImage:
+            //                     true, // <-- PENTING: Beri tahu bahwa ini gambar dari internet
+            //               ),
+            //             ),
+            //           );
+            //         },
+            //         child: ClipRRect(
+            //           borderRadius: BorderRadius.circular(8),
+            //           child: Image.network(
+            //             data.imageUrl,
+            //             width: 80,
+            //             height: 80,
+            //             fit: BoxFit.cover,
+            //             errorBuilder: (context, error, stackTrace) => Container(
+            //               width: 80,
+            //               height: 80,
+            //               color: Colors.grey.shade200,
+            //               child: const Icon(Icons.person,
+            //                   size: 40, color: Colors.grey),
+            //             ),
+            //           ),
+            //         ),
+            //       ),
+            //     )
+            //   ],
+            // ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTitledInfo("Nama Lengkap", data.name),
-                      _buildTitledInfo("Nomor Telepon", data.phone),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Padding(
-                  padding: const EdgeInsets.only(right: 16.0),
-                  child: GestureDetector(
-                    onTap: () {
-                      // 2. Buat objek CapturedImageDetail "palsu"
-                      final dummyDetail = CapturedImageDetail(
-                        imagePath: data.imageUrl,
-                        // Isi field lain dengan data kosong atau default
-                        timestamp: DateTime.now(),
-                        latitude: 0.0,
-                        longitude: 0.0,
-                        address: 'Alamat tidak tersedia',
-                        technicianName: 'N/A',
-                        deviceModel: 'N/A',
-                        transNo: 'N/A',
-                      );
-                      // 3. Navigasi ke FullScreenImageViewer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => FullScreenImageViewer(
-                            imageDetail: dummyDetail,
-                            isNetworkImage:
-                                true, // <-- PENTING: Beri tahu bahwa ini gambar dari internet
-                          ),
-                        ),
-                      );
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        data.imageUrl,
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 80,
-                          height: 80,
-                          color: Colors.grey.shade200,
-                          child: const Icon(Icons.person,
-                              size: 40, color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTitledInfo("Nama Lengkap", data.name),
+                    _buildTitledInfo("NIK", data.nik),
+                  ],
+                )),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTitledInfo("Nomor Telepon", data.phone),
+                    _buildTitledInfo("Jabatan", data.position),
+                  ],
+                )),
               ],
             ),
             Row(
               children: [
-                Expanded(child: _buildTitledInfo("NIK", data.nik)),
-                Expanded(child: _buildTitledInfo("Jabatan", data.position)),
               ],
             ),
           ],

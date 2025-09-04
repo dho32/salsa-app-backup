@@ -61,7 +61,7 @@ void main() async {
     RepositoryProvider.value(
       value: authRepository,
       child: BlocProvider(
-        create: (_) => AuthBloc(authRepository: authRepository)..add(AppStarted()),
+        create: (_) => AuthBloc(authRepository: authRepository)..add(AppLoaded()),
         child: const MyApp(),
       ),
     ),

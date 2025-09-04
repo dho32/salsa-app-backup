@@ -34,20 +34,24 @@ class AuthRepository {
     }
   }
 
-  Future<void> saveUserSession(String token, {MaintenanceInfo? selectedMaintenance}) async {
+  Future<void> saveUserSession(String token,
+      {MaintenanceInfo? selectedMaintenance}) async {
     await AuthStorage.saveToken(token);
     final payload = JwtHelper.decode(token);
     if (payload == null) throw Exception("Token tidak valid");
 
     // Tentukan maintenance_by dan maintenance_by_name
-    final maintenanceBy = selectedMaintenance?.maintenanceBy ?? payload['maintenance'][0]['maintenance_by'];
-    final maintenanceByName = selectedMaintenance?.maintenanceByName ?? payload['maintenance'][0]['maintenance_by_name'];
+    final maintenanceBy = selectedMaintenance?.maintenanceBy ??
+        payload['maintenance'][0]['maintenance_by'];
+    final maintenanceByName = selectedMaintenance?.maintenanceByName ??
+        payload['maintenance'][0]['maintenance_by_name'];
 
     final deviceInfo = DeviceInfoPlugin();
     String deviceModel = 'Unknown Device';
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
-      deviceModel = "${androidInfo.manufacturer} ${androidInfo.model}"; // mis: "Samsung SM-A525F"
+      deviceModel =
+          "${androidInfo.manufacturer} ${androidInfo.model}"; // mis: "Samsung SM-A525F"
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       deviceModel = iosInfo.utsname.machine; // mis: "iPhone13,2"
@@ -57,8 +61,10 @@ class AuthRepository {
       userId: payload['user_id'],
       name: payload['user_name'],
       email: payload['email'],
-      maintenanceBy: maintenanceBy, // Gunakan nilai yang sudah ditentukan
-      maintenanceByName: maintenanceByName, // Gunakan nilai yang sudah ditentukan
+      maintenanceBy: maintenanceBy,
+      // Gunakan nilai yang sudah ditentukan
+      maintenanceByName: maintenanceByName,
+      // Gunakan nilai yang sudah ditentukan
       role: payload['role_code'],
       team: payload['team'],
       deviceModel: deviceModel,
@@ -77,7 +83,7 @@ class AuthRepository {
     return (await getToken()) != null;
   }
 
-  Future<void> recordLogin(String token, String vendorId) async {
+  Future<void> recordLogin(String token, String vendorId, String appVersion) async {
     try {
       // Ambil data dari token untuk dikirim
       final payload = JwtHelper.decode(token);
@@ -99,6 +105,7 @@ class AuthRepository {
         'vendor_id': vendorId,
         'device': deviceModel,
         'login_time': DateTime.now().toIso8601String(),
+        'app_version': appVersion,
       };
 
       JsonEncoder encoder = const JsonEncoder.withIndent('  ');
@@ -110,7 +117,10 @@ class AuthRepository {
       Uri uri = getUrl(pathUrl: '/login/log');
       http.post(
         uri,
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
         body: jsonEncode(requestBody),
       );
     } catch (e) {
@@ -141,11 +151,40 @@ class AuthRepository {
       Uri uri = getUrl(pathUrl: '/logout/log');
       await http.post(
         uri,
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
         body: jsonEncode(requestBody),
       );
     } catch (e) {
       print("Gagal mencatat log logout: $e");
+    }
+  }
+
+  // auth_repository.dart
+
+  Future<Map<String, String>> getAppConfig() async {
+    Uri uri = getUrl(pathUrl: '/version');
+
+    try {
+      final response = await http.get(uri);
+      final decodedResponse = json.decode(response.body);
+
+      if (response.statusCode == 200 && decodedResponse['status'] == 'OK') {
+        final result = decodedResponse['result'];
+        return {
+          'requiredVersion': result['min_app_version'],
+          'updateUrl': Platform.isAndroid
+              ? result['update_url_android']
+              : result['update_url_ios'],
+        };
+      } else {
+        throw Exception('Gagal memuat konfigurasi aplikasi');
+      }
+    } catch (e) {
+      throw Exception(
+          'Tidak dapat terhubung ke server untuk memeriksa pembaruan.');
     }
   }
 }

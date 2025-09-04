@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../blocs/auth/auth_bloc.dart';
 import '../../../blocs/auth/auth_event.dart';
@@ -25,6 +26,8 @@ class _LoginScreenState extends State<LoginScreen>
   String? passwordError;
   final emailFocusNode = FocusNode();
   final passwordFocusNode = FocusNode();
+  String _appVersion = '';
+  String _version = '';
 
   @override
   void initState() {
@@ -33,6 +36,15 @@ class _LoginScreenState extends State<LoginScreen>
         vsync: this, duration: const Duration(milliseconds: 800));
     _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _controller.forward();
+    _initAppVersion();
+  }
+
+  Future<void> _initAppVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      _version = packageInfo.version;
+      _appVersion = 'Versi $_version';
+    });
   }
 
   @override
@@ -54,8 +66,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_formKey.currentState!.validate()) return;
 
     context.read<AuthBloc>().add(LoginRequested(
-        emailController.text.trim().toLowerCase(), passwordController.text));
-
+        emailController.text.trim().toLowerCase(), passwordController.text, _version));
   }
 
   @override
@@ -70,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen>
           } else if (errorMsg.contains("password")) {
             passwordError = state.message;
             FocusScope.of(context).requestFocus(passwordFocusNode);
-          }else {
+          } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),
             );
@@ -170,8 +181,10 @@ class _LoginScreenState extends State<LoginScreen>
                           },
                           decoration: InputDecoration(
                             labelText: "Nomor Telepon / NIK",
-                            hintText: "Masukan Nomor Telepon / NIK anda yang terdaftar",
-                            prefixIcon: const Icon(Icons.account_circle_outlined),
+                            hintText:
+                                "Masukan Nomor Telepon / NIK anda yang terdaftar",
+                            prefixIcon:
+                                const Icon(Icons.account_circle_outlined),
                             filled: true,
                             fillColor: Colors.white,
                             border: OutlineInputBorder(
@@ -255,7 +268,14 @@ class _LoginScreenState extends State<LoginScreen>
                         const Text(
                           "Tidak punya akun? Hubungi admin.",
                           style: TextStyle(fontSize: 12, color: Colors.grey),
-                        )
+                        ),
+                        const SizedBox(height: 24),
+                        if (_appVersion.isNotEmpty)
+                          Text(
+                            _appVersion,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54),
+                          ),
                       ],
                     ),
                   ),
