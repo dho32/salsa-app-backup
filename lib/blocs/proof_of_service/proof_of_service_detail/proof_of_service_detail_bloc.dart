@@ -63,7 +63,7 @@ class ProofOfServiceDetailBloc
 
       if (draft != null) {
         // logic untuk cek status card
-        if (draft.photosAfter.isNotEmpty) {
+        if (draft.isCompleted) {
           statuses[key] = ValidationStatus.completed;
         } else {
           statuses[key] = ValidationStatus.inProgress;

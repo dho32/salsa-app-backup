@@ -45,6 +45,29 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _noteController.text = widget.initialData?.note ?? '';
+
+    if (widget.initialData != null && widget.initialData!.isCompleted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<PosValidationBloc>().add(MarkAsInProgress(
+            transNo: widget.transNo,
+            serialNo: widget.serialNo,
+            note: _noteController.text,
+            articleNo: widget.articleNo,
+            articleDesc: widget.articleDesc,
+            articleUnitDesc: widget.articleUnitDesc,
+            capacity: widget.capacity,
+            articleType: widget.unitType,
+          ));
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _noteController.dispose();
     super.dispose();
@@ -160,6 +183,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   bloc.add(SavePosValidationData(
                     transNo: widget.transNo,
                     serialNo: widget.serialNo,
+                    markAsCompleted: false,
                     note: _noteController.text,
                     articleNo: widget.articleNo,
                     articleDesc: widget.articleDesc,

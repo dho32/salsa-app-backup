@@ -67,3 +67,25 @@ class SavePosValidationData extends PosValidationEvent {
     required this.articleType,
   });
 }
+
+class MarkAsInProgress extends PosValidationEvent {
+  final String transNo;
+  final String serialNo;
+  final String note;
+  final String articleNo;
+  final String articleDesc;
+  final String articleUnitDesc;
+  final int capacity;
+  final String articleType;
+
+  const MarkAsInProgress({
+    required this.transNo,
+    required this.serialNo,
+    required this.note,
+    required this.articleNo,
+    required this.articleDesc,
+    required this.articleUnitDesc,
+    required this.capacity,
+    required this.articleType,
+  });
+}

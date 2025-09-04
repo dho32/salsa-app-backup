@@ -18,6 +18,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     on<RemovePhotoAfter>(_onRemovePhotoAfter);
     on<UpdateMeasurementAfter>(_onUpdateMeasurementAfter);
     on<SavePosValidationData>(_onSaveData);
+    on<MarkAsInProgress>(_onMarkAsInProgress);
   }
 
   // Helper untuk membuat daftar pengukuran default berdasarkan tipe unit
@@ -123,7 +124,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       final currentState = state as PosValidationLoaded;
       final entry = PosValidationEntryModel(
         transNo: event.transNo,
-        serialNo: event.serialNo,
+        serialNo: event.serialNo.trim().toUpperCase(),
         photosBefore: currentState.photosBefore,
         photosAfter: currentState.photosAfter,
         measurementsAfter: currentState.measurementsAfter,
@@ -138,6 +139,31 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
 
       final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       // Gunakan serialNo sebagai key unik untuk box ini
+      await box.put(event.serialNo.trim().toUpperCase(), entry);
+    }
+  }
+
+  Future<void> _onMarkAsInProgress(
+      MarkAsInProgress event, Emitter<PosValidationState> emit) async {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+      // Buat entry baru dengan isCompleted = false
+      final entry = PosValidationEntryModel(
+        transNo: event.transNo,
+        serialNo: event.serialNo.trim().toUpperCase(),
+        photosBefore: currentState.photosBefore,
+        photosAfter: currentState.photosAfter,
+        measurementsAfter: currentState.measurementsAfter,
+        isCompleted: false, // <-- INI KUNCINYA
+        note: event.note,
+        articleNo: event.articleNo,
+        articleDesc: event.articleDesc,
+        articleUnitDesc: event.articleUnitDesc,
+        capacity: event.capacity,
+        articleType: event.articleType,
+      );
+
+      final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
     }
   }
