@@ -162,10 +162,6 @@ class PosHistoryDetailBodyMobile extends StatelessWidget {
                 )),
               ],
             ),
-            Row(
-              children: [
-              ],
-            ),
           ],
         ),
       ),

@@ -165,7 +165,7 @@ class _ServiceCallDetailBodyMobileState
     setState(() {
       // Update state-state yang lain
       technicianName = loggedInUserName;
-      maintenanceBy = user['maintenance_by'] ?? '';
+      maintenanceBy = user['user_id'] ?? '';
 
       // Update controller langsung dengan nilai yang sudah pasti ada
       _technician1Controller.text = loggedInUserName;

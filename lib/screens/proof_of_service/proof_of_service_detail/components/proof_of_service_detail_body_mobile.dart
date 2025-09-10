@@ -633,7 +633,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                 final user = await AuthStorage.getUser();
                 final maintenanceByIP = await getPublicIpAddress();
                 final technicianName = user['name'] ?? '';
-                final maintenanceBy = user['maintenance_by'] ?? '';
+                final maintenanceBy = user['user_id'] ?? '';
 
                 await showDialog<void>(
                   context: context,

@@ -20,7 +20,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     if (state.hasReachedMax) return;
     try {
       final userData = await AuthStorage.getUser();
-      final userId = userData['maintenance_by'] ?? '';
+      final userId = userData['user_id'] ?? '';
 
       final transactions = await repository.fetchHistory(
         page: state.page,
@@ -62,7 +62,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
 
     try {
       final userData = await AuthStorage.getUser();
-      final userId = userData['maintenance_by'] ?? '';
+      final userId = userData['user_id'] ?? '';
 
       // 3. Ambil halaman pertama menggunakan nilai filter yang BARU
       final transactions = await repository.fetchHistory(
