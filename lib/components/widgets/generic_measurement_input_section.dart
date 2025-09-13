@@ -1,7 +1,8 @@
+// generic_measurement_input_section.dart - Versi Revisi
+
 import 'package:flutter/material.dart';
 import 'package:salsa/components/widgets/measurement_input_widget.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
-
 import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../constants.dart';
 
@@ -24,7 +25,8 @@ class GenericMeasurementInputSection extends StatefulWidget {
       _GenericMeasurementInputSectionState();
 }
 
-class _GenericMeasurementInputSectionState extends State<GenericMeasurementInputSection> {
+class _GenericMeasurementInputSectionState
+    extends State<GenericMeasurementInputSection> {
   final Map<String, TextEditingController> _controllers = {};
 
   @override
@@ -47,7 +49,13 @@ class _GenericMeasurementInputSectionState extends State<GenericMeasurementInput
       final valueText = mEntry.value == mEntry.value.truncateToDouble()
           ? mEntry.value.truncate().toString()
           : mEntry.value.toStringAsFixed(1);
-      _controllers[mEntry.measurementId] = TextEditingController(text: valueText);
+      _controllers[mEntry.measurementId] =
+          TextEditingController(text: valueText);
+
+      if(valueText == "0"){
+        _controllers[mEntry.measurementId] =
+            TextEditingController(text: "");
+      }
     }
   }
 
@@ -66,7 +74,7 @@ class _GenericMeasurementInputSectionState extends State<GenericMeasurementInput
 
   @override
   Widget build(BuildContext context) {
-    if(widget.measurements.isEmpty) {
+    if (widget.measurements.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -77,12 +85,10 @@ class _GenericMeasurementInputSectionState extends State<GenericMeasurementInput
           width: double.infinity,
           color: Colors.grey.shade200,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          child: const Text(
-            'Pengukuran Unit',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
+          child: Text("Pengukuran Unit",
+              style:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
-        const SizedBox(height: 8),
         ...widget.measurements.map((mEntry) {
           final limits = kPOSMeasurementLimits.values.firstWhere(
                 (ml) => ml.id == mEntry.measurementId,
@@ -92,22 +98,17 @@ class _GenericMeasurementInputSectionState extends State<GenericMeasurementInput
           const String indoorTempMeasurementId = 'temperature';
 
           if (mEntry.measurementId == indoorTempMeasurementId && widget.indoorTemp != null) {
-            // Buat objek limit baru dengan menimpa nilai max
             limitsToUse = MeasurementLimits(
-              id: limits.id,
-              label: limits.label,
-              min: limits.min,
-              max: widget.indoorTemp!,
-              normalMax: limits.normalMax,
-              normalMin: limits.normalMin,
-              unit: limits.unit,
-              
+              id: limits.id, label: limits.label, min: limits.min,
+              max: widget.indoorTemp!, normalMax: limits.normalMax,
+              normalMin: limits.normalMin, unit: limits.unit,
             );
           }
 
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: MeasurementInputWidget(
+              // Parameter yang sudah ada sebelumnya
               controller: _controllers[mEntry.measurementId]!,
               transNo: widget.transNo,
               label: limitsToUse.label,
@@ -116,22 +117,24 @@ class _GenericMeasurementInputSectionState extends State<GenericMeasurementInput
               initialImage: mEntry.capturedImage,
               onChanged: (newValue) {
                 final updatedValue = double.tryParse(newValue) ?? mEntry.value;
-                widget.onUpdate(
-                  MeasurementEntry(
-                    measurementId: mEntry.measurementId,
-                    value: updatedValue,
-                    unit: mEntry.unit,
-                    capturedImage: mEntry.capturedImage,
-                  ),
-                );
+                widget.onUpdate(mEntry.copyWith(value: updatedValue));
               },
               onImageChanged: (newImage) {
-                widget.onUpdate(MeasurementEntry(
-                  measurementId: mEntry.measurementId,
-                  value: mEntry.value,
-                  unit: mEntry.unit,
-                  capturedImage: newImage,
-                ));
+                widget.onUpdate(mEntry.copyWith(capturedImage: newImage));
+              },
+              isSkipEnabled: true,
+              isSkipped: mEntry.isSkipped,
+              onSkipChanged: (isSkipped) {
+                final controller = _controllers[mEntry.measurementId];
+                if (controller == null) return;
+                if (isSkipped) {
+                  widget.onUpdate(mEntry.copyWith(
+                    isSkipped: true,
+                  ));
+                  controller.clear();
+                } else {
+                  widget.onUpdate(mEntry.copyWith(isSkipped: false));
+                }
               },
             ),
           );

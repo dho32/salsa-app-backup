@@ -14,11 +14,30 @@ class MeasurementEntry extends HiveObject {
   String unit; // Misal: "V", "A", "°C"
   @HiveField(3) // BARU: Tambahkan field untuk CapturedImageDetail
   CapturedImageDetail? capturedImage; // Path foto terkait, bisa null
+  @HiveField(4)
+  bool isSkipped;
 
   MeasurementEntry({
     required this.measurementId,
     required this.value,
     required this.unit,
     this.capturedImage, // BARU: Tambahkan ke konstruktor
+    this.isSkipped = false,
   });
+
+  MeasurementEntry copyWith({
+    String? measurementId,
+    double? value,
+    String? unit,
+    CapturedImageDetail? capturedImage,
+    bool? isSkipped,
+  }) {
+    return MeasurementEntry(
+      measurementId: measurementId ?? this.measurementId,
+      value: value ?? this.value,
+      unit: unit ?? this.unit,
+      capturedImage: capturedImage ?? this.capturedImage,
+      isSkipped: isSkipped ?? this.isSkipped,
+    );
+  }
 }

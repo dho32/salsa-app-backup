@@ -643,6 +643,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                           create: (_) => OtpBloc(repository: OtpRepository())),
                     ],
                     child: OtpDialog(
+                      transNo: header.transNo,
                       shipTo: header.shipToCode,
                       email: header.storeEmail,
                       onVerified: () {

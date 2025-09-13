@@ -71,7 +71,7 @@ const Map<String, MeasurementLimits> kPOSMeasurementLimits = {
   'temperature': MeasurementLimits(
       id: 'temperature',
       label: 'Suhu Indoor AC',
-      min: 0,
+      min: 4,
       max: 25,
       unit: '°C',
       normalMin: 5,
@@ -79,15 +79,15 @@ const Map<String, MeasurementLimits> kPOSMeasurementLimits = {
   'volt': MeasurementLimits(
       id: 'volt',
       label: 'Tegangan',
-      min: 0,
-      max: 420,
+      min: 150,
+      max: 500,
       unit: 'V',
       normalMin: 200.0,
       normalMax: 240.0),
   'ampere': MeasurementLimits(
       id: 'ampere',
       label: 'Arus',
-      min: 0,
+      min: 4,
       max: 15,
       unit: 'A',
       normalMin: 6.0,

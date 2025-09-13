@@ -42,7 +42,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       final limits = kPOSMeasurementLimits[id]!;
       return MeasurementEntry(
         measurementId: limits.id,
-        value: limits.min,
+        value: 0,
         unit: limits.unit,
       );
     }).toList();

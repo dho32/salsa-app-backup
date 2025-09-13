@@ -16,13 +16,14 @@ abstract class OtpEvent extends Equatable {
 /// * [isFirst]  - "1" kalau benar-benar request pertama,
 ///                 "0" kalau hanya ingin **fetch** status (dipakai di dialog init).
 class RequestOtp extends OtpEvent {
+  final String transNo;
   final String shipTo;
   final String isFirst; // tetap string "1"/"0" sesuai API saat ini.
 
-  const RequestOtp(this.shipTo, this.isFirst);
+  const RequestOtp(this.transNo, this.shipTo, this.isFirst);
 
   @override
-  List<Object?> get props => [shipTo, isFirst];
+  List<Object?> get props => [transNo, shipTo, isFirst];
 }
 
 /// “Resend OTP”
@@ -30,32 +31,35 @@ class RequestOtp extends OtpEvent {
 /// * [shipTo]   - kode toko.
 /// * [isFirst]  - selalu "0" (backend pakai flag yang sama).
 class ResendOtp extends OtpEvent {
+  final String transNo;
   final String shipTo;
   final String isFirst;
 
-  const ResendOtp(this.shipTo, this.isFirst);
+  const ResendOtp(this.transNo, this.shipTo, this.isFirst);
 
   @override
-  List<Object?> get props => [shipTo, isFirst];
+  List<Object?> get props => [transNo, shipTo, isFirst];
 }
 
 /// Verifikasi kode yang diketik user
 class VerifyOtp extends OtpEvent {
+  final String transNo;
   final String shipTo;
   final String otp;
 
-  const VerifyOtp(this.shipTo, this.otp);
+  const VerifyOtp(this.transNo, this.shipTo, this.otp);
 
   @override
-  List<Object?> get props => [shipTo, otp];
+  List<Object?> get props => [transNo, shipTo, otp];
 }
 
 /// Tick 1-detik sekali untuk update countdown
 class OtpTick extends OtpEvent {
+  final String transNo;
   final String shipTo;
 
-  const OtpTick(this.shipTo);
+  const OtpTick(this.transNo, this.shipTo);
 
   @override
-  List<Object?> get props => [shipTo];
+  List<Object?> get props => [transNo, shipTo];
 }

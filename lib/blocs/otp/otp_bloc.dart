@@ -21,9 +21,10 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
   final Map<String, DateTime> _resendAvailableAt   = {};
   final Map<String, DateTime> _lockedUntil         = {};
 
-  String? _currentShipTo;
+  String? _currentKey;
   DateTime targetTime = DateTime.now();
   late final Timer _ticker;
+  String _getCompositeKey(String shipTo, String transNo) => '$shipTo-$transNo';
 
   // ───────────────────────── Constructor ────────────────────────────
   OtpBloc({required this.repository}) : super(const OtpInitial()) {
@@ -34,7 +35,13 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
 
     // Kirim 1× tick per detik ke shipTo aktif
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_currentShipTo != null) add(OtpTick(_currentShipTo!));
+      // Jika ada sesi aktif, kirim tick
+      if (_currentKey != null) {
+        final parts = _currentKey!.split('-');
+        if (parts.length == 2) {
+          add(OtpTick(parts[0], parts[1]));
+        }
+      }
     });
   }
 
@@ -42,67 +49,70 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
 
   /// Kirim OTP pertama kali atau fetch status dari server
   Future<void> _onRequestOtp(RequestOtp e, Emitter<OtpState> emit) async {
-    if (_isLocked(e.shipTo)) {
-      return emit(OtpLocked(_lockedUntil[e.shipTo]!.difference(DateTime.now())));
+    final key = _getCompositeKey(e.shipTo, e.transNo);
+    if (_isLocked(key)) {
+      return emit(OtpLocked(_lockedUntil[key]!.difference(DateTime.now())));
     }
 
     emit(const OtpLoading());
 
-    final res = await repository.sendOtp(e.shipTo, e.isFirst);
+    final res = await repository.sendOtp(e.transNo, e.shipTo, e.isFirst);
     if (res == null) return emit(const OtpError('Gagal mengirim OTP'));
-    _currentShipTo = e.shipTo;
+    _currentKey = key;
     if (res['otp'] == ""){
       emit(OtpInitial());
     }else{
-      _hydrateFromServer(e.shipTo, res, resetCooldown: true);
+      _hydrateFromServer(key, res, resetCooldown: true);
 
-      if (_retryUsed[e.shipTo]! >= _maxResend) {
+      if ((_retryUsed[key] ?? 0) >= _maxResend) {
         return emit(OtpLocked(_lockDuration));
       }
-      emit(_buildSentState(e.shipTo));
+      emit(_buildSentState(key));
     }
   }
 
   /// Resend OTP — aturan sama seperti request, tapi menambah retryUsed
   Future<void> _onResendOtp(ResendOtp e, Emitter<OtpState> emit) async {
-    if (_isLocked(e.shipTo)) {
-      return emit(OtpLocked(_lockedUntil[e.shipTo]!.difference(DateTime.now())));
+    final key = _getCompositeKey(e.shipTo, e.transNo);
+    if (_isLocked(key)) {
+      return emit(OtpLocked(_lockedUntil[key]!.difference(DateTime.now())));
     }
-    if (!_canResend(e.shipTo)) return;
+    if (!_canResend(key)) return;
 
     emit(const OtpLoading());
 
-    final res = await repository.sendOtp(e.shipTo, e.isFirst);
+    final res = await repository.sendOtp(e.transNo, e.shipTo, e.isFirst);
     if (res == null) return emit(const OtpError('Gagal mengirim OTP'));
-    _currentShipTo = e.shipTo;
+    _currentKey = key;
 
     // Tambah hitungan retry & refresh data
-    _retryUsed[e.shipTo] = (_retryUsed[e.shipTo] ?? 0) + 1;
-    _hydrateFromServer(e.shipTo, res, resetCooldown: true);
+    _retryUsed[key] = (_retryUsed[key] ?? 0) + 1;
+    _hydrateFromServer(key, res, resetCooldown: true);
 
-    if (_retryUsed[e.shipTo]! >= _maxResend) {
-      _lockedUntil[e.shipTo] = DateTime.now().add(_lockDuration);
+    if ((_retryUsed[key] ?? 0) >= _maxResend) {
+      _lockedUntil[key] = DateTime.now().add(_lockDuration);
       return emit(OtpLocked(_lockDuration));
     }
-    emit(_buildSentState(e.shipTo));
+    emit(_buildSentState(key));
   }
 
   /// Verifikasi kode yang diketik user
   void _onVerifyOtp(VerifyOtp e, Emitter<OtpState> emit) {
+    final key = _getCompositeKey(e.shipTo, e.transNo);
     // 1. Cek kedaluwarsa lebih dulu
-    if (_expiredAt.containsKey(e.shipTo) &&
-        DateTime.now().isAfter(_expiredAt[e.shipTo]!)) {
-      emit(const OtpExpired());          // ← tampil hanya sesudah user klik Verifikasi
+    if (_expiredAt.containsKey(key) &&
+        DateTime.now().isAfter(_expiredAt[key]!)) {
+      emit(const OtpExpired());
       return;
     }
-    final serverOtp = _latestOtp[e.shipTo];
+    final serverOtp = _latestOtp[key];
     if (serverOtp == null) {
       emit(const OtpError('Silakan minta OTP terlebih dahulu'));
       return;
     }
 
     if (serverOtp == e.otp.trim()) {
-      _cleanup(e.shipTo);
+      _cleanup(key);
       emit(const OtpVerified());
     } else {
       emit(const OtpError('Kode OTP salah'));
@@ -111,72 +121,68 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
 
   /// Tick 1-detik untuk update countdown
   void _onTick(OtpTick e, Emitter<OtpState> emit) {
-    if (e.shipTo != _currentShipTo) return;
+    final key = _getCompositeKey(e.shipTo, e.transNo);
+    if (key != _currentKey) return;
 
     // 1. Masih lock → urus lock count-down saja
     if (state is OtpLocked) {
-      final remaining = _lockedUntil[e.shipTo]!.difference(DateTime.now());
+      final remaining = _lockedUntil[key]!.difference(DateTime.now());
       if (remaining.isNegative) {
-        _lockedUntil.remove(e.shipTo);
-        emit(_buildSentState(e.shipTo));
+        _lockedUntil.remove(key);
+        emit(_buildSentState(key));
       } else {
-        emit(OtpLocked(remaining));           // update detik lock (optional)
+        emit(OtpLocked(remaining));
       }
       return;
     }
 
-    // 2. Cek apakah OTP BENAR-BENAR pernah dikirim
-    final expiredAt = _expiredAt[e.shipTo];
-    final sudahPernahKirim =
-        (_retryUsed[e.shipTo] ?? 0) > 0 || (_latestOtp[e.shipTo]?.isNotEmpty ?? false);
-
-    // 3. Perbarui hitung-mundur normal (juga menutupi kasus "OTP belum dikirim")
-    if (state is OtpSent) emit(_buildSentState(e.shipTo));
+    // 2. Perbarui hitung-mundur normal (juga menutupi kasus "OTP belum dikirim")
+    if (state is OtpSent) emit(_buildSentState(key));
   }
 
   // ─────────────────────── Helper methods ───────────────────────────
 
   /// Simpan data dari server + atur cooldown
-  void _hydrateFromServer(String shipTo, Map<String, dynamic> res,
+  void _hydrateFromServer(String key, Map<String, dynamic> res,
       {required bool resetCooldown}) {
     final otpStr = (res['otp'] as String).trim();
-    _latestOtp[shipTo] = otpStr;
-    _expiredAt[shipTo] = res['expired_date'] as DateTime;
-    _retryUsed[shipTo] = res['retry_count'] as int;
+    _latestOtp[key] = otpStr;
+    _expiredAt[key] = res['expired_date'] as DateTime;
+    _retryUsed[key] = res['retry_count'] as int;
 
     // Cool-down hanya dipasang kalau server BENAR-BENAR mengirim OTP
     if (resetCooldown && otpStr.isNotEmpty) {
-      _resendAvailableAt[shipTo] = _expiredAt[shipTo]!.subtract(Duration(minutes: 4));
+      _resendAvailableAt[key] = _expiredAt[key]!.subtract(Duration(minutes: 59));
 
-    } else if (_resendAvailableAt[shipTo] == null) {
+    } else if (_resendAvailableAt[key] == null) {
       // pastikan tidak null supaya _buildSentState aman
-      _resendAvailableAt[shipTo] = DateTime.now();
+      _resendAvailableAt[key] = DateTime.now();
     }
 
-    if (_retryUsed[shipTo]! >= _maxResend) {
-      _lockedUntil[shipTo] = DateTime.now().add(_lockDuration);
+    if (_retryUsed[key]! >= _maxResend) {
+      _lockedUntil[key] = DateTime.now().add(_lockDuration);
     }
   }
 
-  bool _isLocked(String shipTo) =>
-      DateTime.now().isBefore(_lockedUntil[shipTo] ?? DateTime(1970));
+  bool _isLocked(String key) =>
+      DateTime.now().isBefore(_lockedUntil[key] ?? DateTime(1970));
 
-  bool _canResend(String shipTo) =>
-      DateTime.now().isAfter(_resendAvailableAt[shipTo] ?? DateTime(1970)) &&
-          (_retryUsed[shipTo] ?? 0) < _maxResend;
+  bool _canResend(String key) =>
+      DateTime.now().isAfter(_resendAvailableAt[key] ?? DateTime(1970)) &&
+          (_retryUsed[key] ?? 0) < _maxResend;
 
-  OtpSent _buildSentState(String shipTo) {
+  OtpSent _buildSentState(String key) {
     final now = DateTime.now();
 
     final secondsRemaining =
-    max(0, _expiredAt[shipTo]!.difference(now).inSeconds);
+    max(0, _expiredAt[key]!.difference(now).inSeconds);
 
     final resendCooldown =
-    max(0, _resendAvailableAt[shipTo]!.difference(now).inSeconds);
+    max(0, _resendAvailableAt[key]!.difference(now).inSeconds);
 
-    final retryLeft = max(0, _maxResend - (_retryUsed[shipTo] ?? 0));
+    final retryLeft = max(0, _maxResend - (_retryUsed[key] ?? 0));
 
-    final hasOtp = _latestOtp[shipTo]?.isNotEmpty ?? false;
+    final hasOtp = _latestOtp[key]?.isNotEmpty ?? false;
 
     return OtpSent(
       secondsRemaining: secondsRemaining,
@@ -186,13 +192,13 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
     );
   }
 
-  void _cleanup(String shipTo) {
-    _latestOtp.remove(shipTo);
-    _retryUsed.remove(shipTo);
-    _expiredAt.remove(shipTo);
-    _resendAvailableAt.remove(shipTo);
-    _lockedUntil.remove(shipTo);
-    if (shipTo == _currentShipTo) _currentShipTo = null;
+  void _cleanup(String key) {
+    _latestOtp.remove(key);
+    _retryUsed.remove(key);
+    _expiredAt.remove(key);
+    _resendAvailableAt.remove(key);
+    _lockedUntil.remove(key);
+    if (key == _currentKey) _currentKey = null;
   }
 
   // ───────────────────────── dispose ────────────────────────────────

@@ -1,7 +1,7 @@
-// lib/components/widgets/measurement_input_widget.dart
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // MODIFIKASI: Tambahkan ini jika belum
+import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +13,7 @@ import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart
 import 'full_screen_image_viewer.dart';
 
 class MeasurementInputWidget extends StatefulWidget {
+  // Parameter yang sudah ada
   final TextEditingController controller;
   final String transNo;
   final String label;
@@ -21,6 +22,11 @@ class MeasurementInputWidget extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final CapturedImageDetail? initialImage;
   final ValueChanged<CapturedImageDetail?>? onImageChanged;
+
+  // BARU: Parameter opsional untuk fitur "skip"
+  final bool isSkipEnabled;
+  final bool isSkipped;
+  final ValueChanged<bool>? onSkipChanged;
 
   const MeasurementInputWidget({
     super.key,
@@ -32,10 +38,15 @@ class MeasurementInputWidget extends StatefulWidget {
     this.onChanged,
     this.initialImage,
     this.onImageChanged,
+    // BARU: Inisialisasi parameter opsional
+    this.isSkipEnabled = false,
+    this.isSkipped = false,
+    this.onSkipChanged,
   });
 
   @override
   State<MeasurementInputWidget> createState() => _MeasurementInputWidgetState();
+
 }
 
 class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
@@ -47,56 +58,16 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   @override
   void initState() {
     super.initState();
-    _currentSliderValue = widget.limits.min;
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
     _updateSliderFromText(widget.controller.text);
     _currentImage = widget.initialImage;
   }
 
-  void _onFocusChange() {
-    if (!_focusNode.hasFocus) {
-      final textValue = widget.controller.text;
-      double value = double.tryParse(textValue) ?? widget.limits.min;
-
-      final clampedValue = value.clamp(widget.limits.min, widget.limits.max);
-      final newText = _formatValue(clampedValue);
-
-      if (textValue != newText) {
-        setState(() {
-          widget.controller.text = newText;
-          widget.onChanged?.call(newText);
-          _currentSliderValue = clampedValue;
-        });
-      }
-
-      _updateSliderFromText(widget.controller.text);
-      _formatTextField();
-    }
-  }
-
-  void _formatTextField() {
-    final value = double.tryParse(widget.controller.text);
-    if (value != null) {
-      final newText = _formatValue(value);
-      if (widget.controller.text != newText) {
-        widget.controller.text = newText;
-        widget.onChanged?.call(newText);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocusChange); // Hapus listener
-    _focusNode.dispose();
-    super.dispose();
-  }
-
   @override
   void didUpdateWidget(covariant MeasurementInputWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
+    if (widget.controller.text != oldWidget.controller.text) {
       _updateSliderFromText(widget.controller.text);
     }
     if (widget.initialImage != oldWidget.initialImage) {
@@ -106,21 +77,32 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     }
   }
 
-  String _formatValue(double value) {
-    if (value == value.truncateToDouble()) {
-      return value.truncate().toString();
-    } else {
-      return value.toStringAsFixed(1);
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) {
+      final textValue = widget.controller.text;
+      double value = double.tryParse(textValue) ?? widget.limits.min;
+      final clampedValue = value.clamp(widget.limits.min, widget.limits.max);
+      final newText = _formatValue(clampedValue);
+      if (textValue != newText) {
+        widget.controller.text = newText;
+        widget.onChanged?.call(newText);
+        _currentSliderValue = clampedValue;
+        setState(() {});
+      }
     }
   }
+
+  String _formatValue(double value) => value == value.truncateToDouble()
+      ? value.truncate().toString()
+      : value.toStringAsFixed(1);
 
   void _updateSliderFromText(String text) {
     final value = double.tryParse(text);
     if (value != null) {
-      // Panggil setState HANYA untuk update nilai slider
-      setState(() {
-        _currentSliderValue = value.clamp(widget.limits.min, widget.limits.max);
-      });
+      setState(() => _currentSliderValue =
+          value.clamp(widget.limits.min, widget.limits.max));
+    }else if(text == ""){
+      setState(() => _currentSliderValue = widget.limits.min);
     }
   }
 
@@ -135,251 +117,226 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   Future<void> _takePhoto() async {
     if (_currentImage != null) return;
-
-    // --- MULAI PROSES LOADING ---
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
-
       if (image != null) {
         final tempDir = await getTemporaryDirectory();
         final targetPath = p.join(
             tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-
         final XFile? compressedImage =
             await FlutterImageCompress.compressAndGetFile(
-          image.path,
-          targetPath,
-          quality: 70,
-        );
-
-        if (compressedImage == null) {
-          /* Handle error */ return;
-        }
-
-        // Proses ambil GPS dan data lainnya...
-        final timestamp = DateTime.now();
-        double latitude = 0.0;
-        double longitude = 0.0;
-        String address = '';
-
-        // try {
-        //   Position position = await Geolocator.getCurrentPosition(
-        //       desiredAccuracy: LocationAccuracy.high,
-        //       timeLimit: const Duration(seconds: 10));
-        //   latitude = position.latitude;
-        //   longitude = position.longitude;
-        //   List<Placemark> placemarks =
-        //       await placemarkFromCoordinates(latitude, longitude);
-        //   Placemark place = placemarks.first;
-        //   address =
-        //       "${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}";
-        // } catch (e) {
-        //   // Handle error GPS
-        //   if (mounted) {
-        //     ScaffoldMessenger.of(context).showSnackBar(
-        //       const SnackBar(
-        //         content: Text('Gagal mendapatkan koordinat GPS. Coba lagi.'),
-        //         backgroundColor: Colors.orange,
-        //       ),
-        //     );
-        //   }
-        // }
-
+                image.path, targetPath,
+                quality: 70);
+        if (compressedImage == null) return;
         final userData = await AuthStorage.getUser();
-        final technicianName = userData['name'] ?? 'Unknown';
-        final deviceModel = userData['device_model'] ?? 'Unknown Device';
-
-        // Update _currentImage
         _currentImage = CapturedImageDetail(
           imagePath: compressedImage.path,
-          timestamp: timestamp,
-          latitude: latitude,
-          longitude: longitude,
-          address: address,
-          technicianName: technicianName,
-          deviceModel: deviceModel,
+          timestamp: DateTime.now(),
+          latitude: 0,
+          longitude: 0,
+          address: "",
+          technicianName: userData['name'] ?? 'Unknown',
+          deviceModel: userData['device_model'] ?? 'Unknown Device',
           transNo: widget.transNo,
         );
-
-        // Panggil callback ke BLoC
         widget.onImageChanged?.call(_currentImage);
       }
     } finally {
-      // --- SELESAI PROSES LOADING, APAPUN HASILNYA ---
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _removePhoto() {
-    setState(() {
-      _currentImage = null;
-    });
+  void removePhoto() {
+    setState(() => _currentImage = null);
     widget.onImageChanged?.call(null);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final Color primary = Theme.of(context).primaryColor;
+    final bool isEnabled = !widget.isSkipped;
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: isEnabled ? Colors.white : Colors.grey.shade100,
+      child: Column(
+        children: [
+          if (widget.isSkipEnabled)
+            SwitchListTile(
+              title: Text(widget.label,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                isEnabled
+                    ? 'Tekan tombol sebelah jika tidak bisa diukur'
+                    : 'Tidak dapat melakukan pengukuran',
+                style: TextStyle(fontSize: 12, color: Colors.black87),
+              ),
+              value: widget.isSkipped,
+              onChanged: widget.onSkipChanged,
+              activeTrackColor: Colors.grey,
+              contentPadding: const EdgeInsets.only(left: 16, right: 8),
+            )
+          else
+            // Tampilan header default jika skip tidak diaktifkan
             Padding(
-              padding: const EdgeInsets.only(left: 8.0),
-              child: Text(
-                widget.label,
-                style: TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.label,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            _isLoading
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                : _currentImage != null
-                    ? Stack(
-                        alignment: Alignment.topRight,
-                        children: [
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => FullScreenImageViewer(
-                                    imageDetail: _currentImage!),
-                              ),
-                            ),
-                            child: Hero(
-                              tag: _currentImage!.imagePath,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: FadeInImage(
-                                  placeholder: const AssetImage(
-                                      'assets/images/placeholder_image.jpeg'),
-                                  // Gambar placeholder
-                                  image:
-                                      FileImage(File(_currentImage!.imagePath)),
-                                  // Gambar asli
-                                  width: double.maxFinite,
-                                  height: 80,
-                                  fit: BoxFit.cover,
-                                  // Jika terjadi error saat load gambar asli
-                                  imageErrorBuilder:
-                                      (context, error, stackTrace) {
-                                    return const Icon(Icons.broken_image,
-                                        size: 40, color: Colors.grey);
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: _removePhoto,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.all(2),
-                              child: const Icon(Icons.close,
-                                  color: Colors.white, size: 16),
-                            ),
-                          ),
-                        ],
-                      )
-                    : SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _takePhoto,
-                          icon: const Icon(Icons.camera_alt),
-                          label: Text('Ambil Foto ${widget.label}'),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: primary), // warna border
-                            foregroundColor:
-                                primary, // ini juga bisa bantu untuk label/icon
-                          ),
-                        ),
-                      ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 12,
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: Colors.grey,
-                      inactiveTrackColor: Colors.grey.shade300,
-                      thumbColor: Colors.blueGrey,
-                      overlayColor: Colors.grey.shade100,
-                      valueIndicatorColor:
-                          Theme.of(context).colorScheme.primary,
-                      showValueIndicator: ShowValueIndicator.always,
-                    ),
-                    child: Slider(
-                        value: _currentSliderValue,
-                        min: widget.limits.min,
-                        max: widget.limits.max,
-                        label: _currentSliderValue.toStringAsFixed(1),
-                        onChanged: _onSliderChanged),
-                  ),
-                ),
-                Expanded(
-                  flex: 5,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: TextFormField(
-                      focusNode: _focusNode,
-                      controller: widget.controller,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      onFieldSubmitted: (text) {
-                        _updateSliderFromText(text);
-                        widget.onChanged?.call(text);
-                      },
-                      textAlign: TextAlign.right,
-                      onTapOutside: (_) {
-                        _updateSliderFromText(widget.controller.text);
-                        widget.onChanged?.call(widget.controller.text);
-                      },
-                      onEditingComplete: _formatTextField,
-                      decoration: InputDecoration(
-                        labelText: widget.limits.unit,
-                        isDense: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'^-?\d*\.?\d*'))
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                "**Pastikan angka yang diinput sesuai dengan yang di foto",
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+
+          const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey,),
+
+          // Konten input yang bisa dinonaktifkan
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: AbsorbPointer(
+              absorbing: !isEnabled,
+              child: Opacity(
+                opacity: isEnabled ? 1.0 : 0.4,
+                child: !isEnabled
+                    ? const SizedBox(
+                        height: 16) // Beri sedikit padding saat disembunyikan
+                    : _buildInputContent(primary),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  // Helper untuk membangun konten input
+  Widget _buildInputContent(Color primary) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _isLoading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : _currentImage != null
+                  ? _buildPhotoPreview()
+                  : _buildPhotoButton(primary),
+          const SizedBox(height: 16),
+          _buildSliderAndTextfield(),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              "**Pastikan angka yang diinput sesuai dengan yang di foto",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoButton(Color primary) {
+    return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+            onPressed: _takePhoto,
+            icon: const Icon(Icons.camera_alt),
+            label: Text('Ambil Foto ${widget.label}'),
+            style: OutlinedButton.styleFrom(
+                side: BorderSide(color: primary), foregroundColor: primary)));
+  }
+
+  Widget _buildPhotoPreview() {
+    return Stack(alignment: Alignment.topRight, children: [
+      GestureDetector(
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      FullScreenImageViewer(imageDetail: _currentImage!))),
+          child: Hero(
+              tag: _currentImage!.imagePath,
+              child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: FadeInImage(
+                      placeholder: const AssetImage(
+                          'assets/images/placeholder_image.jpeg'),
+                      image: FileImage(File(_currentImage!.imagePath)),
+                      width: double.maxFinite,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      imageErrorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.broken_image,
+                              size: 40, color: Colors.grey))))),
+      GestureDetector(
+          onTap: removePhoto,
+          child: Container(
+              decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.all(2),
+              child: const Icon(Icons.close, color: Colors.white, size: 16)))
+    ]);
+  }
+
+  Widget _buildSliderAndTextfield() {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(
+          flex: 12,
+          child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: Colors.grey,
+                  inactiveTrackColor: Colors.grey.shade300,
+                  thumbColor: Colors.blueGrey,
+                  overlayColor: Colors.grey.shade100,
+                  valueIndicatorColor: Theme.of(context).colorScheme.primary,
+                  showValueIndicator: ShowValueIndicator.always),
+              child: Slider(
+                  value: _currentSliderValue,
+                  min: widget.limits.min,
+                  max: widget.limits.max,
+                  label: _currentSliderValue.toStringAsFixed(1),
+                  onChanged: _onSliderChanged))),
+      Expanded(
+          flex: 5,
+          child: Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: TextFormField(
+                  focusNode: _focusNode,
+                  controller: widget.controller,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onFieldSubmitted: (text) {
+                    _updateSliderFromText(text);
+                    widget.onChanged?.call(text);
+                  },
+                  textAlign: TextAlign.right,
+                  onTapOutside: (_) {
+                    _updateSliderFromText(widget.controller.text);
+                    widget.onChanged?.call(widget.controller.text);
+                  },
+                  onEditingComplete: _onFocusChange,
+                  decoration: InputDecoration(
+                      labelText: widget.limits.unit, isDense: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*'))
+                  ])))
+    ]);
   }
 }

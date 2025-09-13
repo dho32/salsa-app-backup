@@ -6,12 +6,14 @@ import 'package:salsa/blocs/otp/otp_event.dart';
 import 'package:salsa/blocs/otp/otp_state.dart';
 
 class OtpDialog extends StatefulWidget {
+  final String transNo;
   final String shipTo;
   final String email;
   final VoidCallback onVerified;
 
   const OtpDialog({
     super.key,
+    required this.transNo,
     required this.shipTo,
     required this.email,
     required this.onVerified,
@@ -29,7 +31,7 @@ class _OtpDialogState extends State<OtpDialog> {
   void initState() {
     super.initState();
     // Minta OTP saat dialog pertama kali muncul
-    context.read<OtpBloc>().add(RequestOtp(widget.shipTo, '1'));
+    context.read<OtpBloc>().add(RequestOtp(widget.transNo, widget.shipTo, '1'));
   }
 
   @override
@@ -119,7 +121,7 @@ class _OtpDialogState extends State<OtpDialog> {
                     ),
                   ),
                   onCompleted: (pin) {
-                    context.read<OtpBloc>().add(VerifyOtp(widget.shipTo, pin));
+                    context.read<OtpBloc>().add(VerifyOtp(widget.transNo, widget.shipTo, pin));
                   },
                 ),
                 const SizedBox(height: 16),
@@ -142,7 +144,7 @@ class _OtpDialogState extends State<OtpDialog> {
                         ? null
                         : () {
                             context.read<OtpBloc>().add(
-                                VerifyOtp(widget.shipTo, _pinController.text));
+                                VerifyOtp(widget.transNo, widget.shipTo, _pinController.text));
                           },
                     child: isLoading
                         ? const SizedBox(
@@ -167,7 +169,7 @@ class _OtpDialogState extends State<OtpDialog> {
       return TextButton(
         key: const ValueKey('resend'),
         onPressed: () {
-          context.read<OtpBloc>().add(ResendOtp(widget.shipTo, '0'));
+          context.read<OtpBloc>().add(ResendOtp(widget.transNo, widget.shipTo, '0'));
         },
         child: const Text('Minta OTP'),
       );
@@ -204,7 +206,7 @@ class _OtpDialogState extends State<OtpDialog> {
           TextButton(
             onPressed: () {
               _pinController.clear(); // Bersihkan input sebelum kirim ulang
-              context.read<OtpBloc>().add(ResendOtp(widget.shipTo, '0'));
+              context.read<OtpBloc>().add(ResendOtp(widget.transNo, widget.shipTo, '0'));
             },
             child: const Text('Kirim Ulang Kode'),
           ),
@@ -232,7 +234,7 @@ class _OtpDialogState extends State<OtpDialog> {
     return TextButton(
       key: const ValueKey('resend'),
       onPressed: () {
-        context.read<OtpBloc>().add(ResendOtp(widget.shipTo, '0'));
+        context.read<OtpBloc>().add(ResendOtp(widget.transNo, widget.shipTo, '0'));
       },
       child: const Text('Tidak menerima kode? Kirim Ulang'),
     );

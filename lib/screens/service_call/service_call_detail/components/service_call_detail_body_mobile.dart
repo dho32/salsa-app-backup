@@ -394,6 +394,7 @@ class _ServiceCallDetailBodyMobileState
                                               repository: OtpRepository())),
                                     ],
                                     child: OtpDialog(
+                                      transNo: header.transNo,
                                       shipTo: header.storeId,
                                       email: header.storeEmail,
                                       // Ganti dengan email tujuan OTP

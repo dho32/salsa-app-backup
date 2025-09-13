@@ -41,7 +41,8 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
 
   bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
     if (measurements.isEmpty) return true;
-    return measurements.every((m) => m.capturedImage != null);
+    return measurements
+        .every((m) => m.isSkipped || (m.capturedImage != null && m.value != 0));
   }
 
   @override
@@ -53,15 +54,15 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           context.read<PosValidationBloc>().add(MarkAsInProgress(
-            transNo: widget.transNo,
-            serialNo: widget.serialNo,
-            note: _noteController.text,
-            articleNo: widget.articleNo,
-            articleDesc: widget.articleDesc,
-            articleUnitDesc: widget.articleUnitDesc,
-            capacity: widget.capacity,
-            articleType: widget.unitType,
-          ));
+                transNo: widget.transNo,
+                serialNo: widget.serialNo,
+                note: _noteController.text,
+                articleNo: widget.articleNo,
+                articleDesc: widget.articleDesc,
+                articleUnitDesc: widget.articleUnitDesc,
+                capacity: widget.capacity,
+                articleType: widget.unitType,
+              ));
         }
       });
     }
@@ -143,6 +144,9 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 child: const Text('Simpan'),
                 onPressed: () {
+                  final bool isAnyMeasurementSkipped =
+                      state.measurementsAfter.any((m) => m.isSkipped);
+
                   if (state.photosAfter.isEmpty) {
                     _showValidationErrorSnackbar(
                         'Foto unit sesudah cuci wajib dilengkapi.');
@@ -151,6 +155,13 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   if (!_areAllMeasurementsFilled(state.measurementsAfter)) {
                     _showValidationErrorSnackbar(
                         'Harap isi semua nilai & foto hasil pengukuran.');
+                    return;
+                  }
+
+                  if (isAnyMeasurementSkipped &&
+                      _noteController.text.trim().isEmpty) {
+                    _showValidationErrorSnackbar(
+                        'Catatan wajib diisi, jika unit tidak bisa diukur.');
                     return;
                   }
 
