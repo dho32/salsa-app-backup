@@ -14,11 +14,12 @@ class LocationValidationLoading extends LocationValidationState {}
 
 class LocationPhotoLoaded extends LocationValidationState {
   final CapturedImageDetail? photo;
+  final double? distance;
 
-  const LocationPhotoLoaded(this.photo);
+  const LocationPhotoLoaded(this.photo, {this.distance});
 
   @override
-  List<Object?> get props => [photo];
+  List<Object?> get props => [photo, distance];
 }
 
 class LocationValidationSuccess extends LocationValidationState {}
@@ -26,9 +27,14 @@ class LocationValidationSuccess extends LocationValidationState {}
 class LocationValidationFailure extends LocationValidationState {
   final String message;
   final CapturedImageDetail? photo;
+  final double? distance;
 
-  const LocationValidationFailure(this.message, {this.photo});
+  const LocationValidationFailure(
+      this.message, {
+        this.photo,
+        this.distance,
+      });
 
   @override
-  List<Object?> get props => [message, photo];
+  List<Object?> get props => [message, photo, distance];
 }

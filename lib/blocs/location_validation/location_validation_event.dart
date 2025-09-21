@@ -9,18 +9,24 @@ abstract class LocationValidationEvent extends Equatable {
 
 class LoadLocationPhoto extends LocationValidationEvent {
   final String transNo;
-  const LoadLocationPhoto(this.transNo);
+  final double tokoLat;
+  final double tokoLng;
+
+  const LoadLocationPhoto(this.transNo, this.tokoLat, this.tokoLng);
 
   @override
-  List<Object?> get props => [transNo];
+  List<Object?> get props => [transNo, tokoLat, tokoLng];
 }
 
 class TakeLocationPhoto extends LocationValidationEvent {
   final String transNo;
-  const TakeLocationPhoto(this.transNo);
+  final double tokoLat;
+  final double tokoLng;
+
+  const TakeLocationPhoto(this.transNo, this.tokoLat, this.tokoLng);
 
   @override
-  List<Object?> get props => [transNo];
+  List<Object?> get props => [transNo, tokoLat, tokoLng];
 }
 
 class RemoveLocationPhoto extends LocationValidationEvent {

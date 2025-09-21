@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../components/constants.dart';
 import '../../components/shared_function.dart';
@@ -24,7 +27,21 @@ class LocationValidationBloc
       LoadLocationPhoto event, Emitter<LocationValidationState> emit) async {
     final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
     final txn = box.get(event.transNo);
-    emit(LocationPhotoLoaded(txn?.picImageDetail));
+    final photo = txn?.picImageDetail;
+
+    if (photo != null) {
+      // Jika ada foto, hitung ulang jaraknya
+      final distance = await LocationHelper.calculateDistance(
+        pic: photo,
+        tokoLat: event.tokoLat,
+        tokoLng: event.tokoLng,
+      );
+      // Kirim state dengan foto DAN jaraknya
+      emit(LocationPhotoLoaded(photo, distance: distance));
+    } else {
+      // Jika tidak ada foto, kirim state kosong
+      emit(const LocationPhotoLoaded(null));
+    }
   }
 
   Future<void> _onTakePhoto(
@@ -32,8 +49,8 @@ class LocationValidationBloc
     emit(LocationValidationLoading());
 
     final picker = ImagePicker();
-    final pickedFile =
-        await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    // Ambil gambar dengan kualitas asli terlebih dahulu
+    final pickedFile = await picker.pickImage(source: ImageSource.camera);
 
     if (pickedFile == null) {
       final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
@@ -42,12 +59,33 @@ class LocationValidationBloc
       return;
     }
 
+    final tempDir = await getTemporaryDirectory();
+    // Buat nama file baru yang standar menggunakan timestamp
+    final targetPath = p.join(
+        tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+    // Kompres gambar dan simpan ke targetPath
+    final XFile? compressedImage =
+    await FlutterImageCompress.compressAndGetFile(
+      pickedFile.path,
+      targetPath,
+      quality: 70,
+    );
+
+    if (compressedImage == null) {
+      // Handle jika kompresi gagal
+      emit(LocationValidationFailure("Gagal memproses gambar.", photo: null));
+      return;
+    }
+    // --- AKHIR LOGIKA BARU ---
+
     final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.best,
     );
 
     final detail = CapturedImageDetail(
-      imagePath: pickedFile.path,
+      // Gunakan path dari gambar yang sudah dikompres dan diganti namanya
+      imagePath: compressedImage.path,
       timestamp: DateTime.now(),
       latitude: position.latitude,
       longitude: position.longitude,
@@ -57,6 +95,12 @@ class LocationValidationBloc
       transNo: event.transNo,
     );
 
+    final distance = await LocationHelper.calculateDistance(
+      pic: detail,
+      tokoLat: event.tokoLat,
+      tokoLng: event.tokoLng,
+    );
+
     final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
     final txn = box.get(event.transNo);
     if (txn != null) {
@@ -64,7 +108,7 @@ class LocationValidationBloc
       await txn.save();
     }
 
-    emit(LocationPhotoLoaded(detail));
+    emit(LocationPhotoLoaded(detail, distance: distance));
   }
 
   Future<void> _onRemovePhoto(
@@ -108,9 +152,10 @@ class LocationValidationBloc
         tokoLng: event.tokoLng,
       );
       emit(LocationValidationFailure(
-        // "Lokasi tidak sesuai (jarak ${distance.toStringAsFixed(1)} m)"));
+        // "Lokasi tidak sesuai (jarak ${distance.toStringAsFixed(1)} m)",
         "Lokasi foto tidak sesuai dengan toko terdaftar. Mohon ambil ulang di lokasi toko.",
         photo: photo,
+        distance: distance, // <-- SERTAKAN NILAI JARAK DI SINI
       ));
     }
   }
