@@ -149,7 +149,7 @@ class LocationHelper {
     required CapturedImageDetail pic,
     required double tokoLat,
     required double tokoLng,
-    double maxDistance = 500.0,
+    double maxDistance = kDistance,
   }) async {
     final distance = Geolocator.distanceBetween(
       tokoLat,

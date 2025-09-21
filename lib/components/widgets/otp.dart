@@ -14,6 +14,7 @@ import 'package:salsa/blocs/location_validation/location_validation_state.dart';
 import 'package:salsa/components/shared_function.dart';
 
 import '../../models/common/captured_image_detail.dart';
+import '../constants.dart';
 import '../shared_widgets.dart';
 
 class OtpDialog extends StatefulWidget {
@@ -251,7 +252,7 @@ class _OtpDialogState extends State<OtpDialog> {
               else if (photoToShow != null) ...[
                 Image.file(File(photoToShow.imagePath), height: 180),
                 const SizedBox(height: 8),
-                if (distanceToShow != null && distanceToShow > 500)
+                if (distanceToShow != null && distanceToShow > kDistance)
                   Padding(
                     padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
                     child: Card(

@@ -28,6 +28,10 @@ const kPosValidationHiveBox = 'pos_validation_box';
 const kPosDetailCacheBox = 'pos_detail_cache_box';
 const kPosValidationPartialHiveBox = 'pos_validation_partial_cache';
 
+
+//const
+const kDistance = 500.0;
+
 ///Colors
 final kColorBackgroundDefault = Color(0xFFD3E2ED);
 
