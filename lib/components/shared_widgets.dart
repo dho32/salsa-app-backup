@@ -248,7 +248,8 @@ void showLoadingDialog(BuildContext context) {
   );
 }
 
-Future<void> showSuccessDialog(BuildContext context, String message) async {
+Future<void> showSuccessDialog(BuildContext context, String message,
+    {VoidCallback? onOk}) async {
   await showDialog(
     context: context,
     builder: (_) => AlertDialog(
@@ -258,8 +259,9 @@ Future<void> showSuccessDialog(BuildContext context, String message) async {
         TextButton(
           onPressed: () {
             Navigator.pop(context); // close dialog
-            Navigator.pop(context); // back to menu
-            ConfirmationService().processQueue();
+            if (onOk != null) onOk();
+            // Navigator.pop(context); // back to menu
+            // ConfirmationService().processQueue();
           },
           child: const Text("OK"),
         ),

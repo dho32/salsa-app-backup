@@ -47,6 +47,10 @@ class ProofOfServiceHeader {
   final String branchName;
   @HiveField(7)
   final String storeEmail;
+  @HiveField(8)
+  final String latitude;
+  @HiveField(9)
+  final String longitude;
 
   ProofOfServiceHeader({
     required this.transNo,
@@ -57,6 +61,8 @@ class ProofOfServiceHeader {
     required this.branchCode,
     required this.branchName,
     required this.storeEmail,
+    required this.latitude,
+    required this.longitude,
   });
 
   factory ProofOfServiceHeader.fromJson(Map<String, dynamic> json) {
@@ -69,6 +75,8 @@ class ProofOfServiceHeader {
       branchCode: json['branch_code'] ?? '',
       branchName: json['branch_name'] ?? '',
       storeEmail: json['store_email'] ?? '',
+      latitude: json['latitude'] ?? '',
+      longitude: json['longitude'] ?? '',
     );
   }
 }

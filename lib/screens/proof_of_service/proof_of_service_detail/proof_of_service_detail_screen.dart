@@ -16,6 +16,7 @@ import 'package:salsa/components/constants.dart';
 import 'package:salsa/components/shared_widgets.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/service_call/validation_status.dart';
+import '../../common/services/confirmation_service.dart';
 import 'components/proof_of_service_detail_body_mobile.dart';
 
 class ProofOfServiceDetailScreen extends StatefulWidget {
@@ -51,7 +52,7 @@ class _ProofOfServiceDetailScreenState
 
   Future<void> _openHiveBox() async {
     final box =
-    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+        await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
     if (mounted) {
       setState(() {
         _transactionInfoBox = box;
@@ -70,90 +71,108 @@ class _ProofOfServiceDetailScreenState
       body: _transactionInfoBox == null || _technician1Name == null
           ? const Center(child: CircularProgressIndicator())
           : MultiBlocProvider(
-        providers: [
-          BlocProvider(
-            create: (context) => ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
-              ..add(FetchProofOfServiceDetail(widget.transNo)),
-          ),
-          // --- GABUNGKAN MENJADI SATU BLOCPROVIDER UNTUK PosSubmittedBloc ---
-          BlocProvider(
-            create: (context) {
-              final bloc = PosSubmittedBloc(repository: PosSubmittedRepository());
-              // Cek apakah ada data retry saat BLoC dibuat
-              Hive.openBox(kPosValidationPartialHiveBox).then((box) {
-                if (box.containsKey(widget.transNo)) {
-                  bloc.add(LoadPosValidationPartial(widget.transNo));
-                }
-              });
-              return bloc;
-            },
-          ),
-          BlocProvider(
-            create: (context) => UploadProgressCubit(),
-          ),
-          BlocProvider<PosFormCubit>(
-            create: (context) {
-              final detailState = context.read<ProofOfServiceDetailBloc>().state;
-              bool initialAllUnitsValidated = false;
-              if (detailState is ProofOfServiceDetailLoaded) {
-                initialAllUnitsValidated = detailState.data.detail.every((detail) {
-                  final serialKey = detail.serialNo.trim().toUpperCase();
-                  return detailState.validationStatuses[serialKey] == ValidationStatus.completed;
-                });
-              }
-              // --- UBAH NAMA PARAMETER SESUAI PERUBAHAN DI CUBIT ---
-              return PosFormCubit(
-                transNo: widget.transNo,
-                initialAllUnitsValidated: initialAllUnitsValidated,
-              );
-            },
-          ),
-        ],
-        // *** BAGIAN TERPENTING: TAMBAHKAN BLOCLISTENER UNTUK SINKRONISASI ***
-        child: BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
-          listener: (context, detailState) {
-            if (detailState is ProofOfServiceDetailLoaded) {
-              // Setiap kali status unit berubah, hitung ulang status validasinya
-              final allUnitsValidated = detailState.data.detail.every((detail) {
-                final serialKey = detail.serialNo.trim().toUpperCase();
-                return detailState.validationStatuses[serialKey] == ValidationStatus.completed;
-              });
-              // Kemudian, beri tahu PosFormCubit tentang status terbaru
-              context.read<PosFormCubit>().updateAllUnitsValidated(allUnitsValidated);
-            }
-          },
-          child: BlocListener<PosSubmittedBloc, PosSubmittedState>(
-            listener: (context, state) {
-              if (state is PosValidationUploadInProgress) {
-                final uploadCubit = context.read<UploadProgressCubit>();
-                uploadCubit.reset();
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => BlocProvider.value(
-                    value: uploadCubit,
-                    child: const UploadProgressDialog(),
+              providers: [
+                BlocProvider(
+                  create: (context) =>
+                      ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
+                        ..add(FetchProofOfServiceDetail(widget.transNo)),
+                ),
+                // --- GABUNGKAN MENJADI SATU BLOCPROVIDER UNTUK PosSubmittedBloc ---
+                BlocProvider(
+                  create: (context) {
+                    final bloc =
+                        PosSubmittedBloc(repository: PosSubmittedRepository());
+                    // Cek apakah ada data retry saat BLoC dibuat
+                    Hive.openBox(kPosValidationPartialHiveBox).then((box) {
+                      if (box.containsKey(widget.transNo)) {
+                        bloc.add(LoadPosValidationPartial(widget.transNo));
+                      }
+                    });
+                    return bloc;
+                  },
+                ),
+                BlocProvider(
+                  create: (context) => UploadProgressCubit(),
+                ),
+                BlocProvider<PosFormCubit>(
+                  create: (context) {
+                    final detailState =
+                        context.read<ProofOfServiceDetailBloc>().state;
+                    bool initialAllUnitsValidated = false;
+                    if (detailState is ProofOfServiceDetailLoaded) {
+                      initialAllUnitsValidated =
+                          detailState.data.detail.every((detail) {
+                        final serialKey = detail.serialNo.trim().toUpperCase();
+                        return detailState.validationStatuses[serialKey] ==
+                            ValidationStatus.completed;
+                      });
+                    }
+                    // --- UBAH NAMA PARAMETER SESUAI PERUBAHAN DI CUBIT ---
+                    return PosFormCubit(
+                      transNo: widget.transNo,
+                      initialAllUnitsValidated: initialAllUnitsValidated,
+                    );
+                  },
+                ),
+              ],
+              // *** BAGIAN TERPENTING: TAMBAHKAN BLOCLISTENER UNTUK SINKRONISASI ***
+              child: BlocListener<ProofOfServiceDetailBloc,
+                  ProofOfServiceDetailState>(
+                listener: (context, detailState) {
+                  if (detailState is ProofOfServiceDetailLoaded) {
+                    // Setiap kali status unit berubah, hitung ulang status validasinya
+                    final allUnitsValidated =
+                        detailState.data.detail.every((detail) {
+                      final serialKey = detail.serialNo.trim().toUpperCase();
+                      return detailState.validationStatuses[serialKey] ==
+                          ValidationStatus.completed;
+                    });
+                    // Kemudian, beri tahu PosFormCubit tentang status terbaru
+                    context
+                        .read<PosFormCubit>()
+                        .updateAllUnitsValidated(allUnitsValidated);
+                  }
+                },
+                child: BlocListener<PosSubmittedBloc, PosSubmittedState>(
+                  listener: (context, state) {
+                    if (state is PosValidationUploadInProgress) {
+                      final uploadCubit = context.read<UploadProgressCubit>();
+                      uploadCubit.reset();
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => BlocProvider.value(
+                          value: uploadCubit,
+                          child: const UploadProgressDialog(),
+                        ),
+                      );
+                    } else if (state is PosValidationSuccess) {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+                      ConfirmationService().processQueue();
+                      showSuccessDialog(
+                        context,
+                        "Data berhasil dikirim.",
+                        onOk: () {
+                          Navigator.of(context)
+                              .popUntil((route) => route.isFirst);
+                        },
+                      );
+                    } else if (state is PosValidationFailure) {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+                      showFailureDialog(context, state.error);
+                    }
+                  },
+                  child: ProofOfServiceDetailBodyMobile(
+                    transNo: widget.transNo,
+                    technician1Name: _technician1Name!,
                   ),
-                );
-              } else if (state is PosValidationSuccess) {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-                showSuccessDialog(context, "Data berhasil dikirim.");
-              } else if (state is PosValidationFailure) {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-                showFailureDialog(context, state.error);
-              }
-            },
-            child: ProofOfServiceDetailBodyMobile(
-              transNo: widget.transNo,
-              technician1Name: _technician1Name!,
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }

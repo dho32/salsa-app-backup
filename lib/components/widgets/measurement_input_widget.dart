@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
+import '../shared_function.dart';
 import 'full_screen_image_viewer.dart';
 
 class MeasurementInputWidget extends StatefulWidget {
@@ -46,7 +47,6 @@ class MeasurementInputWidget extends StatefulWidget {
 
   @override
   State<MeasurementInputWidget> createState() => _MeasurementInputWidgetState();
-
 }
 
 class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
@@ -59,7 +59,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _focusNode.addListener(_onFocusChange);
+    // _focusNode.addListener(_onFocusChange);
     _updateSliderFromText(widget.controller.text);
     _currentImage = widget.initialImage;
   }
@@ -77,31 +77,31 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     }
   }
 
-  void _onFocusChange() {
-    if (!_focusNode.hasFocus) {
-      final textValue = widget.controller.text;
-      double value = double.tryParse(textValue) ?? widget.limits.min;
-      final clampedValue = value.clamp(widget.limits.min, widget.limits.max);
-      final newText = _formatValue(clampedValue);
-      if (textValue != newText) {
-        widget.controller.text = newText;
-        widget.onChanged?.call(newText);
-        _currentSliderValue = clampedValue;
-        setState(() {});
-      }
-    }
-  }
+  // void _onFocusChange() {
+  //   if (!_focusNode.hasFocus) {
+  //     final textValue = widget.controller.text;
+  //     double value = double.tryParse(textValue) ?? widget.limits.min;
+  //     final clampedValue = value.clamp(widget.limits.min, widget.limits.max);
+  //     final newText = _formatValue(clampedValue);
+  //     if (textValue != newText) {
+  //       widget.controller.text = newText;
+  //       widget.onChanged?.call(newText);
+  //       _currentSliderValue = clampedValue;
+  //       setState(() {});
+  //     }
+  //   }
+  // }
 
   String _formatValue(double value) => value == value.truncateToDouble()
       ? value.truncate().toString()
-      : value.toStringAsFixed(1);
+      : value.toStringAsFixed(2);
 
   void _updateSliderFromText(String text) {
     final value = double.tryParse(text);
     if (value != null) {
       setState(() => _currentSliderValue =
           value.clamp(widget.limits.min, widget.limits.max));
-    }else if(text == ""){
+    } else if (text == "") {
       setState(() => _currentSliderValue = widget.limits.min);
     }
   }
@@ -155,7 +155,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChange);
+    // _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     super.dispose();
   }
@@ -200,7 +200,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               ),
             ),
 
-          const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey,),
+          const Divider(
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+            color: Colors.grey,
+          ),
 
           // Konten input yang bisa dinonaktifkan
           AnimatedSize(
@@ -296,47 +301,54 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   }
 
   Widget _buildSliderAndTextfield() {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(
-          flex: 12,
-          child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: Colors.grey,
-                  inactiveTrackColor: Colors.grey.shade300,
-                  thumbColor: Colors.blueGrey,
-                  overlayColor: Colors.grey.shade100,
-                  valueIndicatorColor: Theme.of(context).colorScheme.primary,
-                  showValueIndicator: ShowValueIndicator.always),
-              child: Slider(
-                  value: _currentSliderValue,
-                  min: widget.limits.min,
-                  max: widget.limits.max,
-                  label: _currentSliderValue.toStringAsFixed(1),
-                  onChanged: _onSliderChanged))),
-      Expanded(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+            flex: 12,
+            child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: Colors.grey,
+                    inactiveTrackColor: Colors.grey.shade300,
+                    thumbColor: Colors.blueGrey,
+                    overlayColor: Colors.grey.shade100,
+                    valueIndicatorColor: Theme.of(context).colorScheme.primary,
+                    showValueIndicator: ShowValueIndicator.always),
+                child: Slider(
+                    value: _currentSliderValue,
+                    min: widget.limits.min,
+                    max: widget.limits.max,
+                    label: _currentSliderValue.toStringAsFixed(2),
+                    onChanged: _onSliderChanged))),
+        Expanded(
           flex: 5,
           child: Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: TextFormField(
-                  focusNode: _focusNode,
-                  controller: widget.controller,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  onFieldSubmitted: (text) {
-                    _updateSliderFromText(text);
-                    widget.onChanged?.call(text);
-                  },
-                  textAlign: TextAlign.right,
-                  onTapOutside: (_) {
-                    _updateSliderFromText(widget.controller.text);
-                    widget.onChanged?.call(widget.controller.text);
-                  },
-                  onEditingComplete: _onFocusChange,
-                  decoration: InputDecoration(
-                      labelText: widget.limits.unit, isDense: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*'))
-                  ])))
-    ]);
+            padding: const EdgeInsets.only(right: 8.0),
+            child: TextFormField(
+              focusNode: _focusNode,
+              controller: widget.controller,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onFieldSubmitted: (text) {
+                _updateSliderFromText(text);
+                widget.onChanged?.call(text);
+              },
+              textAlign: TextAlign.right,
+              onTapOutside: (_) {
+                _updateSliderFromText(widget.controller.text);
+                widget.onChanged?.call(widget.controller.text);
+              },
+              // onEditingComplete: _onFocusChange,
+              decoration:
+                  InputDecoration(labelText: widget.limits.unit, isDense: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*')),
+                NumericRangeFormatter(max: widget.limits.max),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

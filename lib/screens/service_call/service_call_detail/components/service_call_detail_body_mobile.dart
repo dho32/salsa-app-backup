@@ -397,6 +397,8 @@ class _ServiceCallDetailBodyMobileState
                                       transNo: header.transNo,
                                       shipTo: header.storeId,
                                       email: header.storeEmail,
+                                      storeLat: 0,
+                                      storeLong: 0,
                                       // Ganti dengan email tujuan OTP
 
                                       // Berikan fungsi onVerified yang spesifik untuk Proof of Service

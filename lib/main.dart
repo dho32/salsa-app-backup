@@ -44,6 +44,8 @@ void main() async {
   await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
   await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
   await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+  await Hive.openBox('otp_state');
+
 
   // await Hive.deleteBoxFromDisk(kServiceCallHiveBox);
 

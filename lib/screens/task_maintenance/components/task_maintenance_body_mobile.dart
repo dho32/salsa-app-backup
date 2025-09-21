@@ -24,7 +24,6 @@ class TaskMaintenanceBodyMobile extends StatefulWidget {
 
 class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
   final _transNoController = TextEditingController();
-  MaintenanceType? _selectedType;
 
   @override
   void dispose() {
@@ -57,7 +56,6 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       return;
     }
 
-    _selectedType = taskType;
     context.read<TaskMaintenanceBloc>().add(
           SearchPO(transNo, widget.userData['maintenance_by']!, taskType),
         );
@@ -164,10 +162,9 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                         if (suggestions.length == 1 &&
                             suggestions.first.status.toUpperCase() != 'AKTIF') {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Transaksi ini sudah selesai dikerjakan.'),
-                              backgroundColor: Colors.blue,
+                            SnackBar(
+                              content: Text(suggestions.first.status),
+                              backgroundColor: Colors.orange[500],
                               behavior: SnackBarBehavior.floating,
                             ),
                           );

@@ -55,6 +55,7 @@ class SavePosValidationData extends PosValidationEvent {
   final String articleUnitDesc;
   final int capacity;
   final String articleType;
+  final double? indoorTemp;
   const SavePosValidationData({
     required this.transNo,
     required this.serialNo,
@@ -65,7 +66,22 @@ class SavePosValidationData extends PosValidationEvent {
     required this.articleUnitDesc,
     required this.capacity,
     required this.articleType,
+    this.indoorTemp,
   });
+
+  @override
+  List<Object?> get props => [
+    transNo,
+    serialNo,
+    markAsCompleted,
+    note,
+    articleNo,
+    articleDesc,
+    articleUnitDesc,
+    capacity,
+    articleType,
+    indoorTemp // <-- TAMBAHKAN DI PROPS
+  ];
 }
 
 class MarkAsInProgress extends PosValidationEvent {

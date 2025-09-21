@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+5
+version: 1.2.1+7
 
 environment:
   sdk: ^3.6.2
@@ -46,8 +46,6 @@ dependencies:
   hive: ^2.2.3 #local database seperti sql lite cuma lebih ringan
   hive_flutter: ^1.1.0 #local database seperti sql lite cuma lebih ringan
   path_provider: ^2.1.5 #path direction
-  hive_generator: ^2.0.1 #untuk generate hive
-  build_runner: ^2.4.15 #untuk generate hive
   mobile_scanner: ^7.0.1 # untuk scan qr
   image_picker: ^1.1.2 # untuk ambil image via camera/storage
   collection: ^1.19.1 # collection data
@@ -68,6 +66,7 @@ dependencies:
   flutter_launcher_icons: ^0.14.4 # untuk generate icon launcher
   package_info_plus: ^8.3.1 #untuk cek version app
   easy_debounce: ^2.0.3
+  permission_handler: ^12.0.1
   qr_code_scanner:
     git:
       url: https://github.com/RomyITCM/qr_code_scanner.git
@@ -83,6 +82,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  hive_generator: ^2.0.1 #untuk generate hive
+  build_runner: ^2.4.15 #untuk generate hive
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -9,6 +9,7 @@ import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_state.dart';
 import 'package:salsa/components/shared_function.dart';
 import 'package:salsa/models/proof_of_service/proof_of_service_detail_model.dart';
 
+import '../../../../blocs/location_validation/location_validation_bloc.dart';
 import '../../../../blocs/otp/otp_bloc.dart';
 import '../../../../blocs/otp/otp_repository.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
@@ -637,30 +638,39 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
 
                 await showDialog<void>(
                   context: context,
-                  builder: (_) => MultiBlocProvider(
-                    providers: [
-                      BlocProvider(
-                          create: (_) => OtpBloc(repository: OtpRepository())),
-                    ],
-                    child: OtpDialog(
-                      transNo: header.transNo,
-                      shipTo: header.shipToCode,
-                      email: header.storeEmail,
-                      onVerified: () {
-                        final progressCubit =
-                            context.read<UploadProgressCubit>();
-                        context.read<PosSubmittedBloc>().add(
-                              SubmitPosValidation(
-                                transNo: header.transNo,
-                                createdBy: maintenanceBy,
-                                createdByName: technicianName,
-                                createdByIP: maintenanceByIP,
-                                progressCubit: progressCubit,
-                              ),
-                            );
-                      },
-                    ),
-                  ),
+                  builder: (_) {
+                    return MultiBlocProvider(
+                      providers: [
+                        // OTP Bloc
+                        BlocProvider(
+                            create: (_) =>
+                                OtpBloc(repository: OtpRepository())),
+                        BlocProvider(create: (_) => LocationValidationBloc()),
+                        BlocProvider.value(
+                            value: context.read<UploadProgressCubit>()),
+                      ],
+                      child: OtpDialog(
+                        transNo: header.transNo,
+                        shipTo: header.shipToCode,
+                        email: header.storeEmail,
+                        storeLat: double.parse(header.latitude),
+                        storeLong: double.parse(header.longitude),
+                        onVerified: () {
+                          final progressCubit =
+                              context.read<UploadProgressCubit>();
+                          context.read<PosSubmittedBloc>().add(
+                                SubmitPosValidation(
+                                  transNo: header.transNo,
+                                  createdBy: maintenanceBy,
+                                  createdByName: technicianName,
+                                  createdByIP: maintenanceByIP,
+                                  progressCubit: progressCubit,
+                                ),
+                              );
+                        },
+                      ),
+                    );
+                  },
                 );
               } else {
                 if (!formState.isPicStoreValid) {

@@ -48,7 +48,7 @@ class _GenericMeasurementInputSectionState
     for (var mEntry in widget.measurements) {
       final valueText = mEntry.value == mEntry.value.truncateToDouble()
           ? mEntry.value.truncate().toString()
-          : mEntry.value.toStringAsFixed(1);
+          : mEntry.value.toStringAsFixed(2);
       _controllers[mEntry.measurementId] =
           TextEditingController(text: valueText);
 

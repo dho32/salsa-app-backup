@@ -56,3 +56,15 @@ class PosValidationError extends PosValidationState {
   final String message;
   const PosValidationError(this.message);
 }
+
+class PosValidationSaveFailure extends PosValidationState {
+  final String message;
+  final PosValidationLoaded lastState;
+
+  const PosValidationSaveFailure(this.message, this.lastState);
+
+  @override
+  List<Object> get props => [message, lastState];
+}
+
+class PosValidationSaveSuccess extends PosValidationState {}

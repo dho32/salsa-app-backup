@@ -6,6 +6,7 @@ import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_bloc.dart';
 import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_event.dart';
 import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_state.dart';
+import '../../../components/constants.dart';
 import 'components/pos_validation_body_mobile.dart';
 
 class PosValidationScreen extends StatefulWidget {
@@ -93,24 +94,52 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
           initialData: widget.initialData,
           unitType: widget.unitType,
         )),
-      child: BlocBuilder<PosValidationBloc, PosValidationState>(
-        builder: (context, state) {
-          return Scaffold(
-            appBar: AppBar(title: const Text("Validasi Perawatan Unit AC")),
-            body: PosValidationBodyMobile(
-              transNo: widget.transNo,
-              serialNo: widget.serialNo,
-              unitType: widget.unitType,
-              articleDesc: widget.articleDesc,
-              articleUnitDesc: widget.articleUnitDesc,
-              noteController: _noteController,
-              indoorTemp: widget.indoorTemp,
-            ),
-            bottomNavigationBar: (state is PosValidationLoaded)
-                ? _buildFloatingButtons(context, state)
-                : null,
-          );
+      child: BlocListener<PosValidationBloc, PosValidationState>(
+        listener: (context, state) {
+          if (state is PosValidationSaveFailure) {
+            ScaffoldMessenger.of(context).removeCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          else if (state is PosValidationSaveSuccess) {
+            Navigator.of(context).pop(true); // Kembali ke halaman sebelumnya
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Data berhasil disimpan'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
         },
+        child: BlocBuilder<PosValidationBloc, PosValidationState>(
+          builder: (context, state) {
+            PosValidationLoaded? uiState;
+            if (state is PosValidationLoaded) {
+              uiState = state;
+            } else if (state is PosValidationSaveFailure) {
+              uiState = state.lastState;
+            }
+            return Scaffold(
+              appBar: AppBar(title: const Text("Validasi Perawatan Unit AC")),
+              body: PosValidationBodyMobile(
+                transNo: widget.transNo,
+                serialNo: widget.serialNo,
+                unitType: widget.unitType,
+                articleDesc: widget.articleDesc,
+                articleUnitDesc: widget.articleUnitDesc,
+                noteController: _noteController,
+                indoorTemp: widget.indoorTemp,
+              ),
+              bottomNavigationBar: (uiState != null)
+                  ? _buildFloatingButtons(context, uiState)
+                  : null,
+            );
+          },
+        ),
       ),
     );
   }
@@ -165,6 +194,27 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     return;
                   }
 
+                  for (final measurement in state.measurementsAfter) {
+                    if (measurement.isSkipped) continue;
+
+                    final limits = kPOSMeasurementLimits[measurement.measurementId];
+                    if (limits != null) {
+                      // Tentukan batas atas dinamis untuk suhu
+                      double maxLimit = limits.max;
+                      if (measurement.measurementId == 'temperature' && widget.indoorTemp != null) {
+                        maxLimit = widget.indoorTemp!;
+                      }
+
+                      // Lakukan pengecekan
+                      if (measurement.value > maxLimit) {
+                        final errorMessage =
+                            'Nilai "${limits.label}" yang anda input melebihi batas.';
+                        _showValidationErrorSnackbar(errorMessage);
+                        return; // Hentikan proses jika ada yang tidak valid
+                      }
+                    }
+                  }
+
                   bloc.add(SavePosValidationData(
                     transNo: widget.transNo,
                     serialNo: widget.serialNo,
@@ -175,13 +225,14 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     articleUnitDesc: widget.articleUnitDesc,
                     capacity: widget.capacity,
                     articleType: widget.unitType,
+                    indoorTemp: widget.indoorTemp,
                   ));
-                  Navigator.of(context).pop(true);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Data berhasil disimpan'),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                  ));
+                  // Navigator.of(context).pop(true);
+                  // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  //   content: Text('Data berhasil disimpan'),
+                  //   backgroundColor: Colors.green,
+                  //   behavior: SnackBarBehavior.floating,
+                  // ));
                 },
               ),
             ),

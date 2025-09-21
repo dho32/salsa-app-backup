@@ -49,7 +49,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
   }
 
   // Handler untuk memuat data awal (dari Hive atau membuat baru)
-  void _onFetchData(FetchPosValidationData event, Emitter<PosValidationState> emit) {
+  void _onFetchData(
+      FetchPosValidationData event, Emitter<PosValidationState> emit) {
     emit(PosValidationLoading());
     final initialData = event.initialData;
     if (initialData != null) {
@@ -68,24 +69,31 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
   }
 
   // Handler untuk event lainnya yang memodifikasi state
-  void _onChangeStep(ChangePosValidationStep event, Emitter<PosValidationState> emit) {
+  void _onChangeStep(
+      ChangePosValidationStep event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       emit((state as PosValidationLoaded).copyWith(currentStep: event.step));
     }
   }
 
-  void _onAddPhotoBefore(AddPhotoBefore event, Emitter<PosValidationState> emit) {
+  void _onAddPhotoBefore(
+      AddPhotoBefore event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
-      final updatedPhotos = List<CapturedImageDetail>.from(currentState.photosBefore)..add(event.imageDetail);
+      final updatedPhotos =
+          List<CapturedImageDetail>.from(currentState.photosBefore)
+            ..add(event.imageDetail);
       emit(currentState.copyWith(photosBefore: updatedPhotos));
     }
   }
 
-  void _onRemovePhotoBefore(RemovePhotoBefore event, Emitter<PosValidationState> emit) {
+  void _onRemovePhotoBefore(
+      RemovePhotoBefore event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
-      final updatedPhotos = currentState.photosBefore.where((p) => p.imagePath != event.imagePath).toList();
+      final updatedPhotos = currentState.photosBefore
+          .where((p) => p.imagePath != event.imagePath)
+          .toList();
       emit(currentState.copyWith(photosBefore: updatedPhotos));
     }
   }
@@ -93,24 +101,32 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
   void _onAddPhotoAfter(AddPhotoAfter event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
-      final updatedPhotos = List<CapturedImageDetail>.from(currentState.photosAfter)..add(event.imageDetail);
+      final updatedPhotos =
+          List<CapturedImageDetail>.from(currentState.photosAfter)
+            ..add(event.imageDetail);
       emit(currentState.copyWith(photosAfter: updatedPhotos));
     }
   }
 
-  void _onRemovePhotoAfter(RemovePhotoAfter event, Emitter<PosValidationState> emit) {
+  void _onRemovePhotoAfter(
+      RemovePhotoAfter event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
-      final updatedPhotos = currentState.photosAfter.where((p) => p.imagePath != event.imagePath).toList();
+      final updatedPhotos = currentState.photosAfter
+          .where((p) => p.imagePath != event.imagePath)
+          .toList();
       emit(currentState.copyWith(photosAfter: updatedPhotos));
     }
   }
 
-  void _onUpdateMeasurementAfter(UpdateMeasurementAfter event, Emitter<PosValidationState> emit) {
+  void _onUpdateMeasurementAfter(
+      UpdateMeasurementAfter event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
-      final updatedMeasurements = List<MeasurementEntry>.from(currentState.measurementsAfter);
-      final index = updatedMeasurements.indexWhere((m) => m.measurementId == event.measurement.measurementId);
+      final updatedMeasurements =
+          List<MeasurementEntry>.from(currentState.measurementsAfter);
+      final index = updatedMeasurements.indexWhere(
+          (m) => m.measurementId == event.measurement.measurementId);
       if (index != -1) {
         updatedMeasurements[index] = event.measurement;
       }
@@ -119,9 +135,48 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
   }
 
   // Handler untuk menyimpan data ke Hive
-  Future<void> _onSaveData(SavePosValidationData event, Emitter<PosValidationState> emit) async {
+  Future<void> _onSaveData(
+      SavePosValidationData event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
+
+      // =================================================================
+      // --- LOGIKA VALIDASI DITAMBAHKAN DI SINI ---
+      // =================================================================
+      for (final measurement in currentState.measurementsAfter) {
+        // Jangan validasi jika pengukuran di-skip
+        if (measurement.isSkipped) continue;
+
+        // Ambil batas (limits) dari konstanta
+        final limits = kPOSMeasurementLimits[measurement.measurementId];
+
+        // Cek jika nilai yang diinput melebihi batas maksimal
+        if (limits != null) {
+          // Secara default, gunakan batas atas dari konstanta
+          double maxLimit = limits.max;
+
+          // TAPI, jika ini adalah pengukuran suhu ('temperature') DAN kita menerima
+          // nilai indoorTemp dari event, maka GUNAKAN nilai indoorTemp sebagai batas atas.
+          if (measurement.measurementId == 'temperature' &&
+              event.indoorTemp != null) {
+            maxLimit = event.indoorTemp!;
+          }
+
+          // Lakukan validasi dengan batas atas (maxLimit) yang sudah dinamis
+          if (measurement.value > maxLimit) {
+            final errorMessage =
+                'Nilai untuk "${limits.label}" (${measurement.value} ${limits.unit}) melebihi batas maksimal.';
+
+            emit(PosValidationSaveFailure(errorMessage, currentState));
+            return;
+          }
+        }
+      }
+      // =================================================================
+      // --- AKHIR DARI LOGIKA VALIDASI ---
+      // =================================================================
+
+      // Jika semua validasi lolos, lanjutkan proses penyimpanan ke Hive
       final entry = PosValidationEntryModel(
         transNo: event.transNo,
         serialNo: event.serialNo.trim().toUpperCase(),
@@ -137,9 +192,14 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         articleType: event.articleType,
       );
 
-      final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-      // Gunakan serialNo sebagai key unik untuk box ini
+      final box =
+          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
+
+      // Pancarkan (emit) state SUKSES setelah menyimpan
+      if (event.markAsCompleted) {
+        emit(PosValidationSaveSuccess());
+      }
     }
   }
 
@@ -154,7 +214,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         photosBefore: currentState.photosBefore,
         photosAfter: currentState.photosAfter,
         measurementsAfter: currentState.measurementsAfter,
-        isCompleted: false, // <-- INI KUNCINYA
+        isCompleted: false,
+        // <-- INI KUNCINYA
         note: event.note,
         articleNo: event.articleNo,
         articleDesc: event.articleDesc,
@@ -163,7 +224,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         articleType: event.articleType,
       );
 
-      final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      final box =
+          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
     }
   }

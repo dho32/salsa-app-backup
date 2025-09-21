@@ -53,10 +53,26 @@ class OtpVerified extends OtpState {
 /// OTP salah / server mengembalikan error
 class OtpError extends OtpState {
   final String message;
-  const OtpError(this.message);
+  final int? secondsRemaining;
+  final int? resendCooldown;
+  final int? retryLeft;
+  final bool? hasOtp;
+  const OtpError(
+      this.message, {
+        this.secondsRemaining,
+        this.resendCooldown,
+        this.retryLeft,
+        this.hasOtp,
+      });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [
+    message,
+    secondsRemaining,
+    resendCooldown,
+    retryLeft,
+    hasOtp
+  ];
 }
 
 /// Masa berlaku OTP habis
@@ -67,8 +83,9 @@ class OtpExpired extends OtpState {
 /// User di-lock (mis. 1 jam) karena sudah resend 3 ×
 class OtpLocked extends OtpState {
   final Duration lockedFor;
-  const OtpLocked(this.lockedFor);
+  final String? temporaryError;
+  const OtpLocked(this.lockedFor, {this.temporaryError});
 
   @override
-  List<Object?> get props => [lockedFor];
+  List<Object?> get props => [lockedFor, temporaryError];
 }

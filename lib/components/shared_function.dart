@@ -2,9 +2,13 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:salsa/components/constants.dart';
+
+import '../models/common/captured_image_detail.dart';
 
 /// Fungsi untuk mendapatkan tanggal dalam format yang lebih mudah dibaca
 String getFormattedIndonesianDate(
@@ -131,4 +135,81 @@ Future<String> getPublicIpAddress() async {
 String getHiveKeyForTransaction(String transNo) {
   return transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 }
+
+
+class LocationHelper {
+  /// Validasi lokasi foto pejabat toko terhadap koordinat toko
+  ///
+  /// [pic]  → hasil foto pejabat toko (CapturedImageDetail, punya lat/lng)
+  /// [tokoLat], [tokoLng] → koordinat toko
+  /// [maxDistance] → toleransi jarak dalam meter (default 500m)
+  ///
+  /// return `true` kalau lokasi valid (≤ maxDistance), else `false`
+  static Future<bool> validateLocation({
+    required CapturedImageDetail pic,
+    required double tokoLat,
+    required double tokoLng,
+    double maxDistance = 500.0,
+  }) async {
+    final distance = Geolocator.distanceBetween(
+      tokoLat,
+      tokoLng,
+      pic.latitude,
+      pic.longitude,
+    );
+
+    return distance <= maxDistance;
+  }
+
+  /// Hitung jarak (meter) antara toko dan foto
+  static Future<double> calculateDistance({
+    required CapturedImageDetail pic,
+    required double tokoLat,
+    required double tokoLng,
+  }) async {
+    return Geolocator.distanceBetween(
+      tokoLat,
+      tokoLng,
+      pic.latitude,
+      pic.longitude,
+    );
+  }
+}
+
+
+class NumericRangeFormatter extends TextInputFormatter {
+  final double max;
+
+  NumericRangeFormatter({required this.max});
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
+    // Jika field dikosongkan, izinkan.
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    // Coba ubah teks baru menjadi angka.
+    final double? value = double.tryParse(newValue.text);
+
+    // Jika teks bukan angka yang valid (misal: "12."), biarkan apa adanya untuk sementara.
+    // FilteringTextInputFormatter yang sudah ada akan menanganinya.
+    if (value == null) {
+      return newValue;
+    }
+
+    // INTI LOGIKA: Jika angka yang baru diketik lebih besar dari batas maksimal...
+    if (value > max) {
+      // ...JANGAN terima perubahan, kembalikan nilai yang lama.
+      return oldValue;
+    }
+
+    // Jika valid, terima perubahan.
+    return newValue;
+  }
+}
+
 

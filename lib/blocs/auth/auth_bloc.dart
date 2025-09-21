@@ -40,10 +40,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (hasToken && !isExpired) {
         emit(AuthAuthenticated());
       } else {
+        await authRepository.recordLogout();
+        await authRepository.deleteToken();
         emit(AuthUnauthenticated());
       }
     } catch (e) {
       // Jika gagal (cth: tidak ada internet), arahkan ke halaman login
+      await authRepository.recordLogout();
+      await authRepository.deleteToken();
       emit(AuthUnauthenticated());
     }
   }
@@ -52,7 +56,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       LoginRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      final token = await authRepository.login(event.email, event.password);
+      // BARU: Ambil versi aplikasi di sini
+      final packageInfo = await PackageInfo.fromPlatform();
+      final appVersion = packageInfo.version;
+
+      final token = await authRepository.login(event.email, event.password, appVersion);
       final payload = JwtHelper.decode(token);
       if (payload == null) throw Exception("Token tidak valid");
 
@@ -60,10 +68,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final options = maintenanceList
           .map((json) => MaintenanceInfo.fromJson(json))
           .toList();
-
-      // BARU: Ambil versi aplikasi di sini
-      final packageInfo = await PackageInfo.fromPlatform();
-      final appVersion = packageInfo.version;
 
       if (options.length > 1) {
         // Jika ada lebih dari 1 pilihan, minta pengguna memilih

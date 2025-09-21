@@ -8,11 +8,12 @@ import '../../models/auth/maintenance_info_model.dart';
 import 'auth_storage.dart';
 
 class AuthRepository {
-  Future<String> login(String email, String password) async {
+  Future<String> login(String email, String password, String appVersion) async {
     Uri uri = getUrl(pathUrl: '/login');
     var map = <String, dynamic>{};
     map['user'] = email;
     map['password'] = password;
+    map['version'] = appVersion;
 
     final response = await http.post(
       uri,

@@ -13,20 +13,21 @@ class TaskMaintenanceRepository {
       final params = {
         'trans_no': transNo,
         'maintenance_by': maintenanceBy,
-        'task_type': taskType
-            .toString()
-            .split('.')
-            .last,
+        'task_type': taskType.toString().split('.').last,
       };
 
       Uri uri = getUrl(pathUrl: 'task_maintenance', params: params);
       final response = await http.get(uri);
 
+      print(uri);
+
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 'OK') {
           final List<dynamic> results = body['result'] ?? [];
-          return results.map((json) => TransactionSuggestion.fromJson(json)).toList();
+          return results
+              .map((json) => TransactionSuggestion.fromJson(json))
+              .toList();
         } else {
           throw Exception(body['message'] ?? 'Transaksi tidak ditemukan');
         }
@@ -34,12 +35,10 @@ class TaskMaintenanceRepository {
         throw Exception(
             'Gagal memuat data PO. Status Code: ${response.statusCode}');
       }
-    } on http.ClientException catch (e) {
+    } on http.ClientException {
       throw Exception(
           'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
     } catch (e) {
-      // Error tak terduga lainnya
-      print('Unexpected Error: $e');
       throw Exception('Terjadi kesalahan tidak terduga saat mencari PO.');
     }
   }
