@@ -29,7 +29,7 @@ const kPosDetailCacheBox = 'pos_detail_cache_box';
 const kPosValidationPartialHiveBox = 'pos_validation_partial_cache';
 
 
-//const
+///const
 const kDistance = 500.0;
 
 ///Colors
