@@ -14,6 +14,7 @@ extension PosValidationEntryModelJson on PosValidationEntryModel {
       'images_before': photosBefore.map((img) => img.toJson()).toList(),
       'images_after': photosAfter.map((img) => img.toJson()).toList(),
       'measurements_after': measurementsAfter.map((m) => m.toJson()).toList(),
+      'paired_serial_no': pairedSerialNo,
     };
   }
 }

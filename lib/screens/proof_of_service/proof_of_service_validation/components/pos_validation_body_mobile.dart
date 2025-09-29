@@ -233,6 +233,8 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         child: Column(
           children: [
             _buildValidationHeader(),
+            if (state.unitType.toUpperCase() == 'OUT')
+              _buildIndoorPairingDropdown(context, state),
             buildPhotoSection(
               context: context,
               title: '$labelUnit Sebelum Perawatan',
@@ -259,6 +261,41 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         child: Column(
           children: [
             _buildValidationHeader(),
+
+            if (state.unitType.toUpperCase() == 'OUT' &&
+                state.pairedIndoorSerial != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            text: 'Dipasangkan dengan Indoor: ',
+                            style: TextStyle(color: Colors.grey.shade800),
+                            children: [
+                              TextSpan(
+                                text: state.pairedIndoorSerial!,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             buildPhotoSection(
               context: context,
               title: '$labelUnit Sesudah Perawatan',
@@ -395,6 +432,61 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildIndoorPairingDropdown(
+      BuildContext context, PosValidationLoaded state) {
+    // Bangun daftar item untuk dropdown
+    List<DropdownMenuItem<String>> items = state.availableIndoorSerials
+        .map((serial) => DropdownMenuItem(
+      value: serial,
+      child: Text(serial),
+    ))
+        .toList();
+
+    // Jika unit ini sudah punya pasangan, tambahkan pasangannya ke daftar
+    // agar bisa ditampilkan sebagai nilai yang terpilih
+    if (state.pairedIndoorSerial != null &&
+        !state.availableIndoorSerials.contains(state.pairedIndoorSerial)) {
+      items.insert(
+          0,
+          DropdownMenuItem(
+            value: state.pairedIndoorSerial,
+            child: Text(state.pairedIndoorSerial!),
+          ));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pasangkan dengan Unit Indoor (*Wajib diisi)',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: state.pairedIndoorSerial,
+            hint: const Text('Pilih Serial No. Indoor'),
+            isExpanded: true,
+            items: items,
+            onChanged: (newValue) {
+              context.read<PosValidationBloc>().add(
+                PairOutdoorWithIndoor(
+                  outdoorSerialNo: widget.serialNo,
+                  indoorSerialNo: newValue,
+                ),
+              );
+            },
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            ),
+          ),
+        ],
       ),
     );
   }

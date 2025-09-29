@@ -635,6 +635,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                 final maintenanceByIP = await getPublicIpAddress();
                 final technicianName = user['name'] ?? '';
                 final maintenanceBy = user['user_id'] ?? '';
+                final double storeLat = double.tryParse(header.latitude ?? '') ?? 0.0;
+                final double storeLong = double.tryParse(header.longitude ?? '') ?? 0.0;
 
                 await showDialog<void>(
                   context: context,
@@ -653,8 +655,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                         transNo: header.transNo,
                         shipTo: header.shipToCode,
                         email: header.storeEmail,
-                        storeLat: double.parse(header.latitude),
-                        storeLong: double.parse(header.longitude),
+                        storeLat: storeLat,
+                        storeLong: storeLong,
                         onVerified: () {
                           final progressCubit =
                               context.read<UploadProgressCubit>();
@@ -783,6 +785,18 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
         await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
     final existingData = box.get(detail.serialNo.trim().toUpperCase());
     final double? indoorTemp = double.tryParse(tempIn);
+    final detailState = context.read<ProofOfServiceDetailBloc>().state;
+    List<String> allIndoorSerials = [];
+
+    if (detailState is ProofOfServiceDetailLoaded) {
+      // 3. Filter hanya unit indoor, lalu ambil serial number-nya
+      allIndoorSerials = detailState.data.detail
+          .where((d) => d.unitType.toUpperCase() == 'IN')
+          .map((d) => d.serialNo)
+          .toList();
+    }
+
+    if (!context.mounted) return;
 
     await Navigator.push(
       context,
@@ -797,6 +811,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
           articleUnitDesc: detail.unitDesc,
           capacity: 0,
           indoorTemp: indoorTemp,
+          allIndoorSerials: allIndoorSerials,
         ),
       ),
     );
@@ -818,4 +833,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
       ),
     );
   }
+
+
+
 }

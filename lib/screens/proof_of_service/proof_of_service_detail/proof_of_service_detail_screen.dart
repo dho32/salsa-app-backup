@@ -66,8 +66,6 @@ class _ProofOfServiceDetailScreenState
       appBar: AppBar(
         title: const Text("Detail Proof of Service"),
       ),
-      // --- KOREKSI LOGIKA LOADING ---
-      // Gunakan || (ATAU) bukan && (DAN)
       body: _transactionInfoBox == null || _technician1Name == null
           ? const Center(child: CircularProgressIndicator())
           : MultiBlocProvider(

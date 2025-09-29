@@ -19,6 +19,7 @@ class PosValidationScreen extends StatefulWidget {
   final String articleUnitDesc;
   final int capacity;
   final double? indoorTemp;
+  final List<String> allIndoorSerials;
 
   const PosValidationScreen({
     super.key,
@@ -31,6 +32,7 @@ class PosValidationScreen extends StatefulWidget {
     required this.articleUnitDesc,
     required this.capacity,
     required this.indoorTemp,
+    required this.allIndoorSerials,
   });
 
   @override
@@ -93,6 +95,9 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
         ..add(FetchPosValidationData(
           initialData: widget.initialData,
           unitType: widget.unitType,
+          allIndoorSerials: widget.allIndoorSerials, // <-- Kirim daftar
+          serialNo: widget.serialNo, // <-- Kirim SN unit ini
+          transNo: widget.transNo,
         )),
       child: BlocListener<PosValidationBloc, PosValidationState>(
         listener: (context, state) {
@@ -271,6 +276,12 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   if (state.photosBefore.isEmpty) {
                     _showValidationErrorSnackbar(
                         'Foto unit sebelum cuci wajib dilengkapi untuk melanjutkan.');
+                    return;
+                  }
+                  if (state.unitType.toUpperCase() == 'OUT' &&
+                      state.pairedIndoorSerial == null) {
+                    _showValidationErrorSnackbar(
+                        'Anda wajib memilih pasangan unit indoor untuk melanjutkan.');
                     return;
                   }
                   bloc.add(SavePosValidationData(
