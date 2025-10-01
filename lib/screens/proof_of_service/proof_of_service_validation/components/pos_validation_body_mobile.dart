@@ -22,6 +22,7 @@ class PosValidationBodyMobile extends StatefulWidget {
   final String articleUnitDesc;
   final TextEditingController noteController;
   final double? indoorTemp;
+  final List<String> noteOptions;
 
   const PosValidationBodyMobile({
     super.key,
@@ -32,6 +33,7 @@ class PosValidationBodyMobile extends StatefulWidget {
     required this.articleUnitDesc,
     required this.noteController,
     required this.indoorTemp,
+    required this.noteOptions,
   });
 
   @override
@@ -319,14 +321,31 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
               },
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: TextFormField(
-                controller: widget.noteController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: DropdownButtonFormField<String>(
+                value: widget.noteController.text.isNotEmpty
+                    ? widget.noteController.text
+                    : null,
+                hint: const Text('Note wajib dipilih jika tidak dapat diukur'),
+                isExpanded: true,
+                items: widget.noteOptions.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  widget.noteController.text = newValue ?? '';
+                },
                 decoration: const InputDecoration(
-                  labelText: 'Catatan (Opsional)',
+                  labelText: 'Catatan',
                   border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 ),
-                maxLines: 3,
+                validator: (value) {
+                  // Anda bisa menambahkan validasi di sini jika perlu
+                  return null;
+                },
               ),
             ),
           ],

@@ -54,6 +54,21 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       FetchPosValidationData event, Emitter<PosValidationState> emit) {
     emit(PosValidationLoading());
     final initialData = event.initialData;
+
+    if (initialData != null && initialData.isCompleted) {
+      // Jika ya, panggil event MarkAsInProgress dari dalam BLoC itu sendiri
+      add(MarkAsInProgress(
+        transNo: event.transNo,
+        serialNo: event.serialNo,
+        note: initialData.note ?? '',
+        articleNo: initialData.articleNo ?? '',
+        articleDesc: initialData.articleDesc ?? '',
+        articleUnitDesc: initialData.articleUnitDesc ?? '',
+        capacity: initialData.capacity ?? 0,
+        articleType: event.unitType,
+      ));
+    }
+
     final box = Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
     final allEntries = box.values
         .where(

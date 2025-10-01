@@ -20,6 +20,7 @@ class PosValidationScreen extends StatefulWidget {
   final int capacity;
   final double? indoorTemp;
   final List<String> allIndoorSerials;
+  final List<String> noteOptions;
 
   const PosValidationScreen({
     super.key,
@@ -33,6 +34,7 @@ class PosValidationScreen extends StatefulWidget {
     required this.capacity,
     required this.indoorTemp,
     required this.allIndoorSerials,
+    required this.noteOptions,
   });
 
   @override
@@ -53,22 +55,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
     super.initState();
     _noteController.text = widget.initialData?.note ?? '';
 
-    if (widget.initialData != null && widget.initialData!.isCompleted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          context.read<PosValidationBloc>().add(MarkAsInProgress(
-                transNo: widget.transNo,
-                serialNo: widget.serialNo,
-                note: _noteController.text,
-                articleNo: widget.articleNo,
-                articleDesc: widget.articleDesc,
-                articleUnitDesc: widget.articleUnitDesc,
-                capacity: widget.capacity,
-                articleType: widget.unitType,
-              ));
-        }
-      });
-    }
+
   }
 
   @override
@@ -138,6 +125,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 articleUnitDesc: widget.articleUnitDesc,
                 noteController: _noteController,
                 indoorTemp: widget.indoorTemp,
+                noteOptions: widget.noteOptions,
               ),
               bottomNavigationBar: (uiState != null)
                   ? _buildFloatingButtons(context, uiState)

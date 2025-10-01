@@ -787,6 +787,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
     final double? indoorTemp = double.tryParse(tempIn);
     final detailState = context.read<ProofOfServiceDetailBloc>().state;
     List<String> allIndoorSerials = [];
+    List<String> noteOptions = [];
 
     if (detailState is ProofOfServiceDetailLoaded) {
       // 3. Filter hanya unit indoor, lalu ambil serial number-nya
@@ -794,6 +795,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
           .where((d) => d.unitType.toUpperCase() == 'IN')
           .map((d) => d.serialNo)
           .toList();
+      noteOptions = detailState.data.noteOptions ?? [];
     }
 
     if (!context.mounted) return;
@@ -812,6 +814,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
           capacity: 0,
           indoorTemp: indoorTemp,
           allIndoorSerials: allIndoorSerials,
+          noteOptions: noteOptions,
         ),
       ),
     );

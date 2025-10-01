@@ -13,9 +13,13 @@ class ProofOfServiceDetailModel {
   @HiveField(1)
   final List<ProofOfServiceItemDetail> detail;
 
+  @HiveField(2)
+  final List<String>? noteOptions;
+
   ProofOfServiceDetailModel({
     required this.header,
     required this.detail,
+    this.noteOptions,
   });
 
   // Biarkan factory fromJson tetap ada untuk parsing data dari API
@@ -25,6 +29,7 @@ class ProofOfServiceDetailModel {
       detail: (json['detail'] as List<dynamic>? ?? [])
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
+      noteOptions: List<String>.from(json['note_options'] ?? []),
     );
   }
 }
