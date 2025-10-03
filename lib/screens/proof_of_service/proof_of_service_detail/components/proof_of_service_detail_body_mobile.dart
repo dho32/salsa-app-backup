@@ -129,7 +129,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempIn.isNotEmpty &&
-                                          formState.tempIn != '0',
+                                          double.parse(formState.tempIn) >= 20,
                                     ),
                                   if (outdoorUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -142,7 +142,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempOut.isNotEmpty &&
-                                          formState.tempOut != '0',
+                                          double.parse(formState.tempIn) >= 20,
                                     ),
                                   if (setUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -441,10 +441,10 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
             limits: MeasurementLimits(
                 id: 'temp_in',
                 label: 'Suhu Dalam',
-                min: 0,
-                max: 100,
-                normalMax: 0,
-                normalMin: 100,
+                min: 20,
+                max: 35,
+                normalMax: 20,
+                normalMin: 35,
                 unit: '°C'),
             transNo: transNo,
             initialImage: formState.temperatureInImage,
@@ -465,10 +465,10 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
             limits: MeasurementLimits(
                 id: 'temp_out',
                 label: 'Suhu Luar',
-                min: 0,
-                max: 100,
-                normalMax: 0,
-                normalMin: 100,
+                min: 20,
+                max: 50,
+                normalMax: 20,
+                normalMin: 50,
                 unit: '°C'),
             transNo: transNo,
             initialImage: formState.temperatureOutImage,
@@ -497,8 +497,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
     required bool isEnabled,
   }) {
     final String snackBarMessage = title == 'INDOOR'
-        ? 'Harap isi Suhu Dalam Ruangan (°C) terlebih dahulu.'
-        : 'Harap isi Suhu Luar Ruangan (°C) terlebih dahulu.';
+        ? 'Pastikan data suhu dalam ruangan (°C) sudah terisi dengan benar.'
+        : 'Pastikan data suhu luar ruangan (°C) sudah terisi dengan benar.';
 
     return Stack(
       children: [
@@ -635,6 +635,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                 final maintenanceByIP = await getPublicIpAddress();
                 final technicianName = user['name'] ?? '';
                 final maintenanceBy = user['user_id'] ?? '';
+                final double storeLat = double.tryParse(header.latitude ?? '') ?? 0.0;
+                final double storeLong = double.tryParse(header.longitude ?? '') ?? 0.0;
 
                 await showDialog<void>(
                   context: context,
@@ -653,8 +655,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                         transNo: header.transNo,
                         shipTo: header.shipToCode,
                         email: header.storeEmail,
-                        storeLat: double.parse(header.latitude),
-                        storeLong: double.parse(header.longitude),
+                        storeLat: storeLat,
+                        storeLong: storeLong,
                         onVerified: () {
                           final progressCubit =
                               context.read<UploadProgressCubit>();
@@ -783,6 +785,20 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
         await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
     final existingData = box.get(detail.serialNo.trim().toUpperCase());
     final double? indoorTemp = double.tryParse(tempIn);
+    final detailState = context.read<ProofOfServiceDetailBloc>().state;
+    List<String> allIndoorSerials = [];
+    List<String> noteOptions = [];
+
+    if (detailState is ProofOfServiceDetailLoaded) {
+      // 3. Filter hanya unit indoor, lalu ambil serial number-nya
+      allIndoorSerials = detailState.data.detail
+          .where((d) => d.unitType.toUpperCase() == 'IN')
+          .map((d) => d.serialNo)
+          .toList();
+      noteOptions = detailState.data.noteOptions ?? [];
+    }
+
+    if (!context.mounted) return;
 
     await Navigator.push(
       context,
@@ -797,6 +813,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
           articleUnitDesc: detail.unitDesc,
           capacity: 0,
           indoorTemp: indoorTemp,
+          allIndoorSerials: allIndoorSerials,
+          noteOptions: noteOptions,
         ),
       ),
     );
@@ -818,4 +836,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
       ),
     );
   }
+
+
+
 }

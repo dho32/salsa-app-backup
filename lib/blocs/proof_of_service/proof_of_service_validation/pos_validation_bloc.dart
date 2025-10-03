@@ -19,6 +19,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     on<UpdateMeasurementAfter>(_onUpdateMeasurementAfter);
     on<SavePosValidationData>(_onSaveData);
     on<MarkAsInProgress>(_onMarkAsInProgress);
+    on<PairOutdoorWithIndoor>(_onPairOutdoor);
   }
 
   // Helper untuk membuat daftar pengukuran default berdasarkan tipe unit
@@ -53,18 +54,56 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       FetchPosValidationData event, Emitter<PosValidationState> emit) {
     emit(PosValidationLoading());
     final initialData = event.initialData;
+
+    if (initialData != null && initialData.isCompleted) {
+      // Jika ya, panggil event MarkAsInProgress dari dalam BLoC itu sendiri
+      add(MarkAsInProgress(
+        transNo: event.transNo,
+        serialNo: event.serialNo,
+        note: initialData.note ?? '',
+        articleNo: initialData.articleNo ?? '',
+        articleDesc: initialData.articleDesc ?? '',
+        articleUnitDesc: initialData.articleUnitDesc ?? '',
+        capacity: initialData.capacity ?? 0,
+        articleType: event.unitType,
+      ));
+    }
+
+    final box = Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
+    final allEntries = box.values
+        .where(
+            (e) => e.transNo == event.transNo && e.serialNo != event.serialNo)
+        .toList();
+    final usedIndoorSerials = allEntries
+        .map((e) => e.pairedSerialNo)
+        .where((sn) => sn != null)
+        .toSet();
+    final availableIndoors = event.allIndoorSerials
+        .where((sn) => !usedIndoorSerials.contains(sn))
+        .toList();
+
     if (initialData != null) {
       emit(PosValidationLoaded(
         unitType: event.unitType,
         photosBefore: initialData.photosBefore,
         photosAfter: initialData.photosAfter,
         measurementsAfter: initialData.measurementsAfter,
+        pairedIndoorSerial: initialData.pairedSerialNo,
+        availableIndoorSerials: availableIndoors,
       ));
     } else {
       emit(PosValidationLoaded(
         unitType: event.unitType,
         measurementsAfter: _getDefaultMeasurements(event.unitType),
+        availableIndoorSerials: availableIndoors,
       ));
+    }
+  }
+
+  void _onPairOutdoor(PairOutdoorWithIndoor event, Emitter<PosValidationState> emit) {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+      emit(currentState.copyWith(pairedIndoorSerial: event.indoorSerialNo));
     }
   }
 
@@ -190,6 +229,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         articleUnitDesc: event.articleUnitDesc,
         capacity: event.capacity,
         articleType: event.articleType,
+        pairedSerialNo: currentState.pairedIndoorSerial,
       );
 
       final box =

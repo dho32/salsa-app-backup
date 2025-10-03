@@ -39,7 +39,30 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         emit(PosValidationFailure("Data validasi unit tidak ditemukan."));
         return;
       }
-      final itemsPayload = entries.map((e) => e.toJson()).toList();
+
+      final pairingMap = <String, String>{};
+      for (final entry in entries) {
+        if (entry.articleType?.toUpperCase() == 'OUT' && entry.pairedSerialNo != null) {
+          pairingMap[entry.pairedSerialNo!] = entry.serialNo;
+        }
+      }
+
+      final itemsPayload = entries.map((entry) {
+        // Ambil data JSON dasar dari model
+        final json = entry.toJson();
+
+        // Jika unit ini adalah INDOOR...
+        if (entry.articleType?.toUpperCase() == 'IN') {
+          // ...cek di peta apakah ada outdoor yang memilihnya.
+          final outdoorPairSerialNo = pairingMap[entry.serialNo];
+          if (outdoorPairSerialNo != null) {
+            // Jika ada, isi field 'paired_serial_no' dengan SN outdoor pasangannya.
+            // Nama field di API kita asumsikan tetap sama untuk indoor dan outdoor.
+            json['paired_serial_no'] = outdoorPairSerialNo;
+          }
+        }
+        return json;
+      }).toList();
 
       // 2. Ambil data PIC & Teknisi dari Hive
       final infoBox = await Hive.openBox<PosTransactionInfoModel>(

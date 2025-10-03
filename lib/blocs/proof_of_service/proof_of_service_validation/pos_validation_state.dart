@@ -5,7 +5,7 @@ import 'package:salsa/models/common/measurement_entry.dart';
 abstract class PosValidationState extends Equatable {
   const PosValidationState();
   @override
-  List<Object> get props => [];
+  List<Object?> get props => [];
 }
 
 class PosValidationInitial extends PosValidationState {}
@@ -17,6 +17,8 @@ class PosValidationLoaded extends PosValidationState {
   final List<CapturedImageDetail> photosBefore;
   final List<CapturedImageDetail> photosAfter;
   final List<MeasurementEntry> measurementsAfter;
+  final List<String> availableIndoorSerials;
+  final String? pairedIndoorSerial;
 
   const PosValidationLoaded({
     this.currentStep = 0,
@@ -24,6 +26,8 @@ class PosValidationLoaded extends PosValidationState {
     this.photosBefore = const [],
     this.photosAfter = const [],
     this.measurementsAfter = const [],
+    this.availableIndoorSerials = const [],
+    this.pairedIndoorSerial,
   });
 
   PosValidationLoaded copyWith({
@@ -32,6 +36,8 @@ class PosValidationLoaded extends PosValidationState {
     List<CapturedImageDetail>? photosBefore,
     List<CapturedImageDetail>? photosAfter,
     List<MeasurementEntry>? measurementsAfter,
+    List<String>? availableIndoorSerials,
+    String? pairedIndoorSerial,
   }) {
     return PosValidationLoaded(
       currentStep: currentStep ?? this.currentStep,
@@ -39,16 +45,20 @@ class PosValidationLoaded extends PosValidationState {
       photosBefore: photosBefore ?? this.photosBefore,
       photosAfter: photosAfter ?? this.photosAfter,
       measurementsAfter: measurementsAfter ?? this.measurementsAfter,
+      availableIndoorSerials: availableIndoorSerials ?? this.availableIndoorSerials,
+      pairedIndoorSerial: pairedIndoorSerial ?? this.pairedIndoorSerial,
     );
   }
 
   @override
-  List<Object> get props => [
+  List<Object?> get props => [
     currentStep,
     unitType,
     photosBefore,
     photosAfter,
     measurementsAfter,
+    availableIndoorSerials,
+    pairedIndoorSerial,
   ];
 }
 

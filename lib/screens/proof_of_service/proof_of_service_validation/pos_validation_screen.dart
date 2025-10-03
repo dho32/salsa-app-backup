@@ -19,6 +19,8 @@ class PosValidationScreen extends StatefulWidget {
   final String articleUnitDesc;
   final int capacity;
   final double? indoorTemp;
+  final List<String> allIndoorSerials;
+  final List<String> noteOptions;
 
   const PosValidationScreen({
     super.key,
@@ -31,6 +33,8 @@ class PosValidationScreen extends StatefulWidget {
     required this.articleUnitDesc,
     required this.capacity,
     required this.indoorTemp,
+    required this.allIndoorSerials,
+    required this.noteOptions,
   });
 
   @override
@@ -51,22 +55,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
     super.initState();
     _noteController.text = widget.initialData?.note ?? '';
 
-    if (widget.initialData != null && widget.initialData!.isCompleted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          context.read<PosValidationBloc>().add(MarkAsInProgress(
-                transNo: widget.transNo,
-                serialNo: widget.serialNo,
-                note: _noteController.text,
-                articleNo: widget.articleNo,
-                articleDesc: widget.articleDesc,
-                articleUnitDesc: widget.articleUnitDesc,
-                capacity: widget.capacity,
-                articleType: widget.unitType,
-              ));
-        }
-      });
-    }
+
   }
 
   @override
@@ -93,6 +82,9 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
         ..add(FetchPosValidationData(
           initialData: widget.initialData,
           unitType: widget.unitType,
+          allIndoorSerials: widget.allIndoorSerials, // <-- Kirim daftar
+          serialNo: widget.serialNo, // <-- Kirim SN unit ini
+          transNo: widget.transNo,
         )),
       child: BlocListener<PosValidationBloc, PosValidationState>(
         listener: (context, state) {
@@ -133,6 +125,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 articleUnitDesc: widget.articleUnitDesc,
                 noteController: _noteController,
                 indoorTemp: widget.indoorTemp,
+                noteOptions: widget.noteOptions,
               ),
               bottomNavigationBar: (uiState != null)
                   ? _buildFloatingButtons(context, uiState)
@@ -201,6 +194,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     if (limits != null) {
                       // Tentukan batas atas dinamis untuk suhu
                       double maxLimit = limits.max;
+                      double minLimit = limits.min;
                       if (measurement.measurementId == 'temperature' && widget.indoorTemp != null) {
                         maxLimit = widget.indoorTemp!;
                       }
@@ -209,6 +203,11 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                       if (measurement.value > maxLimit) {
                         final errorMessage =
                             'Nilai "${limits.label}" yang anda input melebihi batas.';
+                        _showValidationErrorSnackbar(errorMessage);
+                        return; // Hentikan proses jika ada yang tidak valid
+                      } else if (measurement.value < minLimit) {
+                        final errorMessage =
+                            'Nilai "${limits.label}" yang anda input dibawah batas.';
                         _showValidationErrorSnackbar(errorMessage);
                         return; // Hentikan proses jika ada yang tidak valid
                       }
@@ -271,6 +270,12 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   if (state.photosBefore.isEmpty) {
                     _showValidationErrorSnackbar(
                         'Foto unit sebelum cuci wajib dilengkapi untuk melanjutkan.');
+                    return;
+                  }
+                  if (state.unitType.toUpperCase() == 'OUT' &&
+                      state.pairedIndoorSerial == null) {
+                    _showValidationErrorSnackbar(
+                        'Anda wajib memilih pasangan unit indoor untuk melanjutkan.');
                     return;
                   }
                   bloc.add(SavePosValidationData(

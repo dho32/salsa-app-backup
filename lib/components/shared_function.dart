@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:bloc/bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -36,7 +37,7 @@ class JwtHelper {
       if (parts.length != 3) return null;
 
       final payload =
-          utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
       return json.decode(payload);
     } catch (e) {
       return null;
@@ -95,8 +96,8 @@ class ChipBarDelegate extends SliverPersistentHeaderDelegate {
   ChipBarDelegate(this.child);
 
   @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) =>
+  Widget build(BuildContext context, double shrinkOffset,
+      bool overlapsContent) =>
       child;
 
   @override
@@ -135,7 +136,6 @@ Future<String> getPublicIpAddress() async {
 String getHiveKeyForTransaction(String transNo) {
   return transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 }
-
 
 class LocationHelper {
   /// Validasi lokasi foto pejabat toko terhadap koordinat toko
@@ -176,17 +176,14 @@ class LocationHelper {
   }
 }
 
-
 class NumericRangeFormatter extends TextInputFormatter {
   final double max;
 
   NumericRangeFormatter({required this.max});
 
   @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue,
-      TextEditingValue newValue,
-      ) {
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue,
+      TextEditingValue newValue,) {
     // Jika field dikosongkan, izinkan.
     if (newValue.text.isEmpty) {
       return newValue;
@@ -211,5 +208,4 @@ class NumericRangeFormatter extends TextInputFormatter {
     return newValue;
   }
 }
-
 

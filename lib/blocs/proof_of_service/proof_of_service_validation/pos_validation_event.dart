@@ -5,6 +5,7 @@ import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
 abstract class PosValidationEvent extends Equatable {
   const PosValidationEvent();
+
   @override
   List<Object?> get props => [];
 }
@@ -12,36 +13,52 @@ abstract class PosValidationEvent extends Equatable {
 class FetchPosValidationData extends PosValidationEvent {
   final PosValidationEntryModel? initialData;
   final String unitType;
-  const FetchPosValidationData({this.initialData, required this.unitType});
+  final String transNo;
+  final String serialNo;
+  final List<String> allIndoorSerials;
+
+  const FetchPosValidationData({
+    this.initialData,
+    required this.unitType,
+    required this.transNo,
+    required this.serialNo,
+    required this.allIndoorSerials,
+  });
 }
 
 class ChangePosValidationStep extends PosValidationEvent {
   final int step;
+
   const ChangePosValidationStep(this.step);
 }
 
 class AddPhotoBefore extends PosValidationEvent {
   final CapturedImageDetail imageDetail;
+
   const AddPhotoBefore(this.imageDetail);
 }
 
 class RemovePhotoBefore extends PosValidationEvent {
   final String imagePath;
+
   const RemovePhotoBefore(this.imagePath);
 }
 
 class AddPhotoAfter extends PosValidationEvent {
   final CapturedImageDetail imageDetail;
+
   const AddPhotoAfter(this.imageDetail);
 }
 
 class RemovePhotoAfter extends PosValidationEvent {
   final String imagePath;
+
   const RemovePhotoAfter(this.imagePath);
 }
 
 class UpdateMeasurementAfter extends PosValidationEvent {
   final MeasurementEntry measurement;
+
   const UpdateMeasurementAfter(this.measurement);
 }
 
@@ -56,6 +73,7 @@ class SavePosValidationData extends PosValidationEvent {
   final int capacity;
   final String articleType;
   final double? indoorTemp;
+
   const SavePosValidationData({
     required this.transNo,
     required this.serialNo,
@@ -71,17 +89,17 @@ class SavePosValidationData extends PosValidationEvent {
 
   @override
   List<Object?> get props => [
-    transNo,
-    serialNo,
-    markAsCompleted,
-    note,
-    articleNo,
-    articleDesc,
-    articleUnitDesc,
-    capacity,
-    articleType,
-    indoorTemp // <-- TAMBAHKAN DI PROPS
-  ];
+        transNo,
+        serialNo,
+        markAsCompleted,
+        note,
+        articleNo,
+        articleDesc,
+        articleUnitDesc,
+        capacity,
+        articleType,
+        indoorTemp // <-- TAMBAHKAN DI PROPS
+      ];
 }
 
 class MarkAsInProgress extends PosValidationEvent {
@@ -104,4 +122,17 @@ class MarkAsInProgress extends PosValidationEvent {
     required this.capacity,
     required this.articleType,
   });
+}
+
+class PairOutdoorWithIndoor extends PosValidationEvent {
+  final String outdoorSerialNo;
+  final String? indoorSerialNo; // Bisa null untuk batal memilih
+
+  const PairOutdoorWithIndoor({
+    required this.outdoorSerialNo,
+    required this.indoorSerialNo,
+  });
+
+  @override
+  List<Object?> get props => [outdoorSerialNo, indoorSerialNo];
 }
