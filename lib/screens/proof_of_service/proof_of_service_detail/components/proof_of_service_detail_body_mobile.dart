@@ -129,7 +129,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempIn.isNotEmpty &&
-                                          formState.tempIn != '0',
+                                          double.parse(formState.tempIn) >= 20,
                                     ),
                                   if (outdoorUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -142,7 +142,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempOut.isNotEmpty &&
-                                          formState.tempOut != '0',
+                                          double.parse(formState.tempIn) >= 20,
                                     ),
                                   if (setUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -441,10 +441,10 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
             limits: MeasurementLimits(
                 id: 'temp_in',
                 label: 'Suhu Dalam',
-                min: 0,
-                max: 100,
-                normalMax: 0,
-                normalMin: 100,
+                min: 20,
+                max: 35,
+                normalMax: 20,
+                normalMin: 35,
                 unit: '°C'),
             transNo: transNo,
             initialImage: formState.temperatureInImage,
@@ -465,10 +465,10 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
             limits: MeasurementLimits(
                 id: 'temp_out',
                 label: 'Suhu Luar',
-                min: 0,
-                max: 100,
-                normalMax: 0,
-                normalMin: 100,
+                min: 20,
+                max: 50,
+                normalMax: 20,
+                normalMin: 50,
                 unit: '°C'),
             transNo: transNo,
             initialImage: formState.temperatureOutImage,
@@ -497,8 +497,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
     required bool isEnabled,
   }) {
     final String snackBarMessage = title == 'INDOOR'
-        ? 'Harap isi Suhu Dalam Ruangan (°C) terlebih dahulu.'
-        : 'Harap isi Suhu Luar Ruangan (°C) terlebih dahulu.';
+        ? 'Pastikan data suhu dalam ruangan (°C) sudah terisi dengan benar.'
+        : 'Pastikan data suhu luar ruangan (°C) sudah terisi dengan benar.';
 
     return Stack(
       children: [
