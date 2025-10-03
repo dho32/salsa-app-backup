@@ -194,6 +194,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     if (limits != null) {
                       // Tentukan batas atas dinamis untuk suhu
                       double maxLimit = limits.max;
+                      double minLimit = limits.min;
                       if (measurement.measurementId == 'temperature' && widget.indoorTemp != null) {
                         maxLimit = widget.indoorTemp!;
                       }
@@ -202,6 +203,11 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                       if (measurement.value > maxLimit) {
                         final errorMessage =
                             'Nilai "${limits.label}" yang anda input melebihi batas.';
+                        _showValidationErrorSnackbar(errorMessage);
+                        return; // Hentikan proses jika ada yang tidak valid
+                      } else if (measurement.value < minLimit) {
+                        final errorMessage =
+                            'Nilai "${limits.label}" yang anda input dibawah batas.';
                         _showValidationErrorSnackbar(errorMessage);
                         return; // Hentikan proses jika ada yang tidak valid
                       }
