@@ -1,3 +1,6 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,6 +16,7 @@ import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_repository.dart';
 import 'components/constants.dart';
 import 'components/salsa_theme.dart';
+import 'firebase_options.dart';
 import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
 import 'models/proof_of_service/pos_transaction_info_model.dart';
@@ -24,6 +28,23 @@ import 'models/task_maintenance/confirmation_task_queue.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // --- Inisialisasi Firebase ---
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // --- Konfigurasi Crashlytics untuk menangkap error ---
+  // Menangkap error yang terjadi di dalam Flutter Framework
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+
+  // Menangkap error yang terjadi di luar Flutter (misal: di kode async)
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+  // --- Akhir Konfigurasi Crashlytics ---
+
   await initializeDateFormatting('id_ID', null);
   await Hive.initFlutter();
 
