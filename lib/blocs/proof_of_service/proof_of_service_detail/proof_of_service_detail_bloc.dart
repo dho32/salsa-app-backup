@@ -15,37 +15,56 @@ class ProofOfServiceDetailBloc
 
   ProofOfServiceDetailBloc(this.repository)
       : super(ProofOfServiceDetailInitial()) {
-
     // ## EVENT HANDLER UTAMA DENGAN LOGIKA CACHE ##
     on<FetchProofOfServiceDetail>((event, emit) async {
       emit(ProofOfServiceDetailLoading());
 
+      // Gunakan satu blok try-catch utama untuk menangani semua kemungkinan error
       try {
-        final cacheBox = Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-        final cachedData = cacheBox.get(event.transNo.trim().toUpperCase());
+        ProofOfServiceDetailModel? cachedData;
 
-        // --- 1. CEK CACHE ---
-        if (cachedData != null) {
-          // JIKA CACHE ADA, GUNAKAN DATA LOKAL
-          print("✅ Data ditemukan di cache untuk TransNo: ${event.transNo}");
-          final statuses = await _calculateValidationStatuses(cachedData.detail);
-          emit(ProofOfServiceDetailLoaded(cachedData, statuses));
-          return; // Selesai. Tidak perlu ke jaringan.
+        // --- TAHAP 1: Coba baca cache dengan aman ---
+        // Gunakan try-catch kecil khusus untuk operasi baca cache.
+        try {
+          final cacheBox =
+              Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+          cachedData = cacheBox.get(event.transNo.trim().toUpperCase());
+        } catch (e) {
+          // Jika GAGAL membaca cache (karena data lama/rusak),
+          // kita cetak pesannya, tapi biarkan aplikasi berjalan terus.
+          print(
+              "🟡 Gagal membaca cache (kemungkinan data lama). Akan mengambil dari API. Error: $e");
+          // `cachedData` akan tetap null, sehingga alur akan lanjut ke Tahap 3.
         }
 
-        // --- 2. JIKA CACHE KOSONG, AMBIL DARI JARINGAN ---
-        print("🟡 Cache kosong. Mengambil data dari API untuk TransNo: ${event.transNo}");
-        final dataFromApi = await repository.fetchProofOfServiceDetail(event.transNo);
+        // --- TAHAP 2: Proses cache jika berhasil dibaca ---
+        if (cachedData != null) {
+          print("✅ Data ditemukan di cache. Memproses...");
+          final statuses =
+              await _calculateValidationStatuses(cachedData.detail);
+          emit(ProofOfServiceDetailLoaded(cachedData, statuses));
+          return; // Berhasil, proses selesai.
+        }
 
-        // --- 3. SIMPAN DATA BARU KE CACHE ---
+        // --- TAHAP 3: Jika cache kosong atau gagal dibaca, ambil dari API ---
+        print("🟡 Cache kosong atau tidak valid. Mengambil data dari API...");
+        final dataFromApi =
+            await repository.fetchProofOfServiceDetail(event.transNo);
+
+        // Timpa/simpan cache dengan data baru yang bersih
+        final cacheBox =
+            Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
         await cacheBox.put(event.transNo.trim().toUpperCase(), dataFromApi);
-        print("💾 Data dari API berhasil disimpan ke cache.");
+        print("💾 Data dari API berhasil disimpan/ditimpa ke cache.");
 
         final statuses = await _calculateValidationStatuses(dataFromApi.detail);
         emit(ProofOfServiceDetailLoaded(dataFromApi, statuses));
-
       } catch (e) {
-        emit(ProofOfServiceDetailError("Gagal memuat data: ${e.toString()}"));
+        // --- TAHAP 4: Tangkap semua error lainnya ---
+        // Blok ini akan menangkap error jika API gagal atau ada masalah tak terduga lainnya.
+        print("🔴🔴 Gagal total memuat data: $e");
+        emit(ProofOfServiceDetailError(
+            "Gagal memuat detail data. Periksa koneksi internet Anda dan coba lagi."));
       }
     });
   }
@@ -53,7 +72,6 @@ class ProofOfServiceDetailBloc
   // Helper function
   Future<Map<String, ValidationStatus>> _calculateValidationStatuses(
       List<ProofOfServiceItemDetail> details) async {
-
     final box = Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
     final statuses = <String, ValidationStatus>{};
 

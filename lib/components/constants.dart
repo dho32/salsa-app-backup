@@ -3,12 +3,12 @@ import 'dart:ui';
 import '../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 
 ///path url
-// ///Production
-// const kBaseUrl = 'dxazo32f1j.execute-api.ap-southeast-1.amazonaws.com';
-// const kPath = '/production/';
-///sandbox
-const kBaseUrl = 'ujaxnyipj6.execute-api.ap-southeast-1.amazonaws.com';
-const kPath = '/sandbox/';
+///Production
+const kBaseUrl = 'dxazo32f1j.execute-api.ap-southeast-1.amazonaws.com';
+const kPath = '/production/';
+// ///sandbox
+// const kBaseUrl = 'ujaxnyipj6.execute-api.ap-southeast-1.amazonaws.com';
+// const kPath = '/sandbox/';
 
 ///Route
 const kPathLanding = '/';

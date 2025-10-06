@@ -1,7 +1,9 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:salsa/screens/task_maintenance/components/widget/task_maintenance_widgets.dart';
 
 import '../../../blocs/task_maintenance/task_maintenance_bloc.dart';
@@ -24,6 +26,22 @@ class TaskMaintenanceBodyMobile extends StatefulWidget {
 
 class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
   final _transNoController = TextEditingController();
+  String _appVersion = '';
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initAppVersion();
+  }
+
+  Future<void> _initAppVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      _version = packageInfo.version;
+      _appVersion = 'Versi $_version';
+    });
+  }
 
   @override
   void dispose() {
@@ -138,6 +156,13 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                     child:
                         const Text('Lanjutkan', style: TextStyle(fontSize: 16)),
                   ),
+                  const SizedBox(height: 24),
+                  if (_appVersion.isNotEmpty)
+                    Text(
+                      _appVersion,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.black54),
+                    ),
 
                   // Indikator loading dari BLoC
                   BlocListener<TaskMaintenanceBloc, POSearchState>(
