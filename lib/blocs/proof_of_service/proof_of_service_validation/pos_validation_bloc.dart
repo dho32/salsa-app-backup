@@ -120,8 +120,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-          List<CapturedImageDetail>.from(currentState.photosBefore)
-            ..add(event.imageDetail);
+      List<CapturedImageDetail>.from(currentState.photosBefore)
+        ..add(event.imageDetail);
       emit(currentState.copyWith(photosBefore: updatedPhotos));
     }
   }
@@ -141,8 +141,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-          List<CapturedImageDetail>.from(currentState.photosAfter)
-            ..add(event.imageDetail);
+      List<CapturedImageDetail>.from(currentState.photosAfter)
+        ..add(event.imageDetail);
       emit(currentState.copyWith(photosAfter: updatedPhotos));
     }
   }
@@ -163,9 +163,9 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedMeasurements =
-          List<MeasurementEntry>.from(currentState.measurementsAfter);
+      List<MeasurementEntry>.from(currentState.measurementsAfter);
       final index = updatedMeasurements.indexWhere(
-          (m) => m.measurementId == event.measurement.measurementId);
+              (m) => m.measurementId == event.measurement.measurementId);
       if (index != -1) {
         updatedMeasurements[index] = event.measurement;
       }
@@ -201,14 +201,14 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
             maxLimit = event.indoorTemp!;
           }
 
-          // Lakukan validasi dengan batas atas (maxLimit) yang sudah dinamis
-          if (measurement.value > maxLimit) {
-            final errorMessage =
-                'Nilai untuk "${limits.label}" (${measurement.value} ${limits.unit}) melebihi batas maksimal.';
-
-            emit(PosValidationSaveFailure(errorMessage, currentState));
-            return;
-          }
+          // // Lakukan validasi dengan batas atas (maxLimit) yang sudah dinamis
+          // if (measurement.value > maxLimit) {
+          //   final errorMessage =
+          //       'Nilai untuk "${limits.label}" (${measurement.value} ${limits.unit}) melebihi batas maksimal 3.';
+          //
+          //   emit(PosValidationSaveFailure(errorMessage, currentState));
+          //   return;
+          // }
         }
       }
       // =================================================================
@@ -233,7 +233,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       );
 
       final box =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
 
       // Pancarkan (emit) state SUKSES setelah menyimpan
@@ -265,7 +265,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       );
 
       final box =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
     }
   }

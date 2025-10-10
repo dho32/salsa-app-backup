@@ -9,6 +9,7 @@ import 'package:hive/hive.dart';
 
 import '../models/common/captured_image_detail.dart';
 import '../models/proof_of_service/pos_transaction_info_model.dart';
+import '../models/proof_of_service/pos_unserviceable_model.dart';
 import '../models/proof_of_service/pos_validation_entry_model.dart';
 import '../models/service_call/transaction_info_model.dart';
 
@@ -87,7 +88,6 @@ Future<UploadResult> uploadAllImagesToS3(
 
   final List<_UploadTask> tasksToExecute;
   if (filter != null && filter.isNotEmpty) {
-    // MODIFIKASI START: Perbarui logika filter
     tasksToExecute = allPossibleTasks.where((task) {
       // Cek apakah ada salah satu item di filter yang persis sama dengan fileKey tugas ini
       // atau dimulai dengan fileKey (tergantung format failedFiles Anda)
@@ -95,12 +95,10 @@ Future<UploadResult> uploadAllImagesToS3(
       // Jika failedFiles formatnya "serialNo - filename (ErrorType)", maka gunakan startsWith:
       // return filter.any((filterItem) => filterItem.startsWith(task.fileKey));
     }).toList();
-    // MODIFIKASI END
   } else {
     tasksToExecute = allPossibleTasks;
   }
 
-  // Sisa kode tidak diubah
   int totalToUpload = tasksToExecute.length;
   int currentCount = 0;
   progressCubit?.reset();
@@ -280,6 +278,84 @@ Future<UploadResult> uploadPosImagesToS3(
   return UploadResult(
     successCount: successCount,
     failureCount: failureCount,
+    failedFiles: failedFiles,
+  );
+}
+
+Future<UploadResult> uploadUnserviceableImagesToS3(
+    PosUnserviceableModel report,
+    List<dynamic> presignedDetails, {
+      required UploadProgressCubit progressCubit,
+      List<String>? filter, // Untuk retry
+    }) async {
+  // 1. Kumpulkan semua gambar lokal dari laporan.
+  final Map<String, String> localFileMap = {
+    for (var img in report.proofImages)
+      img.imagePath.split('/').last: img.imagePath,
+  };
+
+  // 2. Bangun daftar tugas upload.
+  List<_UploadTask> allPossibleTasks = [];
+  for (var uploadInfo in presignedDetails) {
+    final filename = uploadInfo['filename'];
+    if (localFileMap.containsKey(filename)) {
+      final filePath = localFileMap[filename]!;
+
+      allPossibleTasks.add(_UploadTask(
+          url: uploadInfo['url'], filePath: filePath, fileKey: filename));
+    } else {
+      print('Warning: No matching local image for $filename. Skipping.');
+    }
+  }
+
+  // 3. Logika filter, eksekusi, dan return (sama persis dengan fungsi lain)
+  final List<_UploadTask> tasksToExecute = filter != null && filter.isNotEmpty
+      ? allPossibleTasks.where((task) => filter.contains(task.fileKey)).toList()
+      : allPossibleTasks;
+
+  int totalToUpload = tasksToExecute.length;
+  progressCubit.updateProgress(0, totalToUpload);
+
+  if (tasksToExecute.isEmpty) {
+    return UploadResult(
+        successCount: 0, failureCount: 0, failedFiles: []);
+  }
+
+  int successCount = 0;
+  List<String> failedFiles = [];
+
+  for (int i = 0; i < tasksToExecute.length; i++) {
+    final task = tasksToExecute[i];
+    final file = File(task.filePath);
+
+    try {
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        final mimeType =
+            lookupMimeType(task.filePath) ?? 'application/octet-stream';
+
+        final response = await http.put(
+          Uri.parse(task.url),
+          headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
+          body: bytes,
+        );
+        if (response.statusCode == 200) {
+          successCount++;
+        } else {
+          failedFiles.add(task.fileKey);
+        }
+      } else {
+        failedFiles.add(task.fileKey);
+      }
+    } catch (e) {
+      failedFiles.add(task.fileKey);
+    }
+    progressCubit.updateProgress(i + 1, totalToUpload);
+  }
+
+  return UploadResult(
+    successCount: successCount,
+    failureCount: failedFiles.length,
     failedFiles: failedFiles,
   );
 }

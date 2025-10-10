@@ -16,10 +16,14 @@ class ProofOfServiceDetailModel {
   @HiveField(2)
   final List<String>? noteOptions;
 
+  @HiveField(3)
+  final List<String>? unserviceableReasons;
+
   ProofOfServiceDetailModel({
     required this.header,
     required this.detail,
     this.noteOptions,
+    this.unserviceableReasons,
   });
 
   // Biarkan factory fromJson tetap ada untuk parsing data dari API
@@ -30,6 +34,7 @@ class ProofOfServiceDetailModel {
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
       noteOptions: List<String>.from(json['note_options'] ?? []),
+      unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
     );
   }
 }

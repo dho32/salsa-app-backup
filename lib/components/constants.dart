@@ -27,6 +27,8 @@ const kPosTransactionInfoHiveBox = 'pos_transaction_info_box';
 const kPosValidationHiveBox = 'pos_validation_box';
 const kPosDetailCacheBox = 'pos_detail_cache_box';
 const kPosValidationPartialHiveBox = 'pos_validation_partial_cache';
+const kPosUnserviceableVisitQueueBox = 'unserviceable_visit_queue_box';
+const kPosUnserviceableDraftsBox = 'unserviceable_drafts_box';
 
 
 ///const

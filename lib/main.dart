@@ -20,6 +20,7 @@ import 'firebase_options.dart';
 import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
 import 'models/proof_of_service/pos_transaction_info_model.dart';
+import 'models/proof_of_service/pos_unserviceable_model.dart';
 import 'models/proof_of_service/pos_validation_entry_model.dart';
 import 'models/proof_of_service/proof_of_service_detail_model.dart';
 import 'models/schedule/proof_of_service/proof_of_service_detail_data.dart';
@@ -60,12 +61,15 @@ void main() async {
   Hive.registerAdapter(ProofOfServiceDetailModelAdapter()); // 10
   Hive.registerAdapter(ProofOfServiceHeaderAdapter()); // 11
   Hive.registerAdapter(ProofOfServiceItemDetailAdapter()); //12
+  Hive.registerAdapter(PosUnserviceableModelAdapter()); //13
   await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
   await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
   await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
   await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
   await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
   await Hive.openBox('otp_state');
+  await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+  await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
 
 
   // await Hive.deleteBoxFromDisk(kServiceCallHiveBox);

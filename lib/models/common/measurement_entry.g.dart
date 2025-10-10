@@ -21,13 +21,14 @@ class MeasurementEntryAdapter extends TypeAdapter<MeasurementEntry> {
       value: fields[1] as double,
       unit: fields[2] as String,
       capturedImage: fields[3] as CapturedImageDetail?,
+      isSkipped: fields[4] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, MeasurementEntry obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.measurementId)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class MeasurementEntryAdapter extends TypeAdapter<MeasurementEntry> {
       ..writeByte(2)
       ..write(obj.unit)
       ..writeByte(3)
-      ..write(obj.capturedImage);
+      ..write(obj.capturedImage)
+      ..writeByte(4)
+      ..write(obj.isSkipped);
   }
 
   @override

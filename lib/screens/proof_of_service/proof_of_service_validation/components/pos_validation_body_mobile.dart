@@ -1,7 +1,8 @@
+// pos_validation_body_mobile.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -48,14 +49,51 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   String labelUnitOutdoor = "Foto Unit Outdoor & Kondensor";
   String labelUnit = "";
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.unitType.toUpperCase() == 'IN') {
+      labelUnit = labelUnitIndoor;
+    } else if (widget.unitType.toUpperCase() == 'OUT') {
+      labelUnit = labelUnitOutdoor;
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeControllers();
+    super.dispose();
+  }
+
+  void _initializeControllers(List<MeasurementEntry> measurements) {
+    // Hapus controller lama untuk mencegah memory leak
+    _disposeControllers();
+
+    for (var measurement in measurements) {
+      final valueText =
+      measurement.value == measurement.value.truncateToDouble()
+          ? measurement.value.truncate().toString()
+          : measurement.value.toStringAsFixed(1);
+
+      _controllers[measurement.measurementId] =
+          TextEditingController(text: valueText == "0" ? "" : valueText);
+    }
+  }
+
+  void _disposeControllers() {
+    for (var controller in _controllers.values) {
+      controller.dispose();
+    }
+    _controllers.clear();
+  }
+
   Future<void> _handlePhoto(BuildContext context,
       {required bool isBefore}) async {
     final currentState = context.read<PosValidationBloc>().state;
     if (currentState is PosValidationLoaded) {
       final photoList =
-          isBefore ? currentState.photosBefore : currentState.photosAfter;
+      isBefore ? currentState.photosBefore : currentState.photosAfter;
       if (photoList.length >= 2) {
-        // Tampilkan pesan error jika sudah ada 2 foto
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Maksimal hanya bisa upload 2 foto.'),
@@ -63,7 +101,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        return; // Hentikan eksekusi fungsi
+        return;
       }
     }
 
@@ -74,59 +112,17 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
       if (image == null) return;
 
-      // --- MULAI PROSES PARALEL ---
-
-      // 1. Siapkan path tujuan untuk kompresi
       final tempDir = await getTemporaryDirectory();
       final targetPath =
-          p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+      p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-      final LocationSettings locationSettings = LocationSettings(
-        accuracy: LocationAccuracy.medium,
-        distanceFilter: 100, // Opsional: atur jarak minimum untuk update
-      );
-
-      // 2. Buat dua Future: satu untuk kompresi, satu untuk lokasi
       final compressFuture = FlutterImageCompress.compressAndGetFile(
         image.path,
         targetPath,
         quality: 70,
-        minWidth: 1080, //ukuran full HD
-        minHeight: 1920, //ukuran full HD
+        minWidth: 1080,
+        minHeight: 1920,
       );
-
-      // final positionFuture =
-      //     Geolocator.getPositionStream(locationSettings: locationSettings)
-      //         .first;
-
-      // // 3. Jalankan keduanya secara bersamaan dan tunggu hasilnya
-      // final results = await Future.wait([compressFuture, positionFuture]);
-      //
-      // final XFile? compressedImage = results[0] as XFile?;
-      // final Position position = results[1] as Position;
-      //
-      // if (compressedImage == null) return;
-
-      // --- PROSES PARALEL SELESAI ---
-
-      // // Proses selanjutnya yang bergantung pada hasil di atas
-      // final List<Placemark> placemarks =
-      //     await placemarkFromCoordinates(position.latitude, position.longitude);
-      // final Placemark place = placemarks.first;
-      // final String address =
-      //     "${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}";
-
-      // final userData = await AuthStorage.getUser();
-      // final capturedImageDetail = CapturedImageDetail(
-      //   imagePath: compressedImage.path,
-      //   timestamp: DateTime.now(),
-      //   latitude: position.latitude,
-      //   longitude: position.longitude,
-      //   address: address,
-      //   technicianName: userData['name'] ?? 'Unknown',
-      //   deviceModel: userData['device_model'] ?? 'Unknown Device',
-      //   transNo: widget.transNo,
-      // );
 
       final results = await Future.wait([compressFuture]);
       final XFile? compressedImage = results[0];
@@ -161,68 +157,46 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    // Inisialisasi controller saat state pertama kali dimuat
-    final state = context.read<PosValidationBloc>().state;
-    if (state is PosValidationLoaded) {
-      _initializeControllers(state.measurementsAfter);
-    }
-    if (widget.unitType.toUpperCase() == 'IN') {
-      labelUnit = labelUnitIndoor;
-    } else if (widget.unitType.toUpperCase() == 'OUT') {
-      labelUnit = labelUnitOutdoor;
-    }
-  }
-
-  @override
-  void dispose() {
-    _disposeControllers();
-    super.dispose();
-  }
-
-  void _initializeControllers(List<MeasurementEntry> measurements) {
-    for (var measurement in measurements) {
-      final valueText =
-          measurement.value == measurement.value.truncateToDouble()
-              ? measurement.value.truncate().toString()
-              : measurement.value.toStringAsFixed(1);
-      _controllers[measurement.measurementId] =
-          TextEditingController(text: valueText);
-    }
-  }
-
-  void _disposeControllers() {
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
-    _controllers.clear();
-  }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<PosValidationBloc, PosValidationState>(
-      builder: (context, state) {
-        if (state is PosValidationLoading || state is PosValidationInitial) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (state is PosValidationError) {
-          return Center(child: Text("Error: ${state.message}"));
-        }
+    return BlocListener<PosValidationBloc, PosValidationState>(
+      listener: (context, state) {
         if (state is PosValidationLoaded) {
-          return Stepper(
-            type: StepperType.horizontal,
-            currentStep: state.currentStep,
-            controlsBuilder: (context, details) => const SizedBox.shrink(),
-            steps: [
-              _buildStep1(context, state),
-              _buildStep2(context, state),
-            ],
-          );
+          // Setiap kali BLoC memuat data, kita buat ulang controllernya
+          // setState dipanggil agar UI tahu ada controller baru
+          setState(() {
+            _initializeControllers(state.measurementsAfter);
+          });
         }
-        return const SizedBox.shrink();
       },
+      child: BlocBuilder<PosValidationBloc, PosValidationState>(
+        builder: (context, state) {
+          if (state is PosValidationLoading || state is PosValidationInitial) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (state is PosValidationError) {
+            return Center(child: Text("Error: ${state.message}"));
+          }
+          if (state is PosValidationLoaded) {
+            // Safety check: Jangan tampilkan UI sebelum controller siap
+            if (_controllers.length != state.measurementsAfter.length) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            return Stepper(
+              type: StepperType.horizontal,
+              currentStep: state.currentStep,
+              controlsBuilder: (context, details) => const SizedBox.shrink(),
+              steps: [
+                _buildStep1(context, state),
+                _buildStep2(context, state),
+              ],
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
     );
   }
 
@@ -231,7 +205,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
       title: const Text('Sebelum'),
       isActive: state.currentStep >= 0,
       content: Container(
-        decoration: BoxDecoration(color: Colors.white),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildValidationHeader(),
@@ -255,15 +229,15 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   }
 
   Step _buildStep2(BuildContext context, PosValidationLoaded state) {
+    final bool isAnyMeasurementSkipped = state.measurementsAfter.any((m) => m.isSkipped);
     return Step(
       title: const Text('Sesudah'),
       isActive: state.currentStep >= 1,
       content: Container(
-        decoration: BoxDecoration(color: Colors.white),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildValidationHeader(),
-
             if (state.unitType.toUpperCase() == 'OUT' &&
                 state.pairedIndoorSerial != null)
               Padding(
@@ -297,7 +271,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   ),
                 ),
               ),
-
             buildPhotoSection(
               context: context,
               title: '$labelUnit Sesudah Perawatan',
@@ -311,6 +284,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             const SizedBox(height: 8),
             GenericMeasurementInputSection(
               key: ValueKey(widget.unitType),
+              controllers: _controllers,
               transNo: widget.transNo,
               measurements: state.measurementsAfter,
               indoorTemp: widget.indoorTemp,
@@ -320,34 +294,34 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                     .add(UpdateMeasurementAfter(measurement));
               },
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: DropdownButtonFormField<String>(
-                value: widget.noteController.text.isNotEmpty
-                    ? widget.noteController.text
-                    : null,
-                hint: const Text('Note wajib dipilih jika tidak dapat diukur'),
-                isExpanded: true,
-                items: widget.noteOptions.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value, overflow: TextOverflow.ellipsis),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  widget.noteController.text = newValue ?? '';
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Catatan',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            if(isAnyMeasurementSkipped)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: DropdownButtonFormField<String>(
+                  value: widget.noteController.text.isNotEmpty
+                      ? widget.noteController.text
+                      : null,
+                  hint: const Text('Note wajib dipilih jika tidak dapat diukur'),
+                  isExpanded: true,
+                  items: widget.noteOptions.map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value, overflow: TextOverflow.ellipsis),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    widget.noteController.text = newValue ?? '';
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Catatan',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  ),
+                  validator: (value) {
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  // Anda bisa menambahkan validasi di sini jika perlu
-                  return null;
-                },
               ),
-            ),
           ],
         ),
       ),
@@ -373,7 +347,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           child: Text(title,
               style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
         if (photos.isNotEmpty)
           Padding(
@@ -383,23 +357,23 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           ),
         isLoading
             ? const Center(
-                child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(),
-              ))
+            child: Padding(
+              padding: EdgeInsets.all(8.0),
+              child: CircularProgressIndicator(),
+            ))
             : Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.camera_alt),
-                  label: Text(title),
-                  onPressed: onAddPhoto,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 40),
-                    side: BorderSide(color: primary),
-                    foregroundColor: primary,
-                  ),
-                ),
-              ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.camera_alt),
+            label: Text(title),
+            onPressed: onAddPhoto,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 40),
+              side: BorderSide(color: primary),
+              foregroundColor: primary,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -416,11 +390,11 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.articleDesc, // Nama Artikel
+                widget.articleDesc,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
                 style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Row(
@@ -428,7 +402,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   const Icon(Icons.ac_unit, size: 16, color: Colors.black54),
                   const SizedBox(width: 8),
                   Text(
-                    widget.articleUnitDesc, // Nama Unit
+                    widget.articleUnitDesc,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
@@ -441,7 +415,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   const Icon(Icons.qr_code, size: 16, color: Colors.black54),
                   const SizedBox(width: 8),
                   Text(
-                    widget.serialNo, // Serial No
+                    widget.serialNo,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
@@ -457,7 +431,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
   Widget _buildIndoorPairingDropdown(
       BuildContext context, PosValidationLoaded state) {
-    // Bangun daftar item untuk dropdown
     List<DropdownMenuItem<String>> items = state.availableIndoorSerials
         .map((serial) => DropdownMenuItem(
       value: serial,
@@ -465,8 +438,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     ))
         .toList();
 
-    // Jika unit ini sudah punya pasangan, tambahkan pasangannya ke daftar
-    // agar bisa ditampilkan sebagai nilai yang terpilih
     if (state.pairedIndoorSerial != null &&
         !state.availableIndoorSerials.contains(state.pairedIndoorSerial)) {
       items.insert(
@@ -500,9 +471,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                 ),
               );
             },
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
             ),
           ),
         ],

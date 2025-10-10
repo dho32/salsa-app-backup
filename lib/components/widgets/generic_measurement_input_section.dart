@@ -1,4 +1,4 @@
-// generic_measurement_input_section.dart - Versi Revisi
+// generic_measurement_input_section.dart - Versi FINAL
 
 import 'package:flutter/material.dart';
 import 'package:salsa/components/widgets/measurement_input_widget.dart';
@@ -6,75 +6,26 @@ import 'package:salsa/models/common/measurement_entry.dart';
 import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../constants.dart';
 
-class GenericMeasurementInputSection extends StatefulWidget {
+// DIUBAH: Menjadi StatelessWidget karena tidak lagi mengelola state internal.
+class GenericMeasurementInputSection extends StatelessWidget {
   final String transNo;
   final List<MeasurementEntry> measurements;
+  final Map<String, TextEditingController> controllers; // DITAMBAHKAN: Menerima controller dari induk
   final Function(MeasurementEntry) onUpdate;
   final double? indoorTemp;
 
-  const GenericMeasurementInputSection({
+  const   GenericMeasurementInputSection({
     super.key,
     required this.transNo,
     required this.measurements,
+    required this.controllers, // DITAMBAHKAN: Wajib diisi oleh induk
     required this.onUpdate,
     required this.indoorTemp,
   });
 
   @override
-  State<GenericMeasurementInputSection> createState() =>
-      _GenericMeasurementInputSectionState();
-}
-
-class _GenericMeasurementInputSectionState
-    extends State<GenericMeasurementInputSection> {
-  final Map<String, TextEditingController> _controllers = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeControllers();
-  }
-
-  @override
-  void didUpdateWidget(covariant GenericMeasurementInputSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.measurements != oldWidget.measurements) {
-      _disposeControllers();
-      _initializeControllers();
-    }
-  }
-
-  void _initializeControllers() {
-    for (var mEntry in widget.measurements) {
-      final valueText = mEntry.value == mEntry.value.truncateToDouble()
-          ? mEntry.value.truncate().toString()
-          : mEntry.value.toStringAsFixed(2);
-      _controllers[mEntry.measurementId] =
-          TextEditingController(text: valueText);
-
-      if(valueText == "0"){
-        _controllers[mEntry.measurementId] =
-            TextEditingController(text: "");
-      }
-    }
-  }
-
-  void _disposeControllers() {
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
-    _controllers.clear();
-  }
-
-  @override
-  void dispose() {
-    _disposeControllers();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (widget.measurements.isEmpty) {
+    if (measurements.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -85,22 +36,30 @@ class _GenericMeasurementInputSectionState
           width: double.infinity,
           color: Colors.grey.shade200,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          child: Text("Pengukuran Unit",
+          child: const Text("Pengukuran Unit",
               style:
-              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
-        ...widget.measurements.map((mEntry) {
+        ...measurements.map((mEntry) {
           final limits = kPOSMeasurementLimits.values.firstWhere(
                 (ml) => ml.id == mEntry.measurementId,
           );
 
+          // Mengambil controller yang sesuai dari map yang diberikan oleh induk
+          final controller = controllers[mEntry.measurementId];
+
+          // Jika karena suatu alasan controller tidak ditemukan, jangan render widgetnya
+          if (controller == null) {
+            return const SizedBox.shrink();
+          }
+
           var limitsToUse = limits;
           const String indoorTempMeasurementId = 'temperature';
 
-          if (mEntry.measurementId == indoorTempMeasurementId && widget.indoorTemp != null) {
+          if (mEntry.measurementId == indoorTempMeasurementId && indoorTemp != null) {
             limitsToUse = MeasurementLimits(
               id: limits.id, label: limits.label, min: limits.min,
-              max: widget.indoorTemp!, normalMax: limits.normalMax,
+              max: indoorTemp!, normalMax: limits.normalMax,
               normalMin: limits.normalMin, unit: limits.unit,
             );
           }
@@ -108,32 +67,27 @@ class _GenericMeasurementInputSectionState
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: MeasurementInputWidget(
-              // Parameter yang sudah ada sebelumnya
-              controller: _controllers[mEntry.measurementId]!,
-              transNo: widget.transNo,
+              controller: controller, // DIUBAH: Menggunakan controller dari induk
+              transNo: transNo,
               label: limitsToUse.label,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               limits: limitsToUse,
               initialImage: mEntry.capturedImage,
-              onChanged: (newValue) {
-                final updatedValue = double.tryParse(newValue) ?? mEntry.value;
-                widget.onUpdate(mEntry.copyWith(value: updatedValue));
+              onEditingComplete: (finalValue) {
+                final updatedValue = double.tryParse(finalValue) ?? mEntry.value;
+                onUpdate(mEntry.copyWith(value: updatedValue));
               },
               onImageChanged: (newImage) {
-                widget.onUpdate(mEntry.copyWith(capturedImage: newImage));
+                onUpdate(mEntry.copyWith(capturedImage: newImage));
               },
               isSkipEnabled: true,
               isSkipped: mEntry.isSkipped,
               onSkipChanged: (isSkipped) {
-                final controller = _controllers[mEntry.measurementId];
-                if (controller == null) return;
                 if (isSkipped) {
-                  widget.onUpdate(mEntry.copyWith(
-                    isSkipped: true,
-                  ));
+                  onUpdate(mEntry.copyWith(isSkipped: true));
                   controller.clear();
                 } else {
-                  widget.onUpdate(mEntry.copyWith(isSkipped: false));
+                  onUpdate(mEntry.copyWith(isSkipped: false));
                 }
               },
             ),

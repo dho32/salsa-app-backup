@@ -136,3 +136,10 @@ class PairOutdoorWithIndoor extends PosValidationEvent {
   @override
   List<Object?> get props => [outdoorSerialNo, indoorSerialNo];
 }
+
+class ProceedToNextStep extends PosValidationEvent {
+  const ProceedToNextStep();
+
+  @override
+  List<Object> get props => [];
+}

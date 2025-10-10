@@ -165,16 +165,22 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 child: const Text('Simpan'),
-                onPressed: () {
-                  final bool isAnyMeasurementSkipped =
-                      state.measurementsAfter.any((m) => m.isSkipped);
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  // Menunggu sesaat agar event unfocus selesai diproses
+                  await Future.delayed(const Duration(milliseconds: 150));
+                  final latestState = context.read<PosValidationBloc>().state;
+                  if (latestState is! PosValidationLoaded) return;
 
-                  if (state.photosAfter.isEmpty) {
+                  final bool isAnyMeasurementSkipped =
+                  latestState.measurementsAfter.any((m) => m.isSkipped);
+
+                  if (latestState.photosAfter.isEmpty) {
                     _showValidationErrorSnackbar(
                         'Foto unit sesudah cuci wajib dilengkapi.');
                     return;
                   }
-                  if (!_areAllMeasurementsFilled(state.measurementsAfter)) {
+                  if (!_areAllMeasurementsFilled(latestState.measurementsAfter)) {
                     _showValidationErrorSnackbar(
                         'Harap isi semua nilai & foto hasil pengukuran.');
                     return;
@@ -187,7 +193,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     return;
                   }
 
-                  for (final measurement in state.measurementsAfter) {
+                  for (final measurement in latestState.measurementsAfter) {
                     if (measurement.isSkipped) continue;
 
                     final limits = kPOSMeasurementLimits[measurement.measurementId];
