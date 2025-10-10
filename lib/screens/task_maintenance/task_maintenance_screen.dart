@@ -71,7 +71,7 @@ class _TaskMaintenanceScreenState extends State<TaskMaintenanceScreen> {
           ),
           Scaffold(
             backgroundColor: Colors.transparent,
-            resizeToAvoidBottomInset: true,
+            resizeToAvoidBottomInset: false,
             appBar: AppBar(
               title: _appVersion.isNotEmpty
                   ? Text(_appVersion,
