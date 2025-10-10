@@ -20,20 +20,23 @@ class ProofOfServiceDetailModelAdapter
     return ProofOfServiceDetailModel(
       header: fields[0] as ProofOfServiceHeader,
       detail: (fields[1] as List).cast<ProofOfServiceItemDetail>(),
-      noteOptions: (fields[2] as List?)?.cast<String>() ?? <String>[],
+      noteOptions: (fields[2] as List?)?.cast<String>(),
+      unserviceableReasons: (fields[3] as List?)?.cast<String>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceDetailModel obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.header)
       ..writeByte(1)
       ..write(obj.detail)
       ..writeByte(2)
-      ..write(obj.noteOptions);
+      ..write(obj.noteOptions)
+      ..writeByte(3)
+      ..write(obj.unserviceableReasons);
   }
 
   @override
@@ -66,8 +69,8 @@ class ProofOfServiceHeaderAdapter extends TypeAdapter<ProofOfServiceHeader> {
       branchCode: fields[5] as String,
       branchName: fields[6] as String,
       storeEmail: fields[7] as String,
-      latitude: fields[8] as String? ?? '',
-      longitude: fields[9] as String? ?? '',
+      latitude: fields[8] as String,
+      longitude: fields[9] as String,
     );
   }
 

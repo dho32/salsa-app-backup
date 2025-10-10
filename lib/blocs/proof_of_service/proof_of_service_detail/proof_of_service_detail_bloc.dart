@@ -77,22 +77,31 @@ class ProofOfServiceDetailBloc
 
     for (final detail in details) {
       final key = detail.serialNo.trim().toUpperCase();
-      final draft = box.get(key);
+      PosValidationEntryModel? draft;
+
+      // Tambahkan try-catch di sini untuk menangani data cache yang tidak kompatibel
+      try {
+        draft = box.get(key);
+      } catch (e) {
+        print('🔴 Gagal membaca draft validasi untuk SN $key. Menghapus data rusak...');
+        // Jika gagal membaca, hapus data yang rusak agar tidak error lagi nanti
+        await box.delete(key);
+        // Anggap saja tidak ada draft
+        draft = null;
+      }
 
       if (draft != null) {
-        // logic untuk cek status card
         if (draft.isCompleted) {
           statuses[key] = ValidationStatus.completed;
         } else {
           statuses[key] = ValidationStatus.inProgress;
         }
       } else {
-        // Jika tidak ada draft sama sekali, berarti belum dimulai
         statuses[key] = ValidationStatus.notStarted;
       }
     }
 
-    // Pastikan semua detail punya status, bahkan yang belum ada di draft
+    // Bagian ini tidak perlu diubah
     for (final detail in details) {
       final key = detail.serialNo.trim().toUpperCase();
       statuses.putIfAbsent(key, () => ValidationStatus.notStarted);

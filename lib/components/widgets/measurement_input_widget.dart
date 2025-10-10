@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -7,14 +6,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+// Ganti import ini dengan path yang sesuai di proyek Anda
 import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
-import '../shared_function.dart';
 import 'full_screen_image_viewer.dart';
 
 class MeasurementInputWidget extends StatefulWidget {
-  // Parameter yang sudah ada
   final TextEditingController controller;
   final String transNo;
   final String label;
@@ -23,11 +21,10 @@ class MeasurementInputWidget extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final CapturedImageDetail? initialImage;
   final ValueChanged<CapturedImageDetail?>? onImageChanged;
-
-  // BARU: Parameter opsional untuk fitur "skip"
   final bool isSkipEnabled;
   final bool isSkipped;
   final ValueChanged<bool>? onSkipChanged;
+  final ValueChanged<String>? onEditingComplete;
 
   const MeasurementInputWidget({
     super.key,
@@ -39,10 +36,10 @@ class MeasurementInputWidget extends StatefulWidget {
     this.onChanged,
     this.initialImage,
     this.onImageChanged,
-    // BARU: Inisialisasi parameter opsional
     this.isSkipEnabled = false,
     this.isSkipped = false,
     this.onSkipChanged,
+    this.onEditingComplete,
   });
 
   @override
@@ -53,15 +50,39 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   CapturedImageDetail? _currentImage;
   bool _isLoading = false;
   double _currentSliderValue = 0.0;
+  String? _errorText;
   late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode();
-    // _focusNode.addListener(_onFocusChange);
-    _updateSliderFromText(widget.controller.text);
     _currentImage = widget.initialImage;
+    _updateSliderFromText(widget.controller.text); // Inisialisasi awal tanpa rebuild
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) {
+      // Saat fokus hilang, lakukan SEMUA update dalam satu setState
+      final text = widget.controller.text;
+      print('1. MeasurementInputWidget (_onFocusChange): Nilai akhir adalah "$text"');
+
+      setState(() {
+        // 1. Lakukan validasi dan tampilkan error
+        _errorText = _getValidationError(text);
+        // 2. Update posisi slider sesuai teks final
+        _updateSliderFromText(text);
+        widget.onEditingComplete?.call(text);
+      });
+    }
   }
 
   @override
@@ -77,20 +98,16 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     }
   }
 
-  // void _onFocusChange() {
-  //   if (!_focusNode.hasFocus) {
-  //     final textValue = widget.controller.text;
-  //     double value = double.tryParse(textValue) ?? widget.limits.min;
-  //     final clampedValue = value.clamp(widget.limits.min, widget.limits.max);
-  //     final newText = _formatValue(clampedValue);
-  //     if (textValue != newText) {
-  //       widget.controller.text = newText;
-  //       widget.onChanged?.call(newText);
-  //       _currentSliderValue = clampedValue;
-  //       setState(() {});
-  //     }
-  //   }
-  // }
+  String? _getValidationError(String text) {
+    if (text.isEmpty) return null;
+    final value = double.tryParse(text);
+    if (value == null) {
+      if (!text.endsWith('.')) return 'Angka tidak valid';
+    } else {
+      if (value > widget.limits.max) return 'Maks: ${widget.limits.max.toStringAsFixed(0)}';
+    }
+    return null;
+  }
 
   String _formatValue(double value) => value == value.truncateToDouble()
       ? value.truncate().toString()
@@ -98,20 +115,21 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   void _updateSliderFromText(String text) {
     final value = double.tryParse(text);
-    if (value != null) {
-      setState(() => _currentSliderValue =
-          value.clamp(widget.limits.min, widget.limits.max));
-    } else if (text == "") {
-      setState(() => _currentSliderValue = widget.limits.min);
-    }
+    _currentSliderValue = (value ?? widget.limits.min).clamp(widget.limits.min, widget.limits.max);
   }
 
   void _onSliderChanged(double newValue) {
+    final newText = _formatValue(newValue);
     setState(() {
       _currentSliderValue = newValue;
-      final newText = _formatValue(newValue);
-      widget.controller.text = newText;
+      widget.controller.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+      // Jika diubah via slider, pasti valid. Hapus error.
+      _errorText = null;
       widget.onChanged?.call(newText);
+      widget.onEditingComplete?.call(newText);
     });
   }
 
@@ -123,12 +141,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
       if (image != null) {
         final tempDir = await getTemporaryDirectory();
-        final targetPath = p.join(
-            tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final XFile? compressedImage =
-            await FlutterImageCompress.compressAndGetFile(
-                image.path, targetPath,
-                quality: 70);
+        final targetPath = p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+        final XFile? compressedImage = await FlutterImageCompress.compressAndGetFile(
+          image.path,
+          targetPath,
+          quality: 70,
+        );
         if (compressedImage == null) return;
         final userData = await AuthStorage.getUser();
         _currentImage = CapturedImageDetail(
@@ -149,15 +167,10 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   }
 
   void removePhoto() {
-    setState(() => _currentImage = null);
+    setState(() {
+      _currentImage = null;
+    });
     widget.onImageChanged?.call(null);
-  }
-
-  @override
-  void dispose() {
-    // _focusNode.removeListener(_onFocusChange);
-    _focusNode.dispose();
-    super.dispose();
   }
 
   @override
@@ -173,13 +186,10 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         children: [
           if (widget.isSkipEnabled)
             SwitchListTile(
-              title: Text(widget.label,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(widget.label, style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                isEnabled
-                    ? 'Tekan tombol sebelah jika tidak bisa diukur'
-                    : 'Tidak dapat melakukan pengukuran',
-                style: TextStyle(fontSize: 12, color: Colors.black87),
+                isEnabled ? 'Tekan tombol sebelah jika tidak bisa diukur' : 'Tidak dapat melakukan pengukuran',
+                style: const TextStyle(fontSize: 12, color: Colors.black87),
               ),
               value: widget.isSkipped,
               onChanged: widget.onSkipChanged,
@@ -187,27 +197,14 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               contentPadding: const EdgeInsets.only(left: 16, right: 8),
             )
           else
-            // Tampilan header default jika skip tidak diaktifkan
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  widget.label,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+                child: Text(widget.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
-
-          const Divider(
-            height: 1,
-            indent: 16,
-            endIndent: 16,
-            color: Colors.grey,
-          ),
-
-          // Konten input yang bisa dinonaktifkan
+          const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey),
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -215,10 +212,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               absorbing: !isEnabled,
               child: Opacity(
                 opacity: isEnabled ? 1.0 : 0.4,
-                child: !isEnabled
-                    ? const SizedBox(
-                        height: 16) // Beri sedikit padding saat disembunyikan
-                    : _buildInputContent(primary),
+                child: !isEnabled ? const SizedBox(height: 16) : _buildInputContent(primary),
               ),
             ),
           ),
@@ -227,7 +221,6 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     );
   }
 
-  // Helper untuk membangun konten input
   Widget _buildInputContent(Color primary) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -236,12 +229,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         children: [
           _isLoading
               ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
               : _currentImage != null
-                  ? _buildPhotoPreview()
-                  : _buildPhotoButton(primary),
+              ? _buildPhotoPreview()
+              : _buildPhotoButton(primary),
           const SizedBox(height: 16),
           _buildSliderAndTextfield(),
           const Padding(
@@ -258,46 +251,53 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   Widget _buildPhotoButton(Color primary) {
     return SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-            onPressed: _takePhoto,
-            icon: const Icon(Icons.camera_alt),
-            label: Text('Ambil Foto ${widget.label}'),
-            style: OutlinedButton.styleFrom(
-                side: BorderSide(color: primary), foregroundColor: primary)));
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _takePhoto,
+        icon: const Icon(Icons.camera_alt),
+        label: Text('Ambil Foto ${widget.label}'),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: primary),
+          foregroundColor: primary,
+        ),
+      ),
+    );
   }
 
   Widget _buildPhotoPreview() {
-    return Stack(alignment: Alignment.topRight, children: [
-      GestureDetector(
+    return Stack(
+      alignment: Alignment.topRight,
+      children: [
+        GestureDetector(
           onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      FullScreenImageViewer(imageDetail: _currentImage!))),
+            context,
+            MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageDetail: _currentImage!)),
+          ),
           child: Hero(
-              tag: _currentImage!.imagePath,
-              child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: FadeInImage(
-                      placeholder: const AssetImage(
-                          'assets/images/placeholder_image.jpeg'),
-                      image: FileImage(File(_currentImage!.imagePath)),
-                      width: double.maxFinite,
-                      height: 80,
-                      fit: BoxFit.cover,
-                      imageErrorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.broken_image,
-                              size: 40, color: Colors.grey))))),
-      GestureDetector(
+            tag: _currentImage!.imagePath,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: FadeInImage(
+                placeholder: const AssetImage('assets/images/placeholder_image.jpeg'),
+                image: FileImage(File(_currentImage!.imagePath)),
+                width: double.maxFinite,
+                height: 80,
+                fit: BoxFit.cover,
+                imageErrorBuilder: (c, e, st) => const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+              ),
+            ),
+          ),
+        ),
+        GestureDetector(
           onTap: removePhoto,
           child: Container(
-              decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.all(2),
-              child: const Icon(Icons.close, color: Colors.white, size: 16)))
-    ]);
+            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.all(2),
+            child: const Icon(Icons.close, color: Colors.white, size: 16),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildSliderAndTextfield() {
@@ -305,21 +305,25 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-            flex: 12,
-            child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: Colors.grey,
-                    inactiveTrackColor: Colors.grey.shade300,
-                    thumbColor: Colors.blueGrey,
-                    overlayColor: Colors.grey.shade100,
-                    valueIndicatorColor: Theme.of(context).colorScheme.primary,
-                    showValueIndicator: ShowValueIndicator.always),
-                child: Slider(
-                    value: _currentSliderValue,
-                    min: widget.limits.min,
-                    max: widget.limits.max,
-                    label: _currentSliderValue.toStringAsFixed(2),
-                    onChanged: _onSliderChanged))),
+          flex: 12,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: Colors.grey,
+              inactiveTrackColor: Colors.grey.shade300,
+              thumbColor: Colors.blueGrey,
+              overlayColor: Colors.grey.shade100,
+              valueIndicatorColor: Theme.of(context).colorScheme.primary,
+              showValueIndicator: ShowValueIndicator.always,
+            ),
+            child: Slider(
+              value: _currentSliderValue,
+              min: widget.limits.min,
+              max: widget.limits.max,
+              label: _currentSliderValue.toStringAsFixed(2),
+              onChanged: _onSliderChanged,
+            ),
+          ),
+        ),
         Expanded(
           flex: 5,
           child: Padding(
@@ -327,24 +331,18 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             child: TextFormField(
               focusNode: _focusNode,
               controller: widget.controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onFieldSubmitted: (text) {
-                _updateSliderFromText(text);
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              onChanged: (text) {
+                // HANYA meneruskan event, tidak ada setState di sini.
                 widget.onChanged?.call(text);
               },
-              textAlign: TextAlign.right,
-              onTapOutside: (_) {
-                _updateSliderFromText(widget.controller.text);
-                widget.onChanged?.call(widget.controller.text);
-              },
-              // onEditingComplete: _onFocusChange,
-              decoration:
-                  InputDecoration(labelText: widget.limits.unit, isDense: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*')),
-                NumericRangeFormatter(max: widget.limits.max),
-              ],
+              decoration: InputDecoration(
+                labelText: widget.limits.unit,
+                isDense: true,
+                errorText: _errorText,
+              ),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*'))],
             ),
           ),
         ),

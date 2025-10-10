@@ -209,3 +209,85 @@ class NumericRangeFormatter extends TextInputFormatter {
   }
 }
 
+class DashedRect extends StatelessWidget {
+  final Color color;
+  final double strokeWidth;
+  final double gap;
+  final double dashWidth;
+  final Radius radius;
+  final Widget child;
+
+  const DashedRect({
+    super.key,
+    this.color = Colors.black,
+    this.strokeWidth = 1.0,
+    this.gap = 4.0,
+    this.dashWidth = 6.0,
+    this.radius = const Radius.circular(0),
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _DashedRectPainter(
+        color: color,
+        strokeWidth: strokeWidth,
+        gap: gap,
+        dashWidth: dashWidth,
+        radius: radius,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _DashedRectPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double gap;
+  final double dashWidth;
+  final Radius radius;
+
+  _DashedRectPainter({
+    this.color = Colors.black,
+    this.strokeWidth = 1.0,
+    this.gap = 4.0,
+    this.dashWidth = 6.0,
+    this.radius = const Radius.circular(0),
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final dashedPath = Path();
+    final shapePath = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, 0, size.width, size.height),
+          radius,
+        ),
+      );
+
+    for (final metric in shapePath.computeMetrics()) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        dashedPath.addPath(
+          metric.extractPath(distance, distance + dashWidth),
+          Offset.zero,
+        );
+        distance += (dashWidth + gap);
+      }
+    }
+
+    canvas.drawPath(dashedPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+

@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,7 +31,8 @@ import '../../../../models/schedule/proof_of_service/proof_of_service_detail_dat
 import '../../../../models/service_call/validation_status.dart';
 import '../../proof_of_service_validation/pos_validation_screen.dart';
 
-class ProofOfServiceDetailBodyMobile extends StatelessWidget {
+// LANGKAH 1: UBAH MENJADI STATEFULWIDGET
+class ProofOfServiceDetailBodyMobile extends StatefulWidget {
   final String transNo;
   final String technician1Name;
 
@@ -39,29 +42,94 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
     required this.technician1Name,
   });
 
+  @override
+  State<ProofOfServiceDetailBodyMobile> createState() =>
+      _ProofOfServiceDetailBodyMobileState();
+}
+
+class _ProofOfServiceDetailBodyMobileState
+    extends State<ProofOfServiceDetailBodyMobile> {
+  // LANGKAH 2: DEKLARASI CONTROLLER DI SINI
+  late final TextEditingController _tempInController;
+  late final TextEditingController _tempOutController;
+
+  final kIndoorLimits = MeasurementLimits(
+      id: 'temp_in',
+      label: 'Suhu Dalam',
+      min: 20,
+      max: 35,
+      normalMax: 20,
+      normalMin: 35,
+      unit: '°C');
+
+  final kOutdoorLimits = MeasurementLimits(
+      id: 'temp_out',
+      label: 'Suhu Luar',
+      min: 20,
+      max: 50,
+      normalMax: 20,
+      normalMin: 50,
+      unit: '°C');
+
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi Controller sekali saja
+    final initialFormState = context.read<PosFormCubit>().state;
+    _tempInController = TextEditingController(text: initialFormState.tempIn);
+    _tempOutController = TextEditingController(text: initialFormState.tempOut);
+  }
+
+  @override
+  void dispose() {
+    // Jangan lupa dispose controller
+    _tempInController.dispose();
+    _tempOutController.dispose();
+    super.dispose();
+  }
+
   bool _hasRetryUploadState(PosSubmittedState state) {
     return state is PosValidationUploadPartial &&
-        state.transNo == transNo &&
+        state.transNo == widget.transNo &&
         state.failedFiles.isNotEmpty;
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
-      listener: (context, detailState) {
-        // Listener ini akan terpanggil setiap kali status unit berubah
-        if (detailState is ProofOfServiceDetailLoaded) {
-          final allUnitsValidated = detailState.data.detail.every((detail) {
-            final serialKey = detail.serialNo.trim().toUpperCase();
-            return detailState.validationStatuses[serialKey] ==
-                ValidationStatus.completed;
-          });
-          // Beri tahu PosFormCubit tentang status terbaru
-          context
-              .read<PosFormCubit>()
-              .updateAllUnitsValidated(allUnitsValidated);
-        }
-      },
+    return MultiBlocListener(
+      listeners: [
+        // Listener untuk sinkronisasi validasi unit
+        BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
+          listener: (context, detailState) {
+            if (detailState is ProofOfServiceDetailLoaded) {
+              final allUnitsValidated = detailState.data.detail.every((detail) {
+                final serialKey = detail.serialNo.trim().toUpperCase();
+                return detailState.validationStatuses[serialKey] ==
+                    ValidationStatus.completed;
+              });
+              context
+                  .read<PosFormCubit>()
+                  .updateAllUnitsValidated(allUnitsValidated);
+            }
+          },
+        ),
+        // LANGKAH 3: SINKRONISASI CONTROLLER DENGAN BLOC STATE
+        BlocListener<PosFormCubit, PosFormState>(
+          listenWhen: (previous, current) =>
+              previous.tempIn != current.tempIn ||
+              previous.tempOut != current.tempOut,
+          listener: (context, state) {
+            // Update controller hanya jika teksnya berbeda untuk menghindari
+            // kursor lompat saat mengetik
+            if (_tempInController.text != state.tempIn) {
+              _tempInController.text = state.tempIn;
+            }
+            if (_tempOutController.text != state.tempOut) {
+              _tempOutController.text = state.tempOut;
+            }
+          },
+        ),
+      ],
       child: BlocBuilder<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
         builder: (context, detailState) {
           if (detailState is ProofOfServiceDetailLoading) {
@@ -92,10 +160,10 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                 return Stack(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 80.0),
+                      padding: const EdgeInsets.only(bottom: 65.0),
                       // Beri ruang untuk tombol
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 35),
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 35),
                         child: Column(
                           children: [
                             _buildCustomerSection(header),
@@ -129,7 +197,13 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempIn.isNotEmpty &&
-                                          double.parse(formState.tempIn) >= 20,
+                                          ((double.tryParse(formState.tempIn) ??
+                                                      0) >=
+                                                  kIndoorLimits.min &&
+                                              (double.tryParse(
+                                                          formState.tempIn) ??
+                                                      0) <=
+                                                  kIndoorLimits.max),
                                     ),
                                   if (outdoorUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -142,7 +216,13 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempOut.isNotEmpty &&
-                                          double.parse(formState.tempIn) >= 20,
+                                          ((double.tryParse(formState.tempOut) ??
+                                                      0) >=
+                                                  kOutdoorLimits.min &&
+                                              (double.tryParse(
+                                                          formState.tempOut) ??
+                                                      0) <=
+                                                  kOutdoorLimits.max),
                                     ),
                                   if (setUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -181,6 +261,52 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
   }
 
   // --- WIDGET BUILDER METHODS ---
+
+  Widget _buildServiceInfoPanel(BuildContext context, PosFormState formState) {
+    final formCubit = context.read<PosFormCubit>();
+    return _buildSection(
+      title: 'Informasi Servis',
+      child: Column(
+        children: [
+          MeasurementInputWidget(
+            // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
+            controller: _tempInController,
+            label: 'Suhu Dalam Ruangan (°C)',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            limits: kIndoorLimits,
+            transNo: widget.transNo,
+            initialImage: formState.temperatureInImage,
+            onEditingComplete: (finalValue) {
+              formCubit.tempInChanged(finalValue);
+              formCubit.onFieldChanged();
+            },
+            onImageChanged: (newImage) {
+              formCubit.tempInImageChanged(newImage);
+              formCubit.onFieldChanged();
+            },
+          ),
+          const SizedBox(height: 12),
+          MeasurementInputWidget(
+            // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
+            controller: _tempOutController,
+            label: 'Suhu Luar Ruangan (°C)',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            limits: kOutdoorLimits,
+            transNo: widget.transNo,
+            initialImage: formState.temperatureOutImage,
+            onEditingComplete: (finalValue) {
+              formCubit.tempOutChanged(finalValue);
+              formCubit.onFieldChanged();
+            },
+            onImageChanged: (newImage) {
+              formCubit.tempOutImageChanged(newImage);
+              formCubit.onFieldChanged();
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSection({
     required String title,
@@ -380,7 +506,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
       child: Column(
         children: [
           _buildCustomTextField(
-            initialValue: technician1Name,
+            initialValue: widget.technician1Name,
             hintText: 'Teknisi 1',
             icon: Icons.engineering,
             readOnly: true,
@@ -428,64 +554,6 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
     );
   }
 
-  Widget _buildServiceInfoPanel(BuildContext context, PosFormState formState) {
-    final formCubit = context.read<PosFormCubit>();
-    return _buildSection(
-      title: 'Informasi Servis',
-      child: Column(
-        children: [
-          MeasurementInputWidget(
-            controller: TextEditingController(text: formState.tempIn),
-            label: 'Suhu Dalam Ruangan (°C)',
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            limits: MeasurementLimits(
-                id: 'temp_in',
-                label: 'Suhu Dalam',
-                min: 20,
-                max: 35,
-                normalMax: 20,
-                normalMin: 35,
-                unit: '°C'),
-            transNo: transNo,
-            initialImage: formState.temperatureInImage,
-            onChanged: (value) {
-              formCubit.tempInChanged(value);
-              formCubit.onFieldChanged();
-            },
-            onImageChanged: (newImage) {
-              formCubit.tempInImageChanged(newImage);
-              formCubit.onFieldChanged();
-            },
-          ),
-          const SizedBox(height: 12),
-          MeasurementInputWidget(
-            controller: TextEditingController(text: formState.tempOut),
-            label: 'Suhu Luar Ruangan (°C)',
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            limits: MeasurementLimits(
-                id: 'temp_out',
-                label: 'Suhu Luar',
-                min: 20,
-                max: 50,
-                normalMax: 20,
-                normalMin: 50,
-                unit: '°C'),
-            transNo: transNo,
-            initialImage: formState.temperatureOutImage,
-            onChanged: (value) {
-              formCubit.tempOutChanged(value);
-              formCubit.onFieldChanged();
-            },
-            onImageChanged: (newImage) {
-              formCubit.tempOutImageChanged(newImage);
-              formCubit.onFieldChanged();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildUnitGroupCard({
     required BuildContext context,
     required String title,
@@ -497,8 +565,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
     required bool isEnabled,
   }) {
     final String snackBarMessage = title == 'INDOOR'
-        ? 'Pastikan data suhu dalam ruangan (°C) sudah terisi dengan benar.'
-        : 'Pastikan data suhu luar ruangan (°C) sudah terisi dengan benar.';
+        ? 'Suhu Dalam Ruangan harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.'
+        : 'Suhu Luar Ruangan harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.';
 
     return Stack(
       children: [
@@ -527,8 +595,8 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
                   ? const Text('Ketuk untuk lihat detail')
                   : Text(
                       title == 'INDOOR'
-                          ? 'Isi Suhu Dalam & foto'
-                          : 'Isi Suhu Luar & foto',
+                          ? 'Isi Suhu Dalam antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C & foto hasil pengukuran'
+                          : 'Isi Suhu Luar antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C & foto hasil pengukuran',
                       style: const TextStyle(
                           color: Colors.orange, fontWeight: FontWeight.w500),
                     ),
@@ -623,20 +691,45 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
         child: SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.check_circle),
+            icon: const Icon(Icons.check_circle, size: 18),
             label: const Text("Selesai"),
             style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: const StadiumBorder(),
                 textStyle:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () async {
-              if (formState.isFormReadyToSubmit) {
+              FocusScope.of(context).unfocus();
+              // Menunggu sesaat agar event unfocus selesai diproses
+              await Future.delayed(const Duration(milliseconds: 150));
+              final latestFormState = context.read<PosFormCubit>().state;
+
+              if (latestFormState.isFormReadyToSubmit) {
+                final tempInValue = double.tryParse(latestFormState.tempIn);
+                final tempOutValue = double.tryParse(latestFormState.tempOut);
+                if (tempInValue != null) {
+                  if (tempInValue < kIndoorLimits.min ||
+                      tempInValue > kIndoorLimits.max) {
+                    _showValidationSnackbar(context,
+                        'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.');
+                    return; // Hentikan proses jika tidak valid
+                  }
+                }
+                if (tempOutValue != null) {
+                  if (tempOutValue < kOutdoorLimits.min ||
+                      tempOutValue > kOutdoorLimits.max) {
+                    _showValidationSnackbar(context,
+                        'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.');
+                    return; // Hentikan proses jika tidak valid
+                  }
+                }
                 final user = await AuthStorage.getUser();
                 final maintenanceByIP = await getPublicIpAddress();
                 final technicianName = user['name'] ?? '';
                 final maintenanceBy = user['user_id'] ?? '';
-                final double storeLat = double.tryParse(header.latitude ?? '') ?? 0.0;
-                final double storeLong = double.tryParse(header.longitude ?? '') ?? 0.0;
+                final double storeLat =
+                    double.tryParse(header.latitude ?? '') ?? 0.0;
+                final double storeLong =
+                    double.tryParse(header.longitude ?? '') ?? 0.0;
 
                 await showDialog<void>(
                   context: context,
@@ -711,7 +804,7 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: const StadiumBorder(),
                 textStyle:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () {
@@ -836,7 +929,4 @@ class ProofOfServiceDetailBodyMobile extends StatelessWidget {
       ),
     );
   }
-
-
-
 }

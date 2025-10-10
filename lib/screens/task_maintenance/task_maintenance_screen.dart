@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:salsa/screens/task_maintenance/components/task_maintenance_body_mobile.dart';
 
 import '../../blocs/auth/auth_bloc.dart';
@@ -19,11 +20,14 @@ class TaskMaintenanceScreen extends StatefulWidget {
 class _TaskMaintenanceScreenState extends State<TaskMaintenanceScreen> {
   bool _isLoading = true;
   Map<String, String?> _userData = {};
+  String _appVersion = '';
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _initAppVersion();
   }
 
   Future<void> _loadUserData() async {
@@ -31,6 +35,14 @@ class _TaskMaintenanceScreenState extends State<TaskMaintenanceScreen> {
     setState(() {
       _userData = userData;
       _isLoading = false;
+    });
+  }
+
+  Future<void> _initAppVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      _version = packageInfo.version;
+      _appVersion = 'Versi $_version';
     });
   }
 
@@ -61,9 +73,17 @@ class _TaskMaintenanceScreenState extends State<TaskMaintenanceScreen> {
             backgroundColor: Colors.transparent,
             resizeToAvoidBottomInset: true,
             appBar: AppBar(
-              backgroundColor: Colors.transparent, // Samakan dengan latar belakang
-              elevation: 0, // Hilangkan bayangan
-              automaticallyImplyLeading: false, // Hilangkan tombol kembali
+              title: _appVersion.isNotEmpty
+                  ? Text(_appVersion,
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.black54))
+                  : null,
+              backgroundColor: Colors.transparent,
+              // Samakan dengan latar belakang
+              elevation: 0,
+              // Hilangkan bayangan
+              automaticallyImplyLeading: false,
+              // Hilangkan tombol kembali
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 16.0),
@@ -99,7 +119,7 @@ class _TaskMaintenanceScreenState extends State<TaskMaintenanceScreen> {
                       margin: EdgeInsets.zero,
                       shape: RoundedSuperellipseBorder(
                           borderRadius:
-                          BorderRadiusGeometry.all(Radius.circular(50))),
+                              BorderRadiusGeometry.all(Radius.circular(50))),
                       elevation: 3,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(

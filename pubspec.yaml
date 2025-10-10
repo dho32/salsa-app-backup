@@ -72,6 +72,7 @@ dependencies:
       url: https://github.com/RomyITCM/qr_code_scanner.git
   firebase_core: ^4.1.1
   firebase_crashlytics: ^5.0.2
+  dotted_border: ^3.1.0
 
 
 dev_dependencies:

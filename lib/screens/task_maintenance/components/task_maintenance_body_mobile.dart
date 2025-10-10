@@ -26,21 +26,10 @@ class TaskMaintenanceBodyMobile extends StatefulWidget {
 
 class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
   final _transNoController = TextEditingController();
-  String _appVersion = '';
-  String _version = '';
 
   @override
   void initState() {
     super.initState();
-    _initAppVersion();
-  }
-
-  Future<void> _initAppVersion() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    setState(() {
-      _version = packageInfo.version;
-      _appVersion = 'Versi $_version';
-    });
   }
 
   @override
@@ -157,12 +146,6 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                         const Text('Lanjutkan', style: TextStyle(fontSize: 16)),
                   ),
                   const SizedBox(height: 24),
-                  if (_appVersion.isNotEmpty)
-                    Text(
-                      _appVersion,
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.black54),
-                    ),
 
                   // Indikator loading dari BLoC
                   BlocListener<TaskMaintenanceBloc, POSearchState>(
