@@ -76,7 +76,7 @@ void main() async {
 
   // Baris ini penting untuk testing. Hapus atau beri komentar saat rilis ke produksi.
   // Ia akan mereset status upgrader setiap kali aplikasi dimulai ulang.
-  await Upgrader.clearSavedSettings();
+  // await Upgrader.clearSavedSettings();
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
