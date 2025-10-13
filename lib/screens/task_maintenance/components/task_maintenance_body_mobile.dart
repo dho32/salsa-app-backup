@@ -39,12 +39,13 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
   }
 
   void process(String transNo) {
+    FocusScope.of(context).unfocus();
     if (transNo.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Nomor transaksi tidak boleh kosong!'),
-          backgroundColor: Colors.red,
-        ),
+            content: Text('Nomor transaksi tidak boleh kosong!'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -58,7 +59,10 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       taskType = MaintenanceType.cuci;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Format nomor transaksi tidak dikenali.')),
+        const SnackBar(
+            content: Text('Format nomor transaksi tidak dikenali.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -204,7 +208,8 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                               content: Text(state.message),
-                              backgroundColor: Colors.red),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating),
                         );
                       }
                     },

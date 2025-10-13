@@ -29,70 +29,114 @@ import 'models/task_maintenance/confirmation_task_queue.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // --- Inisialisasi Firebase ---
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // --- Konfigurasi Crashlytics untuk menangkap error ---
-  // Menangkap error yang terjadi di dalam Flutter Framework
-  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
-
-  // Menangkap error yang terjadi di luar Flutter (misal: di kode async)
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
-  // --- Akhir Konfigurasi Crashlytics ---
-
-  await initializeDateFormatting('id_ID', null);
-  await Hive.initFlutter();
-
-  Hive.registerAdapter(ValidationProblemAdapter());
-  Hive.registerAdapter(ServiceCallValidationEntryModelAdapter());
-  Hive.registerAdapter(ProofOfServiceDetailDataAdapter());
-  Hive.registerAdapter(CapturedImageDetailAdapter());
-  Hive.registerAdapter(MeasurementEntryAdapter());
-  Hive.registerAdapter(TransactionInfoModelAdapter());
-  Hive.registerAdapter(ConfirmationTaskModelAdapter()); //6
-  Hive.registerAdapter(PosTransactionInfoModelAdapter()); //7
-  Hive.registerAdapter(PosValidationEntryModelAdapter()); //8
-  Hive.registerAdapter(ProofOfServiceDetailModelAdapter()); // 10
-  Hive.registerAdapter(ProofOfServiceHeaderAdapter()); // 11
-  Hive.registerAdapter(ProofOfServiceItemDetailAdapter()); //12
-  Hive.registerAdapter(PosUnserviceableModelAdapter()); //13
-  await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-  await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
-  await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-  await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-  await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-  await Hive.openBox('otp_state');
-  await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-  await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
+  runApp(const AppInitializer());
+}
 
 
-  // await Hive.deleteBoxFromDisk(kServiceCallHiveBox);
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
 
-  // Baris ini penting untuk testing. Hapus atau beri komentar saat rilis ke produksi.
-  // Ia akan mereset status upgrader setiap kali aplikasi dimulai ulang.
-  // await Upgrader.clearSavedSettings();
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+class _AppInitializerState extends State<AppInitializer> {
+  late final Future<void> _initializationFuture;
 
-  final authRepository = AuthRepository();
-  ConfirmationService().processQueue();
-  runApp(
-    RepositoryProvider.value(
-      value: authRepository,
-      child: BlocProvider(
-        create: (_) => AuthBloc(authRepository: authRepository)..add(AppLoaded()),
-        child: const MyApp(),
-      ),
-    ),
-  );
+  @override
+  void initState() {
+    super.initState();
+    // Panggil fungsi inisialisasi berat di sini
+    _initializationFuture = _initializeApp();
+  }
+
+  // PINDAHKAN SEMUA KODE 'AWAIT' ANDA KE FUNGSI INI
+  Future<void> _initializeApp() async {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
+    await initializeDateFormatting('id_ID', null);
+    await Hive.initFlutter();
+
+    // Registrasi adapter bisa tetap di sini, karena sinkron
+    Hive.registerAdapter(ValidationProblemAdapter());
+    Hive.registerAdapter(ServiceCallValidationEntryModelAdapter());
+    Hive.registerAdapter(ProofOfServiceDetailDataAdapter());
+    Hive.registerAdapter(CapturedImageDetailAdapter());
+    Hive.registerAdapter(MeasurementEntryAdapter());
+    Hive.registerAdapter(TransactionInfoModelAdapter());
+    Hive.registerAdapter(ConfirmationTaskModelAdapter()); //6
+    Hive.registerAdapter(PosTransactionInfoModelAdapter()); //7
+    Hive.registerAdapter(PosValidationEntryModelAdapter()); //8
+    Hive.registerAdapter(ProofOfServiceDetailModelAdapter()); // 10
+    Hive.registerAdapter(ProofOfServiceHeaderAdapter()); // 11
+    Hive.registerAdapter(ProofOfServiceItemDetailAdapter()); //12
+    Hive.registerAdapter(PosUnserviceableModelAdapter()); //13
+    await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+    await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
+    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+    await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+    await Hive.openBox('otp_state');
+    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
+
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+
+    // Jalankan proses background
+    ConfirmationService().processQueue();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: _initializationFuture,
+      builder: (context, snapshot) {
+        // Cek status future
+        if (snapshot.connectionState == ConnectionState.done) {
+          // JIKA SEMUA INISIALISASI SELESAI
+          if (snapshot.hasError) {
+            // Jika ada error, tampilkan halaman error
+            return MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: Text("Gagal memulai aplikasi: ${snapshot.error}"),
+                ),
+              ),
+            );
+          }
+
+          // Jika berhasil, bangun aplikasi utama Anda
+          final authRepository = AuthRepository();
+          return RepositoryProvider.value(
+            value: authRepository,
+            child: BlocProvider(
+              create: (_) => AuthBloc(authRepository: authRepository)..add(AppLoaded()),
+              child: const MyApp(), // Lanjutkan ke MyApp Anda yang lama
+            ),
+          );
+        }
+
+        // SELAMA MENUNGGU, tampilkan loading indicator
+        return const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -122,6 +166,7 @@ class _MyAppState extends State<MyApp> {
       _isImagePrecached = true;
     });
   }
+
   @override
   Widget build(BuildContext context) {
     if (!_isImagePrecached) {
