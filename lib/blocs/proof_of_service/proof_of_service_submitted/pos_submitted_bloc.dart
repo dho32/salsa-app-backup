@@ -105,10 +105,14 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
           emit(PosValidationSuccess());
         } else {
+          final cleanFailedFiles = uploadResult.failedFiles.map((fullErrorString) {
+            return fullErrorString.split(' (').first;
+          }).toList();
+
           final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
-            'failedFiles': uploadResult.failedFiles,
+            'failedFiles': cleanFailedFiles,
             'presignedDetail': presignedDetail,
           });
 
@@ -116,7 +120,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           emit(PosValidationUploadPartial(
             successCount: uploadResult.successCount,
             failureCount: uploadResult.failureCount,
-            failedFiles: uploadResult.failedFiles,
+            failedFiles: cleanFailedFiles,
             transNo: event.transNo,
             presignedDetail: presignedDetail,
           ));
