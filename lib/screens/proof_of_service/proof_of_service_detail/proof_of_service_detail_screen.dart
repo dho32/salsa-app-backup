@@ -6,6 +6,8 @@ import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_cubit.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_repository.dart';
+import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
+import '../../../blocs/failed_uploads/failed_uploads_event.dart';
 import '../../../blocs/proof_of_service/pos_unserviceable/pos_unserviceable_bloc.dart';
 import '../../../blocs/proof_of_service/pos_unserviceable/pos_unserviceable_event.dart';
 import '../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
@@ -94,6 +96,11 @@ class _ProofOfServiceDetailScreenState
         ),
         BlocProvider(
           create: (context) => UploadProgressCubit(),
+        ),
+        BlocProvider(
+          create: (context) => FailedUploadsBloc(
+            progressCubit: context.read<UploadProgressCubit>(),
+          )..add(LoadFailedUploads()),
         ),
         BlocProvider<PosFormCubit>(
           create: (context) {

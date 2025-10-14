@@ -6,11 +6,15 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:salsa/screens/task_maintenance/components/widget/task_maintenance_widgets.dart';
 
+import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
+import '../../../blocs/failed_uploads/failed_uploads_event.dart';
+import '../../../blocs/failed_uploads/failed_uploads_state.dart';
 import '../../../blocs/task_maintenance/task_maintenance_bloc.dart';
 import '../../../blocs/task_maintenance/task_maintenance_event.dart';
 import '../../../blocs/task_maintenance/task_maintenance_state.dart';
 import '../../../components/widgets/scan_qr.dart';
 import '../../../models/task_maintenance/task_maintenance_model.dart';
+import '../../common/failed_uploads/failed_uploads_screen.dart';
 import '../../proof_of_service/proof_of_service_detail/proof_of_service_detail_screen.dart';
 import '../../service_call/service_call_detail/service_call_detail_screen.dart';
 
@@ -146,6 +150,66 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                     ),
                     child:
                         const Text('Lanjutkan', style: TextStyle(fontSize: 16)),
+                  ),
+                  const SizedBox(height: 24),
+
+                  BlocBuilder<FailedUploadsBloc, FailedUploadsState>(
+                    builder: (context, state) {
+                      if (state.failedTransactions.isEmpty) {
+                        return const SizedBox.shrink(); // Tampilkan kosong jika tidak ada error
+                      }
+                      final count = state.failedTransactions.length;
+                      return InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BlocProvider.value(
+                                value: context.read<FailedUploadsBloc>(),
+                                child: FailedUploadsScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Card(
+                          color: Colors.orange.shade50,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.orange.shade200),
+                          ),
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Row(
+                              children: [
+                                Icon(Icons.sync_problem_outlined, color: Colors.orange.shade800, size: 28),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "$count transaksi butuh perhatian",
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.orange.shade900
+                                        ),
+                                      ),
+                                      const Text(
+                                        "Beberapa foto gagal di-upload. Ketuk untuk memperbaiki.",
+                                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, color: Colors.grey),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 24),
 
@@ -318,23 +382,20 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
 
   void _navigateToDetail(TransactionSuggestion suggestion) {
     _transNoController.text = suggestion.transNo;
-    // Sesuaikan 'service_call' dengan nilai `type` dari API Anda
-    if (suggestion.type == 'service_call') {
-      Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ServiceCallDetailScreen(
-              transNo: suggestion.transNo,
-              maintenanceBy: widget.userData['maintenance_by']!,
-            ),
-          ));
-    } else {
-      Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ProofOfServiceDetailScreen(transNo: suggestion.transNo),
-          ));
-    }
+    // Tentukan halaman tujuan
+    final Widget destinationScreen = suggestion.type == 'service_call'
+        ? ServiceCallDetailScreen(
+      transNo: suggestion.transNo,
+      maintenanceBy: widget.userData['maintenance_by']!,
+    )
+        : ProofOfServiceDetailScreen(transNo: suggestion.transNo);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => destinationScreen),
+    ).then((_) {
+      print('✅ Kembali ke Task Maintenance, memuat ulang daftar gagal...');
+      context.read<FailedUploadsBloc>().add(LoadFailedUploads());
+    });
   }
 }

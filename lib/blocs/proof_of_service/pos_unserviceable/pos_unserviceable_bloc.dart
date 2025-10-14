@@ -31,7 +31,7 @@ class PosUnserviceableBloc
       : _draftBox = Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox),
         _repository = PosUnserviceableRepository(),
         super(const PosUnserviceableState()) {
-    on<LoadUnserviceableDraft>(_onLoadInitialDraft);
+    on<LoadUnserviceableDraft>(_onLoadInitialData);
     on<TakeProofPhoto>(_onTakeProofPhoto);
     on<RemoveProofPhoto>(_onRemoveProofPhoto);
     on<ReasonSelected>(_onReasonSelected);
@@ -44,10 +44,27 @@ class PosUnserviceableBloc
         .listen((state) {
       _saveDraftToHive(state);
     });
+
+    add(LoadUnserviceableDraft());
   }
 
-  void _onLoadInitialDraft(
-      LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) {
+  Future<void> _onLoadInitialData(
+      LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) async {
+    final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final retryData = retryBox.get(transNo);
+
+    if (retryData != null) {
+      final dataMap = Map<String, dynamic>.from(retryData as Map);
+      // Jika ada data retry, langsung emit state partialFailure
+      if (dataMap['type'] == 'unserviceable') {
+        emit(state.copyWith(
+          status: UnserviceableStatus.partialFailure,
+          partialUploadData: dataMap,
+        ));
+        return; // Hentikan proses agar tidak load draft
+      }
+    }
+
     try {
       final initialDraft = _draftBox.get(transNo);
       if (initialDraft != null) {
@@ -221,10 +238,22 @@ class PosUnserviceableBloc
           await _clearAllTransactionData();
           emit(state.copyWith(status: UnserviceableStatus.success));
         } else {
+
+          final detailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+          final detailData = detailCacheBox.get(transNo);
+          final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
+
           final partialData = {
+            'transNo': transNo,
             'presignedDetail': presignedDetails,
+            'successCount': uploadResult.successCount,
             'failedFiles': uploadResult.failedFiles,
+            'type': 'unserviceable',
+            'storeName': storeName,
           };
+          final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          await retryBox.put(transNo, partialData);
+
           emit(state.copyWith(
             status: UnserviceableStatus.partialFailure,
             partialUploadData: partialData,
@@ -263,6 +292,8 @@ class PosUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
+      final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+      await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));
     } else {
@@ -276,8 +307,6 @@ class PosUnserviceableBloc
       ));
     }
   }
-
-  // ... (di dalam class PosUnserviceableBloc)
 
   // Method baru untuk membersihkan semua data terkait transaksi ini
   Future<void> _clearAllTransactionData() async {

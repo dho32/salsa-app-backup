@@ -46,11 +46,9 @@ class _AppInitializerState extends State<AppInitializer> {
   @override
   void initState() {
     super.initState();
-    // Panggil fungsi inisialisasi berat di sini
     _initializationFuture = _initializeApp();
   }
 
-  // PINDAHKAN SEMUA KODE 'AWAIT' ANDA KE FUNGSI INI
   Future<void> _initializeApp() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

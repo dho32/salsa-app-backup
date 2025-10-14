@@ -9,6 +9,7 @@ import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/proof_of_service/pos_validasion_entry_model_ext.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
+import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 
 class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
@@ -109,11 +110,16 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             return fullErrorString.split(' (').first;
           }).toList();
 
+          final detailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+          final detailData = detailCacheBox.get(event.transNo);
+          final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
+
           final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
             'failedFiles': cleanFailedFiles,
             'presignedDetail': presignedDetail,
+            'storeName': storeName,
           });
 
           // Pancarkan state gagal sebagian
@@ -172,15 +178,17 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         emit(PosValidationSuccess());
       } else {
         // Jika masih gagal, update cache dengan sisa file yang masih gagal
+        final cleanFailedFiles = result.failedFiles.map((e) => e.split(' (').first).toList();
+
         await cacheBox.put(event.transNo, {
           'transNo': event.transNo,
-          'failedFiles': result.failedFiles,
+          'failedFiles': cleanFailedFiles,
           'presignedDetail': event.presignedDetail,
         });
         emit(PosValidationUploadPartial(
           successCount: result.successCount,
           failureCount: result.failureCount,
-          failedFiles: result.failedFiles,
+          failedFiles: cleanFailedFiles,
           transNo: event.transNo,
           presignedDetail: event.presignedDetail,
         ));

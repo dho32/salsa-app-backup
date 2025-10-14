@@ -333,7 +333,7 @@ Future<void> showPartialUploadDialog(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
                     child: const Text("OK"),
                   ),
                 ],

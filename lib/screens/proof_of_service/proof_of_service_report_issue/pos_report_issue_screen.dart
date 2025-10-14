@@ -62,7 +62,7 @@ class PosReportIssueScreen extends StatelessWidget {
           if (partialData != null) {
             showPartialUploadDialog(
                 context,
-                0, // Kita bisa perbaiki ini untuk menunjukkan jumlah sukses
+                partialData['successCount'], // Kita bisa perbaiki ini untuk menunjukkan jumlah sukses
                 (partialData['failedFiles'] as List).length,
                 List<String>.from(partialData['failedFiles']));
           }
