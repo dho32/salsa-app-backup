@@ -1,5 +1,8 @@
 // pos_validation_body_mobile.dart
 
+import 'dart:math';
+
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -48,6 +51,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   String labelUnitIndoor = "Foto Unit Indoor & Evaporator";
   String labelUnitOutdoor = "Foto Unit Outdoor & Kondensor";
   String labelUnit = "";
+  final TextEditingController _noteSearchController = TextEditingController();
 
   @override
   void initState() {
@@ -157,7 +161,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return BlocListener<PosValidationBloc, PosValidationState>(
@@ -230,6 +233,20 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
   Step _buildStep2(BuildContext context, PosValidationLoaded state) {
     final bool isAnyMeasurementSkipped = state.measurementsAfter.any((m) => m.isSkipped);
+
+    const double itemHeight = 40.0;        // Tinggi satu item di menu
+    const double searchBarHeight = 50.0;   // Tinggi kotak pencarian
+    const double verticalPadding = 20.0;   // Padding atas & bawah
+
+    // Batas maksimum tinggi dropdown (misal: 40% dari tinggi layar)
+    final double maxAllowedHeight = MediaQuery.of(context).size.height * 0.8;
+
+    // Hitung total tinggi yang dibutuhkan oleh semua item + search bar
+    final double calculatedContentHeight = (widget.noteOptions.length * itemHeight) + searchBarHeight + verticalPadding;
+
+    // Tentukan tinggi akhir: ambil nilai terkecil antara tinggi yg dihitung dan batas maks
+    final double dynamicMaxHeight = min(calculatedContentHeight, maxAllowedHeight);
+
     return Step(
       title: const Text('Sesudah'),
       isActive: state.currentStep >= 1,
@@ -297,28 +314,88 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             if(isAnyMeasurementSkipped)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: DropdownButtonFormField<String>(
+                child: DropdownButtonFormField2<String>(
                   value: widget.noteController.text.isNotEmpty
                       ? widget.noteController.text
                       : null,
-                  hint: const Text('Note wajib dipilih jika tidak dapat diukur'),
                   isExpanded: true,
-                  items: widget.noteOptions.map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value, overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    widget.noteController.text = newValue ?? '';
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Catatan',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  decoration: InputDecoration(
+                    labelText: 'Catatan (Wajib jika skip pengukuran)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
                   ),
-                  validator: (value) {
-                    return null;
+
+                  hint: const Text(
+                    'Pilih Catatan',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  items: widget.noteOptions.map((item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                  )).toList(),
+                  onChanged: (value) {
+                    widget.noteController.text = value ?? '';
+                    FocusScope.of(context).unfocus();
+                  },
+                  dropdownStyleData: DropdownStyleData(
+                    maxHeight: dynamicMaxHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  menuItemStyleData: const MenuItemStyleData(
+                    height: itemHeight, // Gunakan konstanta yg sudah didefinisikan
+                    padding: EdgeInsets.only(left: 14, right: 14),
+                  ),
+                  dropdownSearchData: DropdownSearchData(
+                    searchController: _noteSearchController,
+                    searchInnerWidgetHeight: searchBarHeight, // Gunakan konstanta
+                    searchInnerWidget: Container(
+                      height: searchBarHeight,
+                      padding: const EdgeInsets.all(8),
+                      child: TextFormField(
+                        expands: true,
+                        maxLines: null,
+                        controller: _noteSearchController,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          hintText: 'Cari catatan...',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                    searchMatchFn: (item, searchValue) {
+                      return item.value.toString().toLowerCase().contains(searchValue.toLowerCase());
+                    },
+                  ),
+                  onMenuStateChange: (isOpen) {
+                    if (!isOpen) {
+                      _noteSearchController.clear();
+                    }
+                  },
+                  selectedItemBuilder: (context){
+                    return widget.noteOptions.map((item){
+                      return Text(
+                        item,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          overflow: TextOverflow.ellipsis,
+                          color: Colors.black,
+                        ),
+                        maxLines: 1,
+                      );
+                    }).toList();
                   },
                 ),
               ),
