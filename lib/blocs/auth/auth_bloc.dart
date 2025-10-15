@@ -22,6 +22,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       // Langkah 1: Pengecekan versi aplikasi
       final appConfig = await authRepository.getAppConfig();
+
+      if (appConfig.isEmpty) {
+        print("💡 Gagal mengambil konfigurasi aplikasi (kemungkinan masalah jaringan). Mengarahkan ke halaman login.");
+        await authRepository.recordLogout();
+        await authRepository.deleteToken();
+        emit(AuthUnauthenticated()); // Langsung arahkan ke login
+        return; // Hentikan eksekusi method ini
+      }
+
       final String requiredVersion = appConfig['requiredVersion']!;
       final String updateUrl = appConfig['updateUrl']!;
 
