@@ -8,6 +8,9 @@ import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_se
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_repository.dart';
 import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
 import '../../../blocs/failed_uploads/failed_uploads_event.dart';
+import '../../../blocs/location_validation/location_validation_bloc.dart';
+import '../../../blocs/otp/otp_bloc.dart';
+import '../../../blocs/otp/otp_repository.dart';
 import '../../../blocs/proof_of_service/pos_unserviceable/pos_unserviceable_bloc.dart';
 import '../../../blocs/proof_of_service/pos_unserviceable/pos_unserviceable_event.dart';
 import '../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
@@ -21,6 +24,8 @@ import 'package:salsa/components/constants.dart';
 import 'package:salsa/components/shared_widgets.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/service_call/validation_status.dart';
+import '../../../components/shared_function.dart';
+import '../../../components/widgets/otp.dart';
 import '../../common/services/confirmation_service.dart';
 import '../proof_of_service_report_issue/pos_report_issue_screen.dart';
 import 'components/proof_of_service_detail_body_mobile.dart';
@@ -250,6 +255,67 @@ class _ProofOfServiceDetailScreenState
                   Navigator.pop(context);
                 }
                 showFailureDialog(context, state.error);
+              } else if (state is ShowCreateServiceCallDialog) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text("Unit Bermasalah Terdeteksi"),
+                    content: const Text("""
+Ditemukan unit AC bermasalah yang belum memiliki tiket Service Call aktif pada toko ini.
+
+Mohon koordinasikan dengan PIC toko untuk membuat transaksi Service Call terpisah terlebih dahulu, 
+kemudian lanjutkan penyelesaian DO setelah transaksi tersebut dibuat."""),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text("OK"),
+                      ),
+                    ],
+                  ),
+                );
+              } else if (state is ProceedToOtpDialog) {
+                // Jika BLoC memberi izin, BARU tampilkan dialog OTP
+                final detailState = context.read<ProofOfServiceDetailBloc>().state;
+                if (detailState is ProofOfServiceDetailLoaded) {
+                  final header = detailState.data.header;
+                  // Kode untuk menampilkan OtpDialog (yang kita pindahkan dari tombol 'Selesai')
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) {
+                      return MultiBlocProvider(
+                        providers: [
+                          BlocProvider(create: (_) => OtpBloc(repository: OtpRepository())),
+                          BlocProvider(create: (_) => LocationValidationBloc()),
+                          BlocProvider.value(value: context.read<UploadProgressCubit>()),
+                        ],
+                        child: OtpDialog(
+                          transNo: header.transNo,
+                          shipTo: header.shipToCode,
+                          email: header.storeEmail,
+                          storeLat: double.tryParse(header.latitude ?? '0') ?? 0.0,
+                          storeLong: double.tryParse(header.longitude ?? '0') ?? 0.0,
+                          onVerified: () {
+                            // Ambil data user di sini, tepat sebelum submit
+                            AuthStorage.getUser().then((user) {
+                              getPublicIpAddress().then((ip) {
+                                context.read<PosSubmittedBloc>().add(
+                                  SubmitPosValidation(
+                                    transNo: header.transNo,
+                                    createdBy: user['user_id'] ?? '',
+                                    createdByName: user['name'] ?? '',
+                                    createdByIP: ip,
+                                    progressCubit: context.read<UploadProgressCubit>(),
+                                  ),
+                                );
+                              });
+                            });
+                          },
+                        ),
+                      );
+                    },
+                  );
+                }
               }
             },
             child: BlocListener<ProofOfServiceDetailBloc,

@@ -55,5 +55,29 @@ class PosSubmittedRepository {
       return {'status': 'ERROR', 'message': e.toString()};
     }
   }
-// Anda bisa menambahkan method confirmUploadSuccess di sini juga
+
+  Future<bool> checkActiveServiceCall(String transNo) async {
+    try {
+      Uri uri = getUrl(pathUrl: '/proof_of_service/sc_check_active', params: {
+        'trans_no': transNo,
+      });
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+
+        // Periksa status 'OK' dan pastikan 'result' tidak null
+        if (body['status'] == 'OK' && body['result'] != null) {
+          final result = body['result'] as Map<String, dynamic>;
+          // Ambil nilai 'has_active_sc' dari dalam object 'result'
+          return result['has_active_sc'] ?? false;
+        }
+      }
+      return false;
+    } catch (e) {
+      log("Error checking active SC: $e");
+      return false;
+    }
+  }
 }

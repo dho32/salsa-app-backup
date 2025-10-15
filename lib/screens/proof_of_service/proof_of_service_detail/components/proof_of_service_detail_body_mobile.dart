@@ -697,93 +697,141 @@ class _ProofOfServiceDetailBodyMobileState
                 shape: const StadiumBorder(),
                 textStyle:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            onPressed: () async {
+            onPressed: () {
+              // 1. Tutup keyboard
               FocusScope.of(context).unfocus();
-              // Menunggu sesaat agar event unfocus selesai diproses
-              await Future.delayed(const Duration(milliseconds: 150));
+
+              // 2. Baca state form terakhir untuk validasi dasar
               final latestFormState = context.read<PosFormCubit>().state;
 
               if (latestFormState.isFormReadyToSubmit) {
+
                 final tempInValue = double.tryParse(latestFormState.tempIn);
                 final tempOutValue = double.tryParse(latestFormState.tempOut);
+
                 if (tempInValue != null) {
-                  if (tempInValue < kIndoorLimits.min ||
-                      tempInValue > kIndoorLimits.max) {
+                  if (tempInValue < kIndoorLimits.min || tempInValue > kIndoorLimits.max) {
                     _showValidationSnackbar(context,
                         'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.');
                     return; // Hentikan proses jika tidak valid
                   }
                 }
+
                 if (tempOutValue != null) {
-                  if (tempOutValue < kOutdoorLimits.min ||
-                      tempOutValue > kOutdoorLimits.max) {
+                  if (tempOutValue < kOutdoorLimits.min || tempOutValue > kOutdoorLimits.max) {
                     _showValidationSnackbar(context,
                         'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.');
                     return; // Hentikan proses jika tidak valid
                   }
                 }
-                final user = await AuthStorage.getUser();
-                final maintenanceByIP = await getPublicIpAddress();
-                final technicianName = user['name'] ?? '';
-                final maintenanceBy = user['user_id'] ?? '';
-                final double storeLat =
-                    double.tryParse(header.latitude ?? '') ?? 0.0;
-                final double storeLong =
-                    double.tryParse(header.longitude ?? '') ?? 0.0;
 
-                await showDialog<void>(
-                  context: context,
-                  builder: (_) {
-                    return MultiBlocProvider(
-                      providers: [
-                        // OTP Bloc
-                        BlocProvider(
-                            create: (_) =>
-                                OtpBloc(repository: OtpRepository())),
-                        BlocProvider(create: (_) => LocationValidationBloc()),
-                        BlocProvider.value(
-                            value: context.read<UploadProgressCubit>()),
-                      ],
-                      child: OtpDialog(
-                        transNo: header.transNo,
-                        shipTo: header.shipToCode,
-                        email: header.storeEmail,
-                        storeLat: storeLat,
-                        storeLong: storeLong,
-                        onVerified: () {
-                          final progressCubit =
-                              context.read<UploadProgressCubit>();
-                          context.read<PosSubmittedBloc>().add(
-                                SubmitPosValidation(
-                                  transNo: header.transNo,
-                                  createdBy: maintenanceBy,
-                                  createdByName: technicianName,
-                                  createdByIP: maintenanceByIP,
-                                  progressCubit: progressCubit,
-                                ),
-                              );
-                        },
-                      ),
-                    );
-                  },
+                context.read<PosSubmittedBloc>().add(
+                    FinalValidationRequested(
+                      transNo: header.transNo,
+                      customerCode: header.shipToCode, // (Parameter customerCode ini kita hapus nanti jika tidak jadi dipakai)
+                    )
                 );
+                // --- AKHIR PERBAIKAN ---
               } else {
-                if (!formState.isPicStoreValid) {
-                  _showValidationSnackbar(context,
-                      'Harap lengkapi informasi PIC Toko terlebih dahulu.');
-                } else if (!formState.isServiceInfoValid) {
-                  _showValidationSnackbar(context,
-                      'Harap lengkapi informasi servis dan foto pengukuran suhu.');
-                } else if (!formState.allUnitsValidated) {
-                  // <-- Gunakan state dari Cubit
-                  _showValidationSnackbar(context,
-                      'Harap lengkapi semua validasi unit terlebih dahulu.');
+                // Logika untuk menampilkan snackbar jika form belum siap (ini sudah benar)
+                if (!latestFormState.isPicStoreValid) {
+                  _showValidationSnackbar(context, 'Harap lengkapi informasi PIC Toko terlebih dahulu.');
+                } else if (!latestFormState.isServiceInfoValid) {
+                  _showValidationSnackbar(context, 'Harap lengkapi informasi servis dan foto pengukuran suhu.');
+                } else if (!latestFormState.allUnitsValidated) {
+                  _showValidationSnackbar(context, 'Harap lengkapi semua validasi unit terlebih dahulu.');
                 } else {
-                  _showValidationSnackbar(context,
-                      'Pastikan semua data sudah terisi dengan benar.');
+                  _showValidationSnackbar(context, 'Pastikan semua data sudah terisi dengan benar.');
                 }
               }
             },
+            // onPressed: () async {
+            //   FocusScope.of(context).unfocus();
+            //   // Menunggu sesaat agar event unfocus selesai diproses
+            //   await Future.delayed(const Duration(milliseconds: 150));
+            //   final latestFormState = context.read<PosFormCubit>().state;
+            //
+            //   if (latestFormState.isFormReadyToSubmit) {
+            //     final tempInValue = double.tryParse(latestFormState.tempIn);
+            //     final tempOutValue = double.tryParse(latestFormState.tempOut);
+            //     if (tempInValue != null) {
+            //       if (tempInValue < kIndoorLimits.min ||
+            //           tempInValue > kIndoorLimits.max) {
+            //         _showValidationSnackbar(context,
+            //             'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.');
+            //         return; // Hentikan proses jika tidak valid
+            //       }
+            //     }
+            //     if (tempOutValue != null) {
+            //       if (tempOutValue < kOutdoorLimits.min ||
+            //           tempOutValue > kOutdoorLimits.max) {
+            //         _showValidationSnackbar(context,
+            //             'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.');
+            //         return; // Hentikan proses jika tidak valid
+            //       }
+            //     }
+            //     final user = await AuthStorage.getUser();
+            //     final maintenanceByIP = await getPublicIpAddress();
+            //     final technicianName = user['name'] ?? '';
+            //     final maintenanceBy = user['user_id'] ?? '';
+            //     final double storeLat =
+            //         double.tryParse(header.latitude ?? '') ?? 0.0;
+            //     final double storeLong =
+            //         double.tryParse(header.longitude ?? '') ?? 0.0;
+            //
+            //     await showDialog<void>(
+            //       context: context,
+            //       builder: (_) {
+            //         return MultiBlocProvider(
+            //           providers: [
+            //             // OTP Bloc
+            //             BlocProvider(
+            //                 create: (_) =>
+            //                     OtpBloc(repository: OtpRepository())),
+            //             BlocProvider(create: (_) => LocationValidationBloc()),
+            //             BlocProvider.value(
+            //                 value: context.read<UploadProgressCubit>()),
+            //           ],
+            //           child: OtpDialog(
+            //             transNo: header.transNo,
+            //             shipTo: header.shipToCode,
+            //             email: header.storeEmail,
+            //             storeLat: storeLat,
+            //             storeLong: storeLong,
+            //             onVerified: () {
+            //               final progressCubit =
+            //                   context.read<UploadProgressCubit>();
+            //               context.read<PosSubmittedBloc>().add(
+            //                     SubmitPosValidation(
+            //                       transNo: header.transNo,
+            //                       createdBy: maintenanceBy,
+            //                       createdByName: technicianName,
+            //                       createdByIP: maintenanceByIP,
+            //                       progressCubit: progressCubit,
+            //                     ),
+            //                   );
+            //             },
+            //           ),
+            //         );
+            //       },
+            //     );
+            //   } else {
+            //     if (!formState.isPicStoreValid) {
+            //       _showValidationSnackbar(context,
+            //           'Harap lengkapi informasi PIC Toko terlebih dahulu.');
+            //     } else if (!formState.isServiceInfoValid) {
+            //       _showValidationSnackbar(context,
+            //           'Harap lengkapi informasi servis dan foto pengukuran suhu.');
+            //     } else if (!formState.allUnitsValidated) {
+            //       // <-- Gunakan state dari Cubit
+            //       _showValidationSnackbar(context,
+            //           'Harap lengkapi semua validasi unit terlebih dahulu.');
+            //     } else {
+            //       _showValidationSnackbar(context,
+            //           'Pastikan semua data sudah terisi dengan benar.');
+            //     }
+            //   }
+            // },
           ),
         ),
       ),

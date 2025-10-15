@@ -19,6 +19,45 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
     on<SubmitPosValidation>(_onSubmitValidation);
     on<RetryPosUpload>(_onRetryUpload);
     on<LoadPosValidationPartial>(_onLoadValidationPartial);
+    on<FinalValidationRequested>(_onFinalValidationRequested);
+  }
+
+  Future<void> _onFinalValidationRequested(
+      FinalValidationRequested event,
+      Emitter<PosSubmittedState> emit,
+      ) async {
+    emit(PosValidationSubmitting()); // Tampilkan loading spinner kecil
+    try {
+      final validationBox = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      final entries = validationBox.values.where((e) => e.transNo == event.transNo).toList();
+
+      print("test");
+      final bool hasBrokenUnit = entries.any((entry) {
+        // Kondisi 1: Cek catatan
+        final bool isNoteBroken = entry.note?.trim().toLowerCase().contains('ac rusak / bermasalah') ?? false;
+
+        // Kondisi 2: Cek apakah ada pengukuran yang di-skip
+        final bool isMeasurementSkipped = entry.measurementsAfter.any((m) => m.isSkipped);
+
+        // Hasil akhir: Keduanya harus true
+        return isNoteBroken && isMeasurementSkipped;
+      });
+      print(hasBrokenUnit);
+
+      if (hasBrokenUnit) {
+        final bool hasActiveSC = await repository.checkActiveServiceCall(event.transNo);
+        if (!hasActiveSC) {
+          emit(ShowCreateServiceCallDialog());
+          return;
+        }
+      }
+
+      // Jika semua pengecekan lolos, beri perintah untuk lanjut ke OTP
+      emit(ProceedToOtpDialog());
+
+    } catch (e) {
+      emit(PosValidationFailure("Gagal melakukan validasi akhir: ${e.toString()}"));
+    }
   }
 
   Future<void> _onSubmitValidation(
