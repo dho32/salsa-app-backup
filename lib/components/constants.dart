@@ -31,6 +31,14 @@ const kPosUnserviceableVisitQueueBox = 'unserviceable_visit_queue_box';
 const kPosUnserviceableDraftsBox = 'unserviceable_drafts_box';
 
 
+///string
+const kStringDialogUnitProblem = """
+Ditemukan unit AC bermasalah yang belum memiliki tiket Service Call aktif pada toko ini.
+
+Mohon koordinasikan dengan PIC toko untuk melakukan input complaint terlebih dahulu. 
+Setelah complaint dibuat, Pekerjaan Service/Cleaning ini baru dapat diselesaikan di aplikasi SALSA.""";
+
+
 ///const
 const kDistance = 500.0;
 

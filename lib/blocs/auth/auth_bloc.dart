@@ -23,14 +23,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // Langkah 1: Pengecekan versi aplikasi
       final appConfig = await authRepository.getAppConfig();
 
-      if (appConfig.isEmpty) {
-        print("💡 Gagal mengambil konfigurasi aplikasi (kemungkinan masalah jaringan). Mengarahkan ke halaman login.");
-        await authRepository.recordLogout();
-        await authRepository.deleteToken();
-        emit(AuthUnauthenticated()); // Langsung arahkan ke login
-        return; // Hentikan eksekusi method ini
-      }
-
       final String requiredVersion = appConfig['requiredVersion']!;
       final String updateUrl = appConfig['updateUrl']!;
 
@@ -69,7 +61,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final packageInfo = await PackageInfo.fromPlatform();
       final appVersion = packageInfo.version;
 
-      final token = await authRepository.login(event.email, event.password, appVersion);
+      final token =
+          await authRepository.login(event.email, event.password, appVersion);
       final payload = JwtHelper.decode(token);
       if (payload == null) throw Exception("Token tidak valid");
 

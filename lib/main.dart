@@ -8,6 +8,7 @@ import 'package:hive_flutter/adapters.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:salsa/models/service_call/transaction_info_model.dart';
 import 'package:salsa/screens/common/auth_gate/auth_gate.dart';
+import 'package:salsa/screens/common/error_page/error_retry_screen.dart';
 import 'package:salsa/screens/common/services/confirmation_service.dart';
 import 'package:upgrader/upgrader.dart';
 
@@ -94,6 +95,12 @@ class _AppInitializerState extends State<AppInitializer> {
     ConfirmationService().processQueue();
   }
 
+  void _retryInitialization() {
+    setState(() {
+      _initializationFuture = _initializeApp();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
@@ -105,10 +112,10 @@ class _AppInitializerState extends State<AppInitializer> {
           if (snapshot.hasError) {
             // Jika ada error, tampilkan halaman error
             return MaterialApp(
-              home: Scaffold(
-                body: Center(
-                  child: Text("Gagal memulai aplikasi: ${snapshot.error}"),
-                ),
+              debugShowCheckedModeBanner: false,
+              home: ErrorRetryScreen(
+                errorMessage: snapshot.error.toString(),
+                onRetry: _retryInitialization,
               ),
             );
           }

@@ -45,6 +45,12 @@ class PosTransactionInfoModel extends HiveObject {
   @HiveField(12)
   CapturedImageDetail? temperatureOutImage;
 
+  @HiveField(13)
+  String? finalTemperatureIn;
+
+  @HiveField(14)
+  CapturedImageDetail? finalTemperatureInImage;
+
   PosTransactionInfoModel({
     required this.transNo,
     this.picNik,
@@ -59,5 +65,7 @@ class PosTransactionInfoModel extends HiveObject {
     this.picImageDetail,
     this.temperatureInImage,
     this.temperatureOutImage,
+    this.finalTemperatureIn,      // <-- Tambahkan di constructor
+    this.finalTemperatureInImage,
   });
 }

@@ -26,12 +26,14 @@ class PosSubmittedRepository {
         'pic_phone': transactionInfo?.picPhone ?? '',
         'technician_2_name': transactionInfo?.technician2 ?? '',
         'technician_3_name': transactionInfo?.technician3 ?? '',
-        'temperature_in': double.tryParse(transactionInfo?.temperatureIn ?? '0') ?? 0,
+        'temperature_in_before': double.tryParse(transactionInfo?.temperatureIn ?? '0') ?? 0,
         'temperature_out': double.tryParse(transactionInfo?.temperatureOut ?? '0') ?? 0,
+        'temperature_in_after': double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
         'service_time': transactionInfo?.serviceTime ?? '',
         'pic_image_detail': transactionInfo?.picImageDetail?.toJson(),
-        'temp_in_image_detail': transactionInfo?.temperatureInImage?.toJson(),
+        'temp_in_image_detail_before': transactionInfo?.temperatureInImage?.toJson(),
         'temp_out_image_detail': transactionInfo?.temperatureOutImage?.toJson(),
+        'temp_in_image_detail_after': transactionInfo?.finalTemperatureInImage?.toJson(),
         'items': items,
       };
 
@@ -67,10 +69,8 @@ class PosSubmittedRepository {
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
 
-        // Periksa status 'OK' dan pastikan 'result' tidak null
         if (body['status'] == 'OK' && body['result'] != null) {
           final result = body['result'] as Map<String, dynamic>;
-          // Ambil nilai 'has_active_sc' dari dalam object 'result'
           return result['has_active_sc'] ?? false;
         }
       }

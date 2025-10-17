@@ -176,6 +176,12 @@ Future<UploadResult> uploadPosImagesToS3(
     localFileMap[filename] = imageDetail.imagePath;
   }
 
+  if (transactionInfo?.finalTemperatureIn != null) {
+    final imageDetail = transactionInfo!.finalTemperatureInImage!;
+    final filename = imageDetail.imagePath.split('/').last;
+    localFileMap[filename] = imageDetail.imagePath;
+  }
+
   if (transactionInfo?.temperatureOut != null) {
     final imageDetail = transactionInfo!.temperatureOutImage!;
     final filename = imageDetail.imagePath.split('/').last;

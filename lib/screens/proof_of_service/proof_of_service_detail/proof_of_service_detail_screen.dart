@@ -261,11 +261,7 @@ class _ProofOfServiceDetailScreenState
                   barrierDismissible: false,
                   builder: (dialogContext) => AlertDialog(
                     title: const Text("Unit Bermasalah Terdeteksi"),
-                    content: const Text("""
-Ditemukan unit AC bermasalah yang belum memiliki tiket Service Call aktif pada toko ini.
-
-Mohon koordinasikan dengan PIC toko untuk membuat transaksi Service Call terpisah terlebih dahulu, 
-kemudian lanjutkan penyelesaian DO setelah transaksi tersebut dibuat."""),
+                    content: const Text(kStringDialogUnitProblem),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(dialogContext),
@@ -275,11 +271,9 @@ kemudian lanjutkan penyelesaian DO setelah transaksi tersebut dibuat."""),
                   ),
                 );
               } else if (state is ProceedToOtpDialog) {
-                // Jika BLoC memberi izin, BARU tampilkan dialog OTP
                 final detailState = context.read<ProofOfServiceDetailBloc>().state;
                 if (detailState is ProofOfServiceDetailLoaded) {
                   final header = detailState.data.header;
-                  // Kode untuk menampilkan OtpDialog (yang kita pindahkan dari tombol 'Selesai')
                   showDialog<void>(
                     context: context,
                     builder: (_) {
@@ -293,10 +287,9 @@ kemudian lanjutkan penyelesaian DO setelah transaksi tersebut dibuat."""),
                           transNo: header.transNo,
                           shipTo: header.shipToCode,
                           email: header.storeEmail,
-                          storeLat: double.tryParse(header.latitude ?? '0') ?? 0.0,
-                          storeLong: double.tryParse(header.longitude ?? '0') ?? 0.0,
+                          storeLat: double.tryParse(header.latitude) ?? 0.0,
+                          storeLong: double.tryParse(header.longitude) ?? 0.0,
                           onVerified: () {
-                            // Ambil data user di sini, tepat sebelum submit
                             AuthStorage.getUser().then((user) {
                               getPublicIpAddress().then((ip) {
                                 context.read<PosSubmittedBloc>().add(
@@ -322,15 +315,15 @@ kemudian lanjutkan penyelesaian DO setelah transaksi tersebut dibuat."""),
                 ProofOfServiceDetailState>(
               listener: (context, detailState) {
                 if (detailState is ProofOfServiceDetailLoaded) {
+                  final formCubit = context.read<PosFormCubit>();
                   final allUnitsValidated =
                       detailState.data.detail.every((detail) {
                     final serialKey = detail.serialNo.trim().toUpperCase();
                     return detailState.validationStatuses[serialKey] ==
                         ValidationStatus.completed;
                   });
-                  context
-                      .read<PosFormCubit>()
-                      .updateAllUnitsValidated(allUnitsValidated);
+                  formCubit.updateAllUnitsValidated(allUnitsValidated);
+                  formCubit.recalculateFinalTempLimit();
                 }
               },
               child: SafeArea(

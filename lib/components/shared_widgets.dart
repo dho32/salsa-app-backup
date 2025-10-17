@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../blocs/upload_progress/upload_progress_cubit.dart';
-import '../screens/common/services/confirmation_service.dart';
 
 Widget buildSection(
     {required String title, String subTitle = '', required Widget child}) {
@@ -349,12 +348,13 @@ Future<void> showPartialUploadDialog(
 Future<void> showFailureDialog(BuildContext context, String error) async {
   await showDialog(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (BuildContext dialogContext) => AlertDialog(
       title: const Text("Gagal"),
       content: Text("Terjadi kesalahan: $error"),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          // GUNAKAN 'dialogContext' yang baru untuk menutup dialog!
+          onPressed: () => Navigator.pop(dialogContext),
           child: const Text("Tutup"),
         ),
       ],
