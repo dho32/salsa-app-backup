@@ -72,7 +72,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           throw Exception("Draft laporan masalah untuk $transNo tidak ditemukan.");
         }
 
-        uploadResult = await uploadUnserviceableImagesToS3(
+        uploadResult = await uploadPOSUnserviceableImagesToS3(
           report,
           event.transactionData['presignedDetail'] as List<dynamic>,
           progressCubit: progressCubit,

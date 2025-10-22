@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:salsa/models/service_call/sc_unserviceable_model.dart';
 import 'package:salsa/models/service_call/transaction_info_model.dart';
 import 'package:salsa/screens/common/auth_gate/auth_gate.dart';
 import 'package:salsa/screens/common/error_page/error_retry_screen.dart';
@@ -78,6 +79,7 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(ProofOfServiceHeaderAdapter()); // 11
     Hive.registerAdapter(ProofOfServiceItemDetailAdapter()); //12
     Hive.registerAdapter(PosUnserviceableModelAdapter()); //13
+    Hive.registerAdapter(SCUnserviceableModelAdapter()); //14
     await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
     await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
     await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
@@ -86,6 +88,7 @@ class _AppInitializerState extends State<AppInitializer> {
     await Hive.openBox('otp_state');
     await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
     await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
+    await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,

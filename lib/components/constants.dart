@@ -3,12 +3,12 @@ import 'dart:ui';
 import '../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 
 ///path url
-///Production
-const kBaseUrl = 'dxazo32f1j.execute-api.ap-southeast-1.amazonaws.com';
-const kPath = '/production/';
-// ///sandbox
-// const kBaseUrl = 'ujaxnyipj6.execute-api.ap-southeast-1.amazonaws.com';
-// const kPath = '/sandbox/';
+// ///Production
+// const kBaseUrl = 'dxazo32f1j.execute-api.ap-southeast-1.amazonaws.com';
+// const kPath = '/production/';
+///sandbox
+const kBaseUrl = 'ujaxnyipj6.execute-api.ap-southeast-1.amazonaws.com';
+const kPath = '/sandbox/';
 
 ///Route
 const kPathLanding = '/';
@@ -29,6 +29,7 @@ const kPosDetailCacheBox = 'pos_detail_cache_box';
 const kPosValidationPartialHiveBox = 'pos_validation_partial_cache';
 const kPosUnserviceableVisitQueueBox = 'unserviceable_visit_queue_box';
 const kPosUnserviceableDraftsBox = 'unserviceable_drafts_box';
+const kScUnserviceableDraftsBox = 'sc_unserviceable_drafts';
 
 
 ///string

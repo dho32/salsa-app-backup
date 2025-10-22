@@ -5,12 +5,16 @@ class ServiceCallDetailModel {
   final List<ServiceCallUnitDetail> detail;
   final List<OutdoorUnit> outdoor;
   final List<ProblemSourceModel> problems;
+  final List<String>? noteOptions;
+  final List<String>? unserviceableReasons;
 
   ServiceCallDetailModel({
     required this.header,
     required this.detail,
     required this.outdoor,
     required this.problems,
+    this.noteOptions,
+    this.unserviceableReasons,
   });
 
   factory ServiceCallDetailModel.fromJson(Map<String, dynamic> json) {
@@ -24,6 +28,8 @@ class ServiceCallDetailModel {
           .toList(),
       outdoor: outdoorList.map((item) => OutdoorUnit.fromJson(item)).toList(),
       problems: problemList.map((item) => ProblemSourceModel.fromJson(item)).toList(),
+      noteOptions: List<String>.from(json['note_options'] ?? []),
+      unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
     );
   }
 }

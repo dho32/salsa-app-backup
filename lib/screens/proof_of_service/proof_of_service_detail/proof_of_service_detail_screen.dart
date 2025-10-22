@@ -134,7 +134,6 @@ class _ProofOfServiceDetailScreenState
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage("assets/images/bg_app.png"),
-            // <-- Ganti dengan path gambar Anda
             fit: BoxFit.cover,
           ),
         ),
