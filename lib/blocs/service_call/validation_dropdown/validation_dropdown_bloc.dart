@@ -30,6 +30,7 @@ class ValidationDropdownBloc
     on<ChangeValidationViewMode>(_onChangeValidationViewMode);
     on<SaveValidationData>(_onSaveValidationData);
     on<SelectOutdoorSerial>(_onSelectOutdoorSerial);
+    on<ToggleMeasurementSkip>(_onToggleMeasurementSkip);
   }
 
   List<MeasurementEntry> _getDefaultMeasurements() {
@@ -41,6 +42,41 @@ class ValidationDropdownBloc
               unit: limits.unit,
             ))
         .toList();
+  }
+
+  void _onToggleMeasurementSkip(
+      ToggleMeasurementSkip event, Emitter<ValidationDropdownState> emit) {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+
+      // Tentukan list mana yang akan diupdate (Before atau After)
+      final targetList = event.isBefore
+          ? currentState.capturedMeasurementsBefore
+          : currentState.capturedMeasurementsAfter;
+
+      // Buat salinan list agar immutable
+      final updatedList = List<MeasurementEntry>.from(targetList);
+
+      // Cari index pengukuran yang sesuai
+      final index = updatedList.indexWhere((m) => m.measurementId == event.measurementId);
+
+      if (index != -1) {
+        // Update status isSkipped pada item yang ditemukan
+        updatedList[index] = updatedList[index].copyWith(isSkipped: event.isSkipped);
+
+        // Emit state baru dengan list yang sudah diperbarui
+        if (event.isBefore) {
+          emit(currentState.copyWith(capturedMeasurementsBefore: updatedList));
+        } else {
+          emit(currentState.copyWith(capturedMeasurementsAfter: updatedList));
+        }
+
+        // Opsional: Panggil save draft di sini jika diinginkan
+        // add(SaveValidationData(transNo: ..., serialNo: ...));
+      } else {
+        print(">>> ValidationDropdownBloc: WARNING - Index tidak ditemukan untuk ${event.measurementId} saat toggle skip.");
+      }
+    }
   }
 
   Future<void> _onFetchData(FetchValidationDropdownData event,

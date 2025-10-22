@@ -15,6 +15,21 @@ abstract class ValidationDropdownEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class ToggleMeasurementSkip extends ValidationDropdownEvent {
+  final String measurementId; // ID pengukuran (e.g., 'temperature', 'volt')
+  final bool isBefore;        // True jika di bagian "Sebelum", false jika "Sesudah"
+  final bool isSkipped;       // Nilai baru dari toggle
+
+  const ToggleMeasurementSkip({
+    required this.measurementId,
+    required this.isBefore,
+    required this.isSkipped,
+  });
+
+  @override
+  List<Object?> get props => [measurementId, isBefore, isSkipped];
+}
+
 class FetchValidationDropdownData extends ValidationDropdownEvent {
   final ServiceCallValidationEntryModel? initialData;
   final String transNo;
