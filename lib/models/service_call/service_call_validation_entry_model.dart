@@ -40,6 +40,18 @@ class ServiceCallValidationEntryModel extends HiveObject {
   @HiveField(10)
   String? device;
 
+  @HiveField(11)
+  String? selectedIndoorNoteBefore;
+
+  @HiveField(12)
+  String? selectedOutdoorNoteBefore;
+
+  @HiveField(13)
+  String? selectedIndoorNoteAfter;
+
+  @HiveField(14)
+  String? selectedOutdoorNoteAfter;
+
   ServiceCallValidationEntryModel({
     required this.unitType,
     required this.serialNo,
@@ -52,6 +64,10 @@ class ServiceCallValidationEntryModel extends HiveObject {
     this.isCompleted = false,
     this.outdoorSerialNo,
     this.device,
+    this.selectedIndoorNoteBefore,
+    this.selectedOutdoorNoteBefore,
+    this.selectedIndoorNoteAfter,
+    this.selectedOutdoorNoteAfter,
   });
 
   factory ServiceCallValidationEntryModel.empty() {
@@ -67,6 +83,10 @@ class ServiceCallValidationEntryModel extends HiveObject {
       isCompleted: false,
       outdoorSerialNo: '',
       device: '',
+      selectedIndoorNoteBefore: null,
+      selectedOutdoorNoteBefore: null,
+      selectedIndoorNoteAfter: null,
+      selectedOutdoorNoteAfter: null,
     );
   }
 }

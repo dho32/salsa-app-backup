@@ -6,7 +6,8 @@ import '../../../models/common/measurement_entry.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk SaveValidationData
 import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 
-import '../../../models/service_call/problem_source_model.dart'; // BARU: Import ValidationViewMode
+import '../../../models/service_call/problem_source_model.dart';
+import '../../../models/service_call/service_call_detail_model.dart'; // BARU: Import ValidationViewMode
 
 abstract class ValidationDropdownEvent extends Equatable {
   const ValidationDropdownEvent();
@@ -15,27 +16,13 @@ abstract class ValidationDropdownEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class ToggleMeasurementSkip extends ValidationDropdownEvent {
-  final String measurementId; // ID pengukuran (e.g., 'temperature', 'volt')
-  final bool isBefore;        // True jika di bagian "Sebelum", false jika "Sesudah"
-  final bool isSkipped;       // Nilai baru dari toggle
-
-  const ToggleMeasurementSkip({
-    required this.measurementId,
-    required this.isBefore,
-    required this.isSkipped,
-  });
-
-  @override
-  List<Object?> get props => [measurementId, isBefore, isSkipped];
-}
-
 class FetchValidationDropdownData extends ValidationDropdownEvent {
   final ServiceCallValidationEntryModel? initialData;
   final String transNo;
   final String currentIndoorSerial;
   final List<String> allAvailableOutdoorSerials;
   final List<ProblemSourceModel> problemSources;
+  final ServiceCallDetailModel detailData;
 
   const FetchValidationDropdownData({
     this.initialData,
@@ -43,6 +30,7 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
     required this.currentIndoorSerial,
     required this.allAvailableOutdoorSerials,
     required this.problemSources,
+    required this.detailData,
   });
 
   @override
@@ -51,7 +39,19 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
     transNo,
     currentIndoorSerial,
     allAvailableOutdoorSerials,
+    detailData,
   ];
+}
+
+class NoteChanged extends ValidationDropdownEvent {
+  final String? note;
+  final bool isIndoor;
+  final bool isBefore;
+
+  const NoteChanged(this.note, {required this.isIndoor, required this.isBefore});
+
+  @override
+  List<Object?> get props => [note, isIndoor, isBefore];
 }
 
 class SelectUnitType extends ValidationDropdownEvent {

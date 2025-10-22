@@ -42,7 +42,8 @@ import '../../service_call_validation/service_call_validation_screen.dart';
 
 class ServiceCallDetailBodyMobile extends StatefulWidget {
   final String transNo;
-  final Box<TransactionInfoModel> transactionInfoBox; // Mungkin tidak lagi dipakai
+  final Box<TransactionInfoModel>
+      transactionInfoBox; // Mungkin tidak lagi dipakai
 
   const ServiceCallDetailBodyMobile({
     super.key,
@@ -83,13 +84,19 @@ class _ServiceCallDetailBodyMobileState
 
     // Inisialisasi controller dari state Cubit
     _picNameController = TextEditingController(text: initialFormState.picName);
-    _picPhoneController = TextEditingController(text: initialFormState.picPhone);
+    _picPhoneController =
+        TextEditingController(text: initialFormState.picPhone);
     _picNikController = TextEditingController(text: initialFormState.picNik);
-    _picPositionController = TextEditingController(text: initialFormState.picPosition);
-    _technician1Controller = TextEditingController(); // Diisi oleh _loadUserInfo
-    _technician2Controller = TextEditingController(text: initialFormState.technician2);
-    _technician3Controller = TextEditingController(text: initialFormState.technician3);
-    _finalTempController = TextEditingController(text: initialFormState.finalTempIn);
+    _picPositionController =
+        TextEditingController(text: initialFormState.picPosition);
+    _technician1Controller =
+        TextEditingController(); // Diisi oleh _loadUserInfo
+    _technician2Controller =
+        TextEditingController(text: initialFormState.technician2);
+    _technician3Controller =
+        TextEditingController(text: initialFormState.technician3);
+    _finalTempController =
+        TextEditingController(text: initialFormState.finalTempIn);
 
     _showTechnician3 = initialFormState.showTechnician3;
 
@@ -137,7 +144,6 @@ class _ServiceCallDetailBodyMobileState
     });
   }
 
-
   @override
   void dispose() {
     _picNameController.dispose();
@@ -164,18 +170,23 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
-  Future<Map<String, ValidationStatus>> _loadValidationStatuses(String transNo) async {
-    print("🔄 Memulai _loadValidationStatuses untuk $transNo..."); // Log Awal
-    try { // <-- Tambahkan try-catch di sini
-      final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+  Future<Map<String, ValidationStatus>> _loadValidationStatuses(
+      String transNo) async {
+    try {
+      // <-- Tambahkan try-catch di sini
+      final box =
+          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       final statuses = <String, ValidationStatus>{};
       final entries = box.values.where((e) => e.transNo == transNo);
 
       for (final entry in entries) {
         final serial = entry.serialNo.trim().toUpperCase();
-        statuses[serial] = entry.isCompleted ? ValidationStatus.completed : ValidationStatus.inProgress;
+        statuses[serial] = entry.isCompleted
+            ? ValidationStatus.completed
+            : ValidationStatus.inProgress;
       }
-      print("✅ Selesai _loadValidationStatuses. Ditemukan ${statuses.length} status."); // Log Sukses
+      print(
+          "✅ Selesai _loadValidationStatuses. Ditemukan ${statuses.length} status."); // Log Sukses
       return statuses;
     } catch (e) {
       print("🔴 ERROR di _loadValidationStatuses: $e"); // Log Error
@@ -205,9 +216,11 @@ class _ServiceCallDetailBodyMobileState
         print("🔴 Gagal me-refresh status validasi: $error");
         if (mounted) {
           // Opsional: Tampilkan SnackBar error
-          _showValidationSnackbar(context, "Gagal memuat status validasi unit.");
+          _showValidationSnackbar(
+              context, "Gagal memuat status validasi unit.");
           setState(() {
-            _validationStatusFuture = Future.value({}); // Beri nilai default jika error
+            _validationStatusFuture =
+                Future.value({}); // Beri nilai default jika error
           });
         }
       });
@@ -233,7 +246,7 @@ class _ServiceCallDetailBodyMobileState
   Widget build(BuildContext context) {
     return BlocListener<ScFormCubit, ScFormState>(
       listenWhen: (prev, current) =>
-      prev.picName != current.picName ||
+          prev.picName != current.picName ||
           prev.picPhone != current.picPhone ||
           prev.picNik != current.picNik ||
           prev.picPosition != current.picPosition ||
@@ -242,13 +255,27 @@ class _ServiceCallDetailBodyMobileState
           prev.finalTempIn != current.finalTempIn ||
           prev.showTechnician3 != current.showTechnician3,
       listener: (context, state) {
-        if (_picNameController.text != state.picName) _picNameController.text = state.picName;
-        if (_picPhoneController.text != state.picPhone) _picPhoneController.text = state.picPhone;
-        if (_picNikController.text != state.picNik) _picNikController.text = state.picNik;
-        if (_picPositionController.text != state.picPosition) _picPositionController.text = state.picPosition;
-        if (_technician2Controller.text != state.technician2) _technician2Controller.text = state.technician2;
-        if (_technician3Controller.text != state.technician3) _technician3Controller.text = state.technician3;
-        if (_finalTempController.text != state.finalTempIn) _finalTempController.text = state.finalTempIn;
+        if (_picNameController.text != state.picName) {
+          _picNameController.text = state.picName;
+        }
+        if (_picPhoneController.text != state.picPhone) {
+          _picPhoneController.text = state.picPhone;
+        }
+        if (_picNikController.text != state.picNik) {
+          _picNikController.text = state.picNik;
+        }
+        if (_picPositionController.text != state.picPosition) {
+          _picPositionController.text = state.picPosition;
+        }
+        if (_technician2Controller.text != state.technician2) {
+          _technician2Controller.text = state.technician2;
+        }
+        if (_technician3Controller.text != state.technician3) {
+          _technician3Controller.text = state.technician3;
+        }
+        if (_finalTempController.text != state.finalTempIn) {
+          _finalTempController.text = state.finalTempIn;
+        }
         if (_showTechnician3 != state.showTechnician3) {
           setState(() => _showTechnician3 = state.showTechnician3);
         }
@@ -257,9 +284,10 @@ class _ServiceCallDetailBodyMobileState
         listener: (context, detailState) {
           // Panggil _refreshSerials SETELAH data detail berhasil dimuat
           if (detailState is ServiceCallDetailLoaded) {
-            print("🚀 ServiceCallDetailBloc Loaded. Memanggil _refreshSerials...");
+            print(
+                "🚀 ServiceCallDetailBloc Loaded. Memanggil _refreshSerials...");
             _refreshSerials();
-          } else if (detailState is ServiceCallDetailError){
+          } else if (detailState is ServiceCallDetailError) {
             print("🔴 ServiceCallDetailBloc Error: ${detailState.message}");
             // Set future ke nilai default agar FutureBuilder tidak loading terus
             if (mounted) {
@@ -281,24 +309,32 @@ class _ServiceCallDetailBodyMobileState
             return BlocBuilder<ScFormCubit, ScFormState>(
               builder: (context, formState) {
                 if (_validationStatusFuture == null) {
-                  return const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Colors.orange)));
+                  return const Center(
+                      child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation(Colors.orange)));
                 }
                 return FutureBuilder<Map<String, ValidationStatus>>(
                   future: _validationStatusFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Colors.green)));
+                      return const Center(
+                          child: CircularProgressIndicator(
+                              valueColor:
+                                  AlwaysStoppedAnimation(Colors.green)));
                     }
 
                     if (snapshot.hasError) {
-                      return Center(child: Text("Error memuat status unit: ${snapshot.error}"));
+                      return Center(
+                          child: Text(
+                              "Error memuat status unit: ${snapshot.error}"));
                     }
 
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
                     final validationStatuses = snapshot.data ?? {};
-                    final stateUpload = context.watch<ServiceCallSubmittedBloc>().state;
+                    final stateUpload =
+                        context.watch<ServiceCallSubmittedBloc>().state;
 
                     return Stack(
                       children: [
@@ -309,24 +345,34 @@ class _ServiceCallDetailBodyMobileState
                             child: Column(
                               children: [
                                 _buildCustomerSection(header),
-                                _buildSection(title: 'Tiket Service Call', child: _buildTicketSection(header)),
+                                _buildSection(
+                                    title: 'Tiket Service Call',
+                                    child: _buildTicketSection(header)),
                                 _buildPicPanel(context, formState),
-                                _buildSection(title: 'Teknisi Bertugas', child: _buildTechnicianPanel(context, formState)),
+                                _buildSection(
+                                    title: 'Teknisi Bertugas',
+                                    child: _buildTechnicianPanel(
+                                        context, formState)),
                                 _buildSection(
                                   title: 'Validasi Unit',
                                   child: Column(
                                     children: [
                                       _buildScanQRButton(context, detailState),
                                       const SizedBox(height: 8),
-                                      ...detailList.map((item) => _buildDetailCard(header, item, validationStatuses)),
+                                      ...detailList.map((item) =>
+                                          _buildDetailCard(header, item,
+                                              validationStatuses)),
                                     ],
                                   ),
                                 ),
                                 // Widget Suhu Akhir (Kondisional)
                                 BlocBuilder<ScFormCubit, ScFormState>(
-                                  buildWhen: (prev, current) => prev.allUnitsValidated != current.allUnitsValidated,
+                                  buildWhen: (prev, current) =>
+                                      prev.allUnitsValidated !=
+                                      current.allUnitsValidated,
                                   builder: (context, formStateForTemp) {
-                                    final bool isEnabled = formStateForTemp.allUnitsValidated;
+                                    final bool isEnabled =
+                                        formStateForTemp.allUnitsValidated;
                                     return Padding(
                                       padding: const EdgeInsets.only(top: 16.0),
                                       child: Stack(
@@ -335,15 +381,21 @@ class _ServiceCallDetailBodyMobileState
                                             opacity: isEnabled ? 1.0 : 0.5,
                                             child: AbsorbPointer(
                                               absorbing: !isEnabled,
-                                              child: _buildFinalTempSection(context, formStateForTemp),
+                                              child: _buildFinalTempSection(
+                                                  context, formStateForTemp),
                                             ),
                                           ),
                                           if (!isEnabled)
                                             Positioned.fill(
                                               child: InkWell(
-                                                onTap: () => _showValidationSnackbar(context, 'Selesaikan validasi semua unit dahulu.'),
-                                                borderRadius: BorderRadius.circular(12),
-                                                child: Container(color: Colors.transparent),
+                                                onTap: () =>
+                                                    _showValidationSnackbar(
+                                                        context,
+                                                        'Selesaikan validasi semua unit dahulu.'),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: Container(
+                                                    color: Colors.transparent),
                                               ),
                                             ),
                                         ],
@@ -357,7 +409,8 @@ class _ServiceCallDetailBodyMobileState
                         ),
                         // Tombol Submit/Retry
                         if (_hasRetryUploadState(stateUpload))
-                          _buildRetryButton(stateUpload as ValidationUploadPartial)
+                          _buildRetryButton(
+                              stateUpload as ValidationUploadPartial)
                         else
                           _buildSubmitButton(context, header, formState),
                       ],
@@ -373,7 +426,6 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-
   // --- Helper Widgets ---
 
   Widget _buildSection({required String title, required Widget child}) {
@@ -384,12 +436,21 @@ class _ServiceCallDetailBodyMobileState
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.85),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [ BoxShadow( color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 2),)],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (title.isNotEmpty) Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          if (title.isNotEmpty)
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           if (title.isNotEmpty) const SizedBox(height: 8),
           child,
         ],
@@ -403,39 +464,51 @@ class _ServiceCallDetailBodyMobileState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Toko: ${header.storeName} (${header.storeId})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text('Toko: ${header.storeName} (${header.storeId})',
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 4),
-          Text('Alamat: ${header.storeAddress}', style: const TextStyle(fontSize: 13)),
+          Text('Alamat: ${header.storeAddress}',
+              style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 4),
-          Text('Kontak: ${header.contactName} (${header.contactPhone})', style: const TextStyle(fontSize: 13)),
+          Text('Kontak: ${header.contactName} (${header.contactPhone})',
+              style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 4),
-          Text('Cabang: ${header.branchName} (${header.branchId})', style: const TextStyle(fontSize: 13)),
+          Text('Cabang: ${header.branchName} (${header.branchId})',
+              style: const TextStyle(fontSize: 13)),
         ],
       ),
     );
   }
 
   Widget _buildTicketSection(ServiceCallHeader header) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(children: [
-        const Icon(Icons.confirmation_number_outlined, size: 20, color: Colors.black54),
-        const SizedBox(width: 8),
-        Expanded(child: Text('No: ${header.transNo}', style: const TextStyle(fontWeight: FontWeight.bold)))
-      ]),
-      const SizedBox(height: 4),
-      Row(children: [
-        const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.black54),
-        const SizedBox(width: 8),
-        Text('Posted: ${header.postedDate.split('T')[0]}') // Asumsi format
-      ]),
-      const SizedBox(height: 4),
-      Text('Status: ${header.status}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      Text('Kategori: ${header.complaintCategory}'),
-      Text('Keluhan: ${header.complaintSubject}', style: const TextStyle(fontStyle: FontStyle.italic)),
-    ],
-  );
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.confirmation_number_outlined,
+                size: 20, color: Colors.black54),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text('No: ${header.transNo}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)))
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            const Icon(Icons.calendar_today_outlined,
+                size: 16, color: Colors.black54),
+            const SizedBox(width: 8),
+            Text('Posted: ${header.postedDate.split('T')[0]}') // Asumsi format
+          ]),
+          const SizedBox(height: 4),
+          Text('Status: ${header.status}',
+              style: const TextStyle(
+                  color: Colors.blue, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          Text('Kategori: ${header.complaintCategory}'),
+          Text('Keluhan: ${header.complaintSubject}',
+              style: const TextStyle(fontStyle: FontStyle.italic)),
+        ],
+      );
 
   Widget _buildPicPanel(BuildContext context, ScFormState formState) {
     final formCubit = context.read<ScFormCubit>();
@@ -507,7 +580,7 @@ class _ServiceCallDetailBodyMobileState
                 child: Image.file(
                   File(imageDetail.imagePath),
                   width: double.infinity, // Lebarkan
-                  height: 150,           // Sesuaikan tinggi
+                  height: 150, // Sesuaikan tinggi
                   fit: BoxFit.cover,
                 ),
               ),
@@ -519,7 +592,8 @@ class _ServiceCallDetailBodyMobileState
               formCubit.onFieldChanged();
             },
             child: Container(
-              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                  color: Colors.black54, shape: BoxShape.circle),
               padding: const EdgeInsets.all(4),
               child: const Icon(Icons.close, color: Colors.white, size: 16),
             ),
@@ -538,27 +612,34 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
-
   Widget _buildTechnicianPanel(BuildContext context, ScFormState formState) {
     final formCubit = context.read<ScFormCubit>();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         children: [
-          _buildCustomTextField(controller: _technician1Controller, hintText: 'Teknisi 1', icon: Icons.engineering, readOnly: true),
+          _buildCustomTextField(
+              controller: _technician1Controller,
+              hintText: 'Teknisi 1',
+              icon: Icons.engineering,
+              readOnly: true),
           const SizedBox(height: 12),
-          _buildCustomTextField(controller: _technician2Controller, hintText: 'Teknisi 2', icon: Icons.engineering),
+          _buildCustomTextField(
+              controller: _technician2Controller,
+              hintText: 'Teknisi 2',
+              icon: Icons.engineering),
           const SizedBox(height: 8),
           if (_showTechnician3)
             _buildCustomTextField(
-              controller: _technician3Controller, hintText: 'Teknisi 3', icon: Icons.engineering,
+              controller: _technician3Controller,
+              hintText: 'Teknisi 3',
+              icon: Icons.engineering,
               iconBtn: IconButton(
                   onPressed: () {
                     formCubit.technician3Changed('');
                     formCubit.toggleTechnician3(false);
                   },
-                  icon: const Icon(Icons.cancel, color: Colors.red)
-              ),
+                  icon: const Icon(Icons.cancel, color: Colors.red)),
             )
           else
             Align(
@@ -574,7 +655,8 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildScanQRButton(BuildContext context, ServiceCallDetailLoaded detailState) {
+  Widget _buildScanQRButton(
+      BuildContext context, ServiceCallDetailLoaded detailState) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -589,33 +671,49 @@ class _ServiceCallDetailBodyMobileState
             if (scannedSerialNo == null || !mounted) return;
 
             final matchingItem = detailState.data.detail.firstWhereOrNull(
-                  (e) => e.serialNo.trim().toUpperCase() == scannedSerialNo.trim().toUpperCase(),
+              (e) =>
+                  e.serialNo.trim().toUpperCase() ==
+                  scannedSerialNo.trim().toUpperCase(),
             );
 
             if (matchingItem != null) {
-              final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+              final box = Hive.box<ServiceCallValidationEntryModel>(
+                  kServiceCallHiveBox);
               final existingData = box.values.firstWhereOrNull(
-                    (entry) => entry.serialNo.trim().toUpperCase() == scannedSerialNo.trim().toUpperCase() && entry.transNo == widget.transNo,
+                (entry) =>
+                    entry.serialNo.trim().toUpperCase() ==
+                        scannedSerialNo.trim().toUpperCase() &&
+                    entry.transNo == widget.transNo,
               );
 
-              final outdoorSerials = detailState.data.outdoor.map((unit) => unit.serialNo).toList();
+              final outdoorSerials = detailState.data.outdoor
+                  .map((unit) => unit.serialNo)
+                  .toList();
               final problemSources = detailState.data.problems;
+              final detailData = detailState.data;
 
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => ServiceCallValidationScreen(
                     transNo: widget.transNo,
-                    serialNo: matchingItem.serialNo, lineNo: matchingItem.lineNo,
-                    assetAge: matchingItem.assetAge, rentDate: matchingItem.rentDate,
-                    leasesEndingDate: matchingItem.leasesEndingDate, complaintDetails: matchingItem.complaintDetails,
-                    imageFile: matchingItem.imageFile, initialData: existingData,
-                    allAvailableOutdoorSerials: outdoorSerials, problemSources: problemSources,
+                    serialNo: matchingItem.serialNo,
+                    lineNo: matchingItem.lineNo,
+                    assetAge: matchingItem.assetAge,
+                    rentDate: matchingItem.rentDate,
+                    leasesEndingDate: matchingItem.leasesEndingDate,
+                    complaintDetails: matchingItem.complaintDetails,
+                    imageFile: matchingItem.imageFile,
+                    initialData: existingData,
+                    allAvailableOutdoorSerials: outdoorSerials,
+                    problemSources: problemSources,
+                    detailData: detailData,
                   ),
                 ),
               ).then((_) => _refreshSerials());
             } else {
-              _showValidationSnackbar(context, "Serial number tidak ditemukan di transaksi ini.");
+              _showValidationSnackbar(
+                  context, "Serial number tidak ditemukan di transaksi ini.");
             }
           },
         ),
@@ -623,15 +721,27 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildDetailCard(ServiceCallHeader header, ServiceCallUnitDetail detail, Map<String, ValidationStatus> validationStatuses) {
+  Widget _buildDetailCard(
+      ServiceCallHeader header,
+      ServiceCallUnitDetail detail,
+      Map<String, ValidationStatus> validationStatuses) {
     final isRemote = detail.articleNameUnit.toUpperCase().contains('REMOTE');
     final String serialKey = detail.serialNo.trim().toUpperCase();
     final status = validationStatuses[serialKey] ?? ValidationStatus.notStarted;
-    IconData iconData; Color iconColor;
+    IconData iconData;
+    Color iconColor;
     switch (status) {
-      case ValidationStatus.completed: iconData = Icons.check_circle; iconColor = Colors.green; break;
-      case ValidationStatus.inProgress: iconData = Icons.pending_actions; iconColor = Colors.orange; break;
-      default: iconData = Icons.radio_button_unchecked; iconColor = Colors.grey;
+      case ValidationStatus.completed:
+        iconData = Icons.check_circle;
+        iconColor = Colors.green;
+        break;
+      case ValidationStatus.inProgress:
+        iconData = Icons.pending_actions;
+        iconColor = Colors.orange;
+        break;
+      default:
+        iconData = Icons.radio_button_unchecked;
+        iconColor = Colors.grey;
     }
 
     return Card(
@@ -640,51 +750,70 @@ class _ServiceCallDetailBodyMobileState
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        title: Text(detail.articleNameUnit, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        title: Text(detail.articleNameUnit,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text('Serial No: ${detail.serialNo}', style: const TextStyle(fontWeight: FontWeight.w500)),
-            Text('Keluhan: ${detail.complaintDetails}', style: const TextStyle(fontSize: 12)),
+            Text('Serial No: ${detail.serialNo}',
+                style: const TextStyle(fontWeight: FontWeight.w500)),
+            Text('Keluhan: ${detail.complaintDetails}',
+                style: const TextStyle(fontSize: 12)),
           ],
         ),
         trailing: Icon(iconData, color: iconColor, size: 28),
         onTap: () async {
-          final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-          final existingEntry = box.values.firstWhereOrNull(
-                  (e) => e.serialNo.trim().toUpperCase() == serialKey && e.transNo == header.transNo
-          );
+          final box =
+              Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+          final existingEntry = box.values.firstWhereOrNull((e) =>
+              e.serialNo.trim().toUpperCase() == serialKey &&
+              e.transNo == header.transNo);
           // Ambil detail state terbaru
           final detailState = context.read<ServiceCallDetailBloc>().state;
           if (detailState is! ServiceCallDetailLoaded) return; // Guard clause
 
-          final outdoorSerials = detailState.data.outdoor.map((unit) => unit.serialNo).toList();
+          final outdoorSerials =
+              detailState.data.outdoor.map((unit) => unit.serialNo).toList();
           final problemSources = detailState.data.problems;
 
           if (isRemote) {
             await Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => RemoteValidationScreen(
-                transNo: header.transNo,
-                uniqueId: detail.serialNo, // Gunakan serialNo sebagai uniqueId
-                articleName: detail.articleNameUnit,
-                initialData: existingEntry,
-                complaintDetails: detail.complaintDetails,
-                imageFile: header.pathAttachment, // Mungkin imageFile dari detail? Sesuaikan
-                problemSources: problemSources,
-              )),
+              MaterialPageRoute(
+                  builder: (_) => RemoteValidationScreen(
+                        transNo: header.transNo,
+                        uniqueId: detail.serialNo,
+                        // Gunakan serialNo sebagai uniqueId
+                        articleName: detail.articleNameUnit,
+                        initialData: existingEntry,
+                        complaintDetails: detail.complaintDetails,
+                        imageFile: header.pathAttachment,
+                        // Mungkin imageFile dari detail? Sesuaikan
+                        problemSources: problemSources,
+                      )),
             );
           } else {
+            final detailData = (context.read<ServiceCallDetailBloc>().state
+                    as ServiceCallDetailLoaded)
+                .data;
             await Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ServiceCallValidationScreen(
-                serialNo: detail.serialNo, lineNo: detail.lineNo, transNo: header.transNo,
-                initialData: existingEntry, assetAge: detail.assetAge, rentDate: detail.rentDate,
-                leasesEndingDate: detail.leasesEndingDate, complaintDetails: detail.complaintDetails,
-                imageFile: detail.imageFile, allAvailableOutdoorSerials: outdoorSerials,
-                problemSources: problemSources,
-              )),
+              MaterialPageRoute(
+                  builder: (_) => ServiceCallValidationScreen(
+                        serialNo: detail.serialNo,
+                        lineNo: detail.lineNo,
+                        transNo: header.transNo,
+                        initialData: existingEntry,
+                        assetAge: detail.assetAge,
+                        rentDate: detail.rentDate,
+                        leasesEndingDate: detail.leasesEndingDate,
+                        complaintDetails: detail.complaintDetails,
+                        imageFile: detail.imageFile,
+                        allAvailableOutdoorSerials: outdoorSerials,
+                        problemSources: problemSources,
+                        detailData: detailData,
+                      )),
             );
           }
           if (mounted) _refreshSerials();
@@ -695,10 +824,20 @@ class _ServiceCallDetailBodyMobileState
 
   Widget _buildFinalTempSection(BuildContext context, ScFormState formState) {
     final formCubit = context.read<ScFormCubit>();
+    final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
+    final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
+    final String label = '${baseLimits.label} (Min: ${minLimit.toStringAsFixed(1)}${baseLimits.unit})';
+
     final finalTempLimits = MeasurementLimits(
-      id: 'final_temp_in_sc', label: 'Suhu Akhir Ruangan (°C)',
-      min: 4, max: 25, unit: '°C', normalMin: 5, normalMax: 18,
+      id: baseLimits.id,
+      label: label,
+      min: minLimit,
+      max: baseLimits.max,
+      unit: baseLimits.unit,
+      normalMin: baseLimits.normalMin,
+      normalMax: baseLimits.normalMax,
     );
+
     return _buildSection(
       title: 'Pengukuran Akhir (*Wajib)',
       child: MeasurementInputWidget(
@@ -722,7 +861,8 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildSubmitButton(BuildContext context, ServiceCallHeader header, ScFormState formState) {
+  Widget _buildSubmitButton(
+      BuildContext context, ServiceCallHeader header, ScFormState formState) {
     return Align(
       alignment: Alignment.bottomCenter,
       child: SafeArea(
@@ -747,22 +887,28 @@ class _ServiceCallDetailBodyMobileState
                 // Langsung kirim event submit SC
                 final progressCubit = context.read<UploadProgressCubit>();
                 context.read<ServiceCallSubmittedBloc>().add(
-                  SubmitValidation(
-                    transNo: header.transNo,
-                    createdBy: maintenanceBy, createdByName: technicianName, createdByIP: maintenanceByIP,
-                    pathAttachment: header.pathAttachment, progressCubit: progressCubit,
-                  ),
-                );
+                      SubmitValidation(
+                        transNo: header.transNo,
+                        createdBy: maintenanceBy,
+                        createdByName: technicianName,
+                        createdByIP: maintenanceByIP,
+                        pathAttachment: header.pathAttachment,
+                        progressCubit: progressCubit,
+                      ),
+                    );
               } else {
                 // Tampilkan pesan error spesifik
                 if (!latestFormState.isPicStoreValid) {
                   _showValidationSnackbar(context, 'Lengkapi info PIC.');
                 } else if (!latestFormState.allUnitsValidated) {
-                  _showValidationSnackbar(context, 'Lengkapi validasi semua unit.');
+                  _showValidationSnackbar(
+                      context, 'Lengkapi validasi semua unit.');
                 } else if (!latestFormState.isFinalTempValid) {
-                  _showValidationSnackbar(context, 'Lengkapi suhu akhir & fotonya.');
+                  _showValidationSnackbar(
+                      context, 'Lengkapi suhu akhir & fotonya.');
                 } else {
-                  _showValidationSnackbar(context, 'Periksa kembali data Anda.');
+                  _showValidationSnackbar(
+                      context, 'Periksa kembali data Anda.');
                 }
               }
             },
@@ -798,13 +944,13 @@ class _ServiceCallDetailBodyMobileState
                 ),
               );
               context.read<ServiceCallSubmittedBloc>().add(
-                RetryUpload(
-                  transNo: partial.transNo,
-                  failedFiles: partial.failedFiles,
-                  presignedDetail: partial.presignedDetail,
-                  progressCubit: uploadCubit,
-                ),
-              );
+                    RetryUpload(
+                      transNo: partial.transNo,
+                      failedFiles: partial.failedFiles,
+                      presignedDetail: partial.presignedDetail,
+                      progressCubit: uploadCubit,
+                    ),
+                  );
             },
           ),
         ),
@@ -833,7 +979,8 @@ class _ServiceCallDetailBodyMobileState
         suffixIcon: iconBtn,
         isDense: true,
         filled: true,
-        fillColor: readOnly ? Colors.grey.shade200 : Colors.white, // Warna berbeda jika readonly
+        fillColor: readOnly ? Colors.grey.shade200 : Colors.white,
+        // Warna berbeda jika readonly
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -841,7 +988,7 @@ class _ServiceCallDetailBodyMobileState
       ),
       inputFormatters: [
         TextInputFormatter.withFunction(
-              (oldValue, newValue) =>
+          (oldValue, newValue) =>
               newValue.copyWith(text: newValue.text.toUpperCase()),
         ),
       ],
@@ -869,16 +1016,25 @@ class _ServiceCallDetailBodyMobileState
       if (photo == null || !mounted) return;
 
       final tempDir = await getTemporaryDirectory();
-      final targetPath = p.join(tempDir.path, 'pic_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      final XFile? compressedImage = await FlutterImageCompress.compressAndGetFile(
-        photo.path, targetPath, quality: 70, minWidth: 1080, minHeight: 1920,
+      final targetPath = p.join(
+          tempDir.path, 'pic_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final XFile? compressedImage =
+          await FlutterImageCompress.compressAndGetFile(
+        photo.path,
+        targetPath,
+        quality: 70,
+        minWidth: 1080,
+        minHeight: 1920,
       );
       if (compressedImage == null) return;
 
       final userData = await AuthStorage.getUser();
       final capturedDetail = CapturedImageDetail(
-        imagePath: compressedImage.path, timestamp: DateTime.now(),
-        latitude: 0, longitude: 0, address: "",
+        imagePath: compressedImage.path,
+        timestamp: DateTime.now(),
+        latitude: 0,
+        longitude: 0,
+        address: "",
         technicianName: userData['name'] ?? 'Unknown',
         deviceModel: userData['device_model'] ?? 'Unknown Device',
         transNo: widget.transNo,
@@ -886,9 +1042,9 @@ class _ServiceCallDetailBodyMobileState
 
       formCubit.picImageChanged(capturedDetail); // Update Cubit
       formCubit.onFieldChanged();
-
     } catch (e) {
-      if (mounted) _showValidationSnackbar(context, "Gagal mengambil detail foto: $e");
+      if (mounted)
+        _showValidationSnackbar(context, "Gagal mengambil detail foto: $e");
     } finally {
       if (mounted) setState(() => _isTakingPicPhoto = false);
     }
@@ -898,7 +1054,8 @@ class _ServiceCallDetailBodyMobileState
     if (imageDetail != null) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageDetail: imageDetail)),
+        MaterialPageRoute(
+            builder: (_) => FullScreenImageViewer(imageDetail: imageDetail)),
       );
     }
   }

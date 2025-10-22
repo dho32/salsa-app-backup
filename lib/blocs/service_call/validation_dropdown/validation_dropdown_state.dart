@@ -46,6 +46,16 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final List<CapturedImageDetail> capturedPhotosAfter;
   final List<MeasurementEntry> capturedMeasurementsAfter;
 
+  // Daftar Opsi Catatan (dari API)
+  final List<String> noteIndoorOptions;
+  final List<String> noteOutdoorOptions;
+
+  //selected note
+  final String? selectedIndoorNoteBefore;
+  final String? selectedOutdoorNoteBefore;
+  final String? selectedIndoorNoteAfter;
+  final String? selectedOutdoorNoteAfter;
+
   final int currentStep;
   final ValidationViewMode currentViewMode;
 
@@ -62,6 +72,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.outdoorSerialNumbers = const [],
     this.unitLocation = 'INDOOR',
     this.selectedOutdoorSerialNo,
+    this.noteIndoorOptions = const [],
+    this.noteOutdoorOptions = const [],
+    this.selectedIndoorNoteBefore,
+    this.selectedOutdoorNoteBefore,
+    this.selectedIndoorNoteAfter,
+    this.selectedOutdoorNoteAfter,
   });
 
   ValidationDropdownLoaded copyWith({
@@ -76,6 +92,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     ValidationViewMode? currentViewMode,
     List<String>? outdoorSerialNumbers,
     String? selectedOutdoorSerialNo,
+    List<String>? noteIndoorOptions,
+    List<String>? noteOutdoorOptions,
+    String? selectedIndoorNoteBefore,
+    String? selectedOutdoorNoteBefore,
+    String? selectedIndoorNoteAfter,
+    String? selectedOutdoorNoteAfter,
   }) {
     return ValidationDropdownLoaded(
       data: data ?? this.data,
@@ -90,6 +112,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
       selectedOutdoorSerialNo:
       selectedOutdoorSerialNo ?? this.selectedOutdoorSerialNo,
+      noteIndoorOptions: noteIndoorOptions ?? this.noteIndoorOptions,
+      noteOutdoorOptions: noteOutdoorOptions ?? this.noteOutdoorOptions,
+      selectedIndoorNoteBefore: selectedIndoorNoteBefore ?? this.selectedIndoorNoteBefore,
+      selectedOutdoorNoteBefore: selectedOutdoorNoteBefore ?? this.selectedOutdoorNoteBefore,
+      selectedIndoorNoteAfter: selectedIndoorNoteAfter ?? this.selectedIndoorNoteAfter,
+      selectedOutdoorNoteAfter: selectedOutdoorNoteAfter ?? this.selectedOutdoorNoteAfter,
     );
   }
 
@@ -106,6 +134,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     currentViewMode,
     outdoorSerialNumbers,
     selectedOutdoorSerialNo,
+    noteIndoorOptions,
+    noteOutdoorOptions,
+    selectedIndoorNoteBefore,
+    selectedOutdoorNoteBefore,
+    selectedIndoorNoteAfter,
+    selectedOutdoorNoteAfter,
   ];
 }
 

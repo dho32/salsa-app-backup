@@ -3,8 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
+import '../../../components/constants.dart';
 import '../../../models/common/measurement_entry.dart';
 import '../../../models/service_call/problem_source_model.dart';
+import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
 import 'components/service_call_validation_body_mobile.dart';
 
@@ -20,6 +22,7 @@ class ServiceCallValidationScreen extends StatefulWidget {
   final ServiceCallValidationEntryModel? initialData;
   final List<String> allAvailableOutdoorSerials;
   final List<ProblemSourceModel> problemSources;
+  final ServiceCallDetailModel detailData;
 
   const ServiceCallValidationScreen({
     super.key,
@@ -34,6 +37,7 @@ class ServiceCallValidationScreen extends StatefulWidget {
     this.initialData,
     required this.allAvailableOutdoorSerials,
     required this.problemSources,
+    required this.detailData,
   });
 
   @override
@@ -44,7 +48,7 @@ class ServiceCallValidationScreen extends StatefulWidget {
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
   bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
-    return measurements.every((m) => m.capturedImage != null);
+    return measurements.every((m) => m.isSkipped || m.capturedImage != null);
   }
 
   @override
@@ -57,6 +61,7 @@ class _ServiceCallValidationScreenState
           currentIndoorSerial: widget.serialNo,
           allAvailableOutdoorSerials: widget.allAvailableOutdoorSerials,
           problemSources: widget.problemSources,
+          detailData: widget.detailData,
         )),
       child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
         builder: (context, state) {
@@ -117,22 +122,28 @@ class _ServiceCallValidationScreenState
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 onPressed: () {
-                  // Validasi dan Simpan Final
-                  if (state.selectedUnitType == null ||
-                      state.selectedProblemCards.isEmpty ||
-                      state.capturedPhotosAfter.isEmpty ||
-                      !_areAllMeasurementsFilled(
-                          state.capturedMeasurementsAfter)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content:
-                            Text('Lengkapi semua data & foto (Sesudah Servis)'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                  // --- Validasi "Sesudah" ---
+                  final measurementError = _validateMeasurements(state.capturedMeasurementsBefore);
+                  if (measurementError != null) {
+                    _showErrorSnackbar(measurementError);
                     return;
                   }
+
+                  if (state.selectedUnitType == null || state.selectedProblemCards.isEmpty) {
+                    _showErrorSnackbar('Lengkapi data Permasalahan & Solusi.');
+                    return;
+                  }
+                  if (state.capturedPhotosAfter.isEmpty || !_areAllMeasurementsFilled(state.capturedMeasurementsAfter)) {
+                    _showErrorSnackbar('Lengkapi semua foto & pengukuran (Sesudah).');
+                    return;
+                  }
+                  // Validasi Note "Sesudah"
+                  final noteError = _validateNotes(state, isBefore: false);
+                  if (noteError != null) {
+                    _showErrorSnackbar(noteError);
+                    return;
+                  }
+
                   bloc.add(SaveValidationData(
                     transNo: widget.transNo,
                     serialNo: widget.serialNo,
@@ -172,6 +183,12 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
+                  final measurementError = _validateMeasurements(state.capturedMeasurementsBefore);
+                  if (measurementError != null) {
+                    _showErrorSnackbar(measurementError);
+                    return;
+                  }
+
                   // Kirim event untuk menyimpan, tapi JANGAN pindah step
                   bloc.add(SaveValidationData(
                     transNo: widget.transNo,
@@ -197,28 +214,24 @@ class _ServiceCallValidationScreenState
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  if (state.capturedPhotosBefore.isEmpty ||
-                      !_areAllMeasurementsFilled(
-                          state.capturedMeasurementsBefore)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Lengkapi semua data & foto untuk melanjutkan'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                  if (state.capturedPhotosBefore.isEmpty) {
+                    _showErrorSnackbar('Lengkapi semua foto unit (Sebelum).');
+                    return;
+                  }
+                  if (state.selectedOutdoorSerialNo == null) {
+                    _showErrorSnackbar('Pilih Serial No Outdoor.');
+                    return;
+                  }
+                  // Validasi Note "Sebelum"
+                  final noteError = _validateNotes(state, isBefore: true);
+                  if (noteError != null) {
+                    _showErrorSnackbar(noteError);
                     return;
                   }
 
-                  if (state.selectedOutdoorSerialNo == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Pilih Serial No Outdoor'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                  final measurementError = _validateMeasurements(state.capturedMeasurementsBefore);
+                  if (measurementError != null) {
+                    _showErrorSnackbar(measurementError);
                     return;
                   }
 
@@ -233,6 +246,64 @@ class _ServiceCallValidationScreenState
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  String? _validateNotes(ValidationDropdownLoaded state, {required bool isBefore}) {
+    final measurements = isBefore ? state.capturedMeasurementsBefore : state.capturedMeasurementsAfter;
+
+    // Cek Indoor
+    final bool isAnyIndoorSkipped = measurements.any((m) => m.measurementId.toLowerCase().contains('temperature') && m.isSkipped);
+    final String? indoorNote = isBefore ? state.selectedIndoorNoteBefore : state.selectedIndoorNoteAfter;
+    if (isAnyIndoorSkipped && (indoorNote == null || indoorNote.isEmpty)) {
+      return 'Catatan indoor wajib diisi jika ada pengukuran yang di-skip.';
+    }
+
+    // Cek Outdoor
+    final bool isAnyOutdoorSkipped = measurements.any((m) => !m.measurementId.toLowerCase().contains('temperature') && m.isSkipped);
+    final String? outdoorNote = isBefore ? state.selectedOutdoorNoteBefore : state.selectedOutdoorNoteAfter;
+    if (isAnyOutdoorSkipped && (outdoorNote == null || outdoorNote.isEmpty)) {
+      return 'Catatan outdoor wajib diisi jika ada pengukuran yang di-skip.';
+    }
+
+    return null; // Semua valid
+  }
+
+  String? _validateMeasurements(List<MeasurementEntry> measurements) {
+    for (final mEntry in measurements) {
+      // 1. Jika di-skip, lewati ke pengukuran berikutnya (dianggap valid)
+      if (mEntry.isSkipped) continue;
+
+      // 2. Jika tidak di-skip, periksa kelengkapan
+      if (mEntry.capturedImage == null) {
+        final label = kMeasurementLimits[mEntry.measurementId]?.label ?? mEntry.measurementId;
+        return 'Foto untuk "$label" wajib diisi.';
+      }
+      // Kita anggap 0.0 adalah default (kosong)
+      if (mEntry.value == 0.0) {
+        final label = kMeasurementLimits[mEntry.measurementId]?.label ?? mEntry.measurementId;
+        return 'Nilai untuk "$label" wajib diisi.';
+      }
+
+      // 3. Jika lengkap, periksa rentang nilainya
+      final limits = kMeasurementLimits[mEntry.measurementId];
+      if (limits == null) continue;
+
+      if (mEntry.value < limits.min || mEntry.value > limits.max) {
+        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar.';
+      }
+    }
+    return null; // Semua valid
+  }
+
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

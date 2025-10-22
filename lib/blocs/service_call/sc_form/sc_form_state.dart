@@ -16,6 +16,7 @@ class ScFormState extends Equatable {
   // Data Suhu Akhir
   final String finalTempIn;
   final CapturedImageDetail? finalTempInImage;
+  final double? minFinalTempInLimit;
 
   // Validation & Status Fields
   final bool isPicStoreValid;
@@ -34,6 +35,7 @@ class ScFormState extends Equatable {
     this.picImageDetail,
     this.finalTempIn = '',
     this.finalTempInImage,
+    this.minFinalTempInLimit,
     this.isPicStoreValid = false,
     this.allUnitsValidated = false,
     this.isFinalTempValid = false,
@@ -44,6 +46,7 @@ class ScFormState extends Equatable {
     String? picNik, String? picName, String? picPosition, String? picPhone,
     String? technician2, String? technician3, bool? showTechnician3,
     CapturedImageDetail? picImageDetail,
+    double? minFinalTempInLimit,
     String? finalTempIn, CapturedImageDetail? finalTempInImage,
     bool? isPicStoreValid, bool? allUnitsValidated, bool? isFinalTempValid,
     bool? isFormReadyToSubmit,
@@ -59,6 +62,7 @@ class ScFormState extends Equatable {
       picImageDetail: picImageDetail ?? this.picImageDetail,
       finalTempIn: finalTempIn ?? this.finalTempIn,
       finalTempInImage: finalTempInImage ?? this.finalTempInImage,
+      minFinalTempInLimit: minFinalTempInLimit ?? this.minFinalTempInLimit,
       isPicStoreValid: isPicStoreValid ?? this.isPicStoreValid,
       allUnitsValidated: allUnitsValidated ?? this.allUnitsValidated,
       isFinalTempValid: isFinalTempValid ?? this.isFinalTempValid,

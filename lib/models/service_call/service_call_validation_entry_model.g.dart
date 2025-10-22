@@ -29,13 +29,17 @@ class ServiceCallValidationEntryModelAdapter
       isCompleted: fields[8] as bool,
       outdoorSerialNo: fields[9] as String?,
       device: fields[10] as String?,
+      selectedIndoorNoteBefore: fields[11] as String?,
+      selectedOutdoorNoteBefore: fields[12] as String?,
+      selectedIndoorNoteAfter: fields[13] as String?,
+      selectedOutdoorNoteAfter: fields[14] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ServiceCallValidationEntryModel obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.unitType)
       ..writeByte(1)
@@ -57,7 +61,15 @@ class ServiceCallValidationEntryModelAdapter
       ..writeByte(9)
       ..write(obj.outdoorSerialNo)
       ..writeByte(10)
-      ..write(obj.device);
+      ..write(obj.device)
+      ..writeByte(11)
+      ..write(obj.selectedIndoorNoteBefore)
+      ..writeByte(12)
+      ..write(obj.selectedOutdoorNoteBefore)
+      ..writeByte(13)
+      ..write(obj.selectedIndoorNoteAfter)
+      ..writeByte(14)
+      ..write(obj.selectedOutdoorNoteAfter);
   }
 
   @override

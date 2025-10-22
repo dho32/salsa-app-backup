@@ -11,9 +11,7 @@ import 'package:hive/hive.dart'; // Untuk Hive.box
 
 class ValidationDropdownBloc
     extends Bloc<ValidationDropdownEvent, ValidationDropdownState> {
-
-  ValidationDropdownBloc()
-      : super(ValidationDropdownInitial()) {
+  ValidationDropdownBloc() : super(ValidationDropdownInitial()) {
     on<FetchValidationDropdownData>(_onFetchData);
     on<SelectUnitType>(_onSelectUnitType);
     on<AddProblemCard>(_onAddProblemCard);
@@ -30,53 +28,18 @@ class ValidationDropdownBloc
     on<ChangeValidationViewMode>(_onChangeValidationViewMode);
     on<SaveValidationData>(_onSaveValidationData);
     on<SelectOutdoorSerial>(_onSelectOutdoorSerial);
-    on<ToggleMeasurementSkip>(_onToggleMeasurementSkip);
+    on<NoteChanged>(_onNoteChanged);
   }
 
   List<MeasurementEntry> _getDefaultMeasurements() {
-
     return kMeasurementLimits.values
         .map((limits) => MeasurementEntry(
               measurementId: limits.id,
-              value: limits.min, // Inisialisasi dengan 0.0
+              value: 0.0,
               unit: limits.unit,
+              isSkipped: false,
             ))
         .toList();
-  }
-
-  void _onToggleMeasurementSkip(
-      ToggleMeasurementSkip event, Emitter<ValidationDropdownState> emit) {
-    if (state is ValidationDropdownLoaded) {
-      final currentState = state as ValidationDropdownLoaded;
-
-      // Tentukan list mana yang akan diupdate (Before atau After)
-      final targetList = event.isBefore
-          ? currentState.capturedMeasurementsBefore
-          : currentState.capturedMeasurementsAfter;
-
-      // Buat salinan list agar immutable
-      final updatedList = List<MeasurementEntry>.from(targetList);
-
-      // Cari index pengukuran yang sesuai
-      final index = updatedList.indexWhere((m) => m.measurementId == event.measurementId);
-
-      if (index != -1) {
-        // Update status isSkipped pada item yang ditemukan
-        updatedList[index] = updatedList[index].copyWith(isSkipped: event.isSkipped);
-
-        // Emit state baru dengan list yang sudah diperbarui
-        if (event.isBefore) {
-          emit(currentState.copyWith(capturedMeasurementsBefore: updatedList));
-        } else {
-          emit(currentState.copyWith(capturedMeasurementsAfter: updatedList));
-        }
-
-        // Opsional: Panggil save draft di sini jika diinginkan
-        // add(SaveValidationData(transNo: ..., serialNo: ...));
-      } else {
-        print(">>> ValidationDropdownBloc: WARNING - Index tidak ditemukan untuk ${event.measurementId} saat toggle skip.");
-      }
-    }
   }
 
   Future<void> _onFetchData(FetchValidationDropdownData event,
@@ -129,10 +92,38 @@ class ValidationDropdownBloc
           currentViewMode: ValidationViewMode.before,
           outdoorSerialNumbers: availableSerialsForDropdown,
           selectedOutdoorSerialNo: initialData?.outdoorSerialNo,
+          noteIndoorOptions: event.detailData.noteIndoorOptions,
+          noteOutdoorOptions: event.detailData.noteOutdoorOptions,
+          selectedIndoorNoteBefore: initialData?.selectedIndoorNoteBefore,
+          selectedOutdoorNoteBefore: initialData?.selectedOutdoorNoteBefore,
+          selectedIndoorNoteAfter: initialData?.selectedIndoorNoteAfter,
+          selectedOutdoorNoteAfter: initialData?.selectedOutdoorNoteAfter,
         ),
       );
     } catch (e) {
       emit(ValidationDropdownError(e.toString()));
+    }
+  }
+
+  void _onNoteChanged(
+      NoteChanged event, Emitter<ValidationDropdownState> emit) {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+
+      if (event.isBefore) {
+        if (event.isIndoor) {
+          emit(currentState.copyWith(selectedIndoorNoteBefore: event.note));
+        } else {
+          emit(currentState.copyWith(selectedOutdoorNoteBefore: event.note));
+        }
+      } else {
+        // Jika isBefore == false (sesudah)
+        if (event.isIndoor) {
+          emit(currentState.copyWith(selectedIndoorNoteAfter: event.note));
+        } else {
+          emit(currentState.copyWith(selectedOutdoorNoteAfter: event.note));
+        }
+      }
     }
   }
 
@@ -304,6 +295,10 @@ class ValidationDropdownBloc
           measurementsAfter: currentState.capturedMeasurementsAfter,
           isCompleted: event.markAsCompleted,
           outdoorSerialNo: currentState.selectedOutdoorSerialNo,
+          selectedIndoorNoteBefore: currentState.selectedIndoorNoteBefore,
+          selectedOutdoorNoteBefore: currentState.selectedOutdoorNoteBefore,
+          selectedIndoorNoteAfter: currentState.selectedIndoorNoteAfter,
+          selectedOutdoorNoteAfter: currentState.selectedOutdoorNoteAfter,
         );
 
         final box = await Hive.openBox<ServiceCallValidationEntryModel>(
