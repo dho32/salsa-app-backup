@@ -63,30 +63,59 @@ class _ServiceCallValidationScreenState
           problemSources: widget.problemSources,
           detailData: widget.detailData,
         )),
-      child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
-        builder: (context, state) {
-          return Scaffold(
-            appBar: AppBar(title: const Text("Validasi Service Call")),
-            body: GestureDetector(
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: ServiceCallValidationBodyMobile(
-                transNo: widget.transNo,
-                serialNo: widget.serialNo,
-                lineNo: widget.lineNo,
-                assetAge: widget.assetAge,
-                rentDate: widget.rentDate,
-                leasesEndingDate: widget.leasesEndingDate,
-                initialData: widget.initialData,
-                complaintDetails: widget.complaintDetails,
-                imageFile: widget.imageFile,
-              ),
-            ),
-            // --- BAGIAN BARU: TOMBOL FLOATING ---
-            bottomNavigationBar: (state is ValidationDropdownLoaded)
-                ? _buildFloatingButtons(context, state)
-                : null,
-          );
+      child: BlocListener<ValidationDropdownBloc, ValidationDropdownState>(
+        listenWhen: (prev, current) =>
+        prev is ValidationDropdownLoaded &&
+            current is ValidationDropdownLoaded &&
+            prev.saveStatus != current.saveStatus,
+        listener: (context, state) {
+          if (state is ValidationDropdownLoaded) {
+            if (state.saveStatus == ValidationSaveStatus.successFinal) {
+              Navigator.of(context).pop(true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.saveMessage ?? 'Berhasil!'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else if (state.saveStatus == ValidationSaveStatus.successDraft) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.saveMessage ?? 'Draft disimpan!'),
+                  backgroundColor: Colors.blue,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else if (state.saveStatus == ValidationSaveStatus.error) {
+              _showErrorSnackbar(state.saveMessage ?? 'Gagal menyimpan data');
+            }
+          }
         },
+        child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
+          builder: (context, state) {
+            return Scaffold(
+              appBar: AppBar(title: const Text("Validasi Service Call")),
+              body: GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: ServiceCallValidationBodyMobile(
+                  transNo: widget.transNo,
+                  serialNo: widget.serialNo,
+                  lineNo: widget.lineNo,
+                  assetAge: widget.assetAge,
+                  rentDate: widget.rentDate,
+                  leasesEndingDate: widget.leasesEndingDate,
+                  initialData: widget.initialData,
+                  complaintDetails: widget.complaintDetails,
+                  imageFile: widget.imageFile,
+                ),
+              ),
+              bottomNavigationBar: (state is ValidationDropdownLoaded)
+                  ? _buildFloatingButtons(context, state)
+                  : null,
+            );
+          },
+        ),
       ),
     );
   }
@@ -123,7 +152,7 @@ class _ServiceCallValidationScreenState
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 onPressed: () {
                   // --- Validasi "Sesudah" ---
-                  final measurementError = _validateMeasurements(state.capturedMeasurementsBefore);
+                  final measurementError = _validateMeasurements(state.capturedMeasurementsAfter);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -149,14 +178,6 @@ class _ServiceCallValidationScreenState
                     serialNo: widget.serialNo,
                     markAsCompleted: true,
                   ));
-                  Navigator.of(context).pop(true);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Validasi berhasil disimpan!'),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
                 },
                 child: const Text('Simpan'),
               ),

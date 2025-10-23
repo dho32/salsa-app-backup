@@ -19,11 +19,11 @@ import '../../../blocs/service_call/service_call_unserviceable/sc_unserviceable_
 import '../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../components/constants.dart';
 import '../../../components/shared_widgets.dart';
-import '../../../models/service_call/service_call_validation_entry_model.dart'; // <-- Impor model validasi SC
+import '../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
-import '../../../models/service_call/validation_status.dart'; // <-- Impor enum status
 import '../service_call_report_issue/service_call_report_issue_screen.dart';
 import 'components/service_call_detail_body_mobile.dart';
+
 
 class ServiceCallDetailScreen extends StatefulWidget {
   final String transNo;

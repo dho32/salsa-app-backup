@@ -1,6 +1,7 @@
 // lib/blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart
 import 'dart:async';
 import 'package:bloc/bloc.dart';
+import 'package:collection/collection.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk save Hive
@@ -277,64 +278,87 @@ class ValidationDropdownBloc
   // BARU: Handler untuk menyimpan data validasi ke Hive
   Future<void> _onSaveValidationData(
       SaveValidationData event, Emitter<ValidationDropdownState> emit) async {
-    if (state is ValidationDropdownLoaded) {
-      final currentState = state as ValidationDropdownLoaded;
-      try {
-        final validationEntry = ServiceCallValidationEntryModel(
-          unitType: currentState.selectedUnitType ?? '',
-          serialNo: event.serialNo,
-          transNo: event.transNo,
-          imagePathsBefore: currentState.capturedPhotosBefore,
-          measurementsBefore: currentState.capturedMeasurementsBefore,
-          problems: currentState.selectedProblemCards
-              .map((card) => ValidationProblem(
-                  problemId: card.selectedProblemId!,
-                  solutionIds: card.selectedSolutionIds))
-              .toList(),
-          imagePathsAfter: currentState.capturedPhotosAfter,
-          measurementsAfter: currentState.capturedMeasurementsAfter,
-          isCompleted: event.markAsCompleted,
-          outdoorSerialNo: currentState.selectedOutdoorSerialNo,
-          selectedIndoorNoteBefore: currentState.selectedIndoorNoteBefore,
-          selectedOutdoorNoteBefore: currentState.selectedOutdoorNoteBefore,
-          selectedIndoorNoteAfter: currentState.selectedIndoorNoteAfter,
-          selectedOutdoorNoteAfter: currentState.selectedOutdoorNoteAfter,
-        );
 
-        final box = await Hive.openBox<ServiceCallValidationEntryModel>(
-            kServiceCallHiveBox);
-        final existingKey = box.keys.cast<int?>().firstWhere(
-              (key) =>
-                  box.get(key)?.serialNo == event.serialNo &&
-                  box.get(key)?.transNo == event.transNo,
-              orElse: () => null,
-            );
+    if (state is! ValidationDropdownLoaded) return;
 
-        if (existingKey != null) {
-          await box.put(existingKey, validationEntry);
-        } else {
-          await box.add(validationEntry);
-        }
+    final stateSaatEventMulai = state as ValidationDropdownLoaded;
 
-        final assignmentBox = await Hive.openBox(kOutdoorUnitAssignmentsBox);
-        final Map<dynamic, dynamic> currentAssignments =
-            assignmentBox.get(event.transNo) ?? {};
+    emit(stateSaatEventMulai.copyWith(saveStatus: ValidationSaveStatus.saving));
 
-        if (currentState.selectedOutdoorSerialNo != null &&
-            currentState.selectedOutdoorSerialNo!.isNotEmpty) {
-          currentAssignments[event.serialNo] =
-              currentState.selectedOutdoorSerialNo;
-        } else {
-          currentAssignments.remove(event.serialNo);
-        }
+    try {
+      // 4. Buat objek data yang akan disimpan (menggunakan stateSaatEventMulai)
+      final validationEntry = ServiceCallValidationEntryModel(
+        unitType: stateSaatEventMulai.selectedUnitType ?? '',
+        serialNo: event.serialNo,
+        transNo: event.transNo,
+        imagePathsBefore: stateSaatEventMulai.capturedPhotosBefore,
+        measurementsBefore: stateSaatEventMulai.capturedMeasurementsBefore,
+        problems: stateSaatEventMulai.selectedProblemCards
+            .map((card) => ValidationProblem(
+            problemId: card.selectedProblemId!,
+            solutionIds: card.selectedSolutionIds))
+            .toList(),
+        imagePathsAfter: stateSaatEventMulai.capturedPhotosAfter,
+        measurementsAfter: stateSaatEventMulai.capturedMeasurementsAfter,
+        isCompleted: event.markAsCompleted,
+        outdoorSerialNo: stateSaatEventMulai.selectedOutdoorSerialNo,
+        selectedIndoorNoteBefore: stateSaatEventMulai.selectedIndoorNoteBefore,
+        selectedOutdoorNoteBefore: stateSaatEventMulai.selectedOutdoorNoteBefore,
+        selectedIndoorNoteAfter: stateSaatEventMulai.selectedIndoorNoteAfter,
+        selectedOutdoorNoteAfter: stateSaatEventMulai.selectedOutdoorNoteAfter,
+      );
 
-        await assignmentBox.put(event.transNo, currentAssignments);
-        print(
-            'Assignment data for ${event.serialNo} saved to Hive successfully!');
-      } catch (e) {
-        print('Error saving validation data to Hive: $e');
-        // Anda bisa emit ValidationDropdownError di sini jika perlu
+      // 5. Lakukan proses async (menyimpan ke Hive)
+      final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull(
+            (key) =>
+        box.get(key, defaultValue: null)?.serialNo == event.serialNo &&
+            box.get(key, defaultValue: null)?.transNo == event.transNo,
+      );
+
+      if (existingKey != null) {
+        await box.put(existingKey, validationEntry);
+      } else {
+        await box.add(validationEntry);
       }
+
+      final assignmentBox = Hive.box(kOutdoorUnitAssignmentsBox);
+      final Map<dynamic, dynamic> currentAssignments =
+          assignmentBox.get(event.transNo) ?? {};
+      if (stateSaatEventMulai.selectedOutdoorSerialNo != null &&
+          stateSaatEventMulai.selectedOutdoorSerialNo!.isNotEmpty) {
+        currentAssignments[event.serialNo] =
+            stateSaatEventMulai.selectedOutdoorSerialNo;
+      } else {
+        currentAssignments.remove(event.serialNo);
+      }
+      await assignmentBox.put(event.transNo, currentAssignments);
+
+      // --- ✅ PERBAIKAN UTAMA: GUNAKAN 'state' (properti) BUKAN 'stateSaatEventMulai' (variabel) ✅ ---
+      // 'state' (properti BLoC) adalah state paling baru, yang mungkin sudah
+      // memiliki currentStep: 1 dari event ChangeValidationStep.
+
+      if (event.markAsCompleted) {
+        // Jika ini adalah SIMPAN FINAL (dari Step 2)
+        emit((state as ValidationDropdownLoaded).copyWith(
+          saveStatus: ValidationSaveStatus.successFinal,
+          saveMessage: "Validasi berhasil disimpan!",
+        ));
+      } else {
+        // Jika ini adalah SIMPAN DRAFT (dari Step 1, baik tombol Lanjut atau Simpan Draft)
+        emit((state as ValidationDropdownLoaded).copyWith(
+          saveStatus: ValidationSaveStatus.successDraft,
+          saveMessage: "Draft berhasil disimpan",
+        ));
+      }
+      // --- AKHIR PERBAIKAN ---
+
+    } catch (e) {
+      print('Error saving validation data to Hive: $e');
+      emit((state as ValidationDropdownLoaded).copyWith(
+        saveStatus: ValidationSaveStatus.error,
+        saveMessage: "Gagal menyimpan data: $e",
+      ));
     }
   }
 

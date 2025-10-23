@@ -10,6 +10,8 @@ enum ValidationViewMode {
   after,
 }
 
+enum ValidationSaveStatus { initial, saving, successDraft, successFinal, error }
+
 abstract class ValidationDropdownState extends Equatable {
   const ValidationDropdownState();
 
@@ -59,6 +61,9 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final int currentStep;
   final ValidationViewMode currentViewMode;
 
+  final ValidationSaveStatus saveStatus;
+  final String? saveMessage;
+
   const ValidationDropdownLoaded({
     required this.data,
     this.selectedUnitType,
@@ -78,6 +83,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.selectedOutdoorNoteBefore,
     this.selectedIndoorNoteAfter,
     this.selectedOutdoorNoteAfter,
+    this.saveStatus = ValidationSaveStatus.initial,
+    this.saveMessage,
   });
 
   ValidationDropdownLoaded copyWith({
@@ -98,6 +105,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     String? selectedOutdoorNoteBefore,
     String? selectedIndoorNoteAfter,
     String? selectedOutdoorNoteAfter,
+    ValidationSaveStatus? saveStatus,
+    String? saveMessage,
   }) {
     return ValidationDropdownLoaded(
       data: data ?? this.data,
@@ -118,6 +127,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
       selectedOutdoorNoteBefore: selectedOutdoorNoteBefore ?? this.selectedOutdoorNoteBefore,
       selectedIndoorNoteAfter: selectedIndoorNoteAfter ?? this.selectedIndoorNoteAfter,
       selectedOutdoorNoteAfter: selectedOutdoorNoteAfter ?? this.selectedOutdoorNoteAfter,
+      saveStatus: saveStatus ?? this.saveStatus,
+      saveMessage: saveMessage,
     );
   }
 
@@ -140,6 +151,7 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     selectedOutdoorNoteBefore,
     selectedIndoorNoteAfter,
     selectedOutdoorNoteAfter,
+    saveStatus, saveMessage,
   ];
 }
 

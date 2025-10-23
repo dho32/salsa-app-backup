@@ -692,7 +692,7 @@ class _ServiceCallDetailBodyMobileState
               final problemSources = detailState.data.problems;
               final detailData = detailState.data;
 
-              Navigator.push(
+              final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => ServiceCallValidationScreen(
@@ -710,7 +710,11 @@ class _ServiceCallDetailBodyMobileState
                     detailData: detailData,
                   ),
                 ),
-              ).then((_) => _refreshSerials());
+              );
+
+              if (result == true && mounted) {
+                _refreshSerials(); // JALANKAN REFRESH DI SINI
+              }
             } else {
               _showValidationSnackbar(
                   context, "Serial number tidak ditemukan di transaksi ini.");
@@ -778,45 +782,73 @@ class _ServiceCallDetailBodyMobileState
           final problemSources = detailState.data.problems;
 
           if (isRemote) {
-            await Navigator.push(
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (_) => RemoteValidationScreen(
-                        transNo: header.transNo,
-                        uniqueId: detail.serialNo,
-                        // Gunakan serialNo sebagai uniqueId
-                        articleName: detail.articleNameUnit,
-                        initialData: existingEntry,
-                        complaintDetails: detail.complaintDetails,
-                        imageFile: header.pathAttachment,
-                        // Mungkin imageFile dari detail? Sesuaikan
-                        problemSources: problemSources,
-                      )),
+                builder: (_) => RemoteValidationScreen(
+                  transNo: header.transNo,
+                  uniqueId: detail.serialNo,
+                  // Gunakan serialNo sebagai uniqueId
+                  articleName: detail.articleNameUnit,
+                  initialData: existingEntry,
+                  complaintDetails: detail.complaintDetails,
+                  imageFile: header.pathAttachment,
+                  // Mungkin imageFile dari detail? Sesuaikan
+                  problemSources: problemSources,
+                ),
+              ),
             );
+
+            if (result == true && mounted) {
+              ScaffoldMessenger.of(context).removeCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Validasi berhasil disimpan!'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+
+              _refreshSerials(); // JALANKAN REFRESH DI SINI
+            }
           } else {
             final detailData = (context.read<ServiceCallDetailBloc>().state
                     as ServiceCallDetailLoaded)
                 .data;
-            await Navigator.push(
+
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (_) => ServiceCallValidationScreen(
-                        serialNo: detail.serialNo,
-                        lineNo: detail.lineNo,
-                        transNo: header.transNo,
-                        initialData: existingEntry,
-                        assetAge: detail.assetAge,
-                        rentDate: detail.rentDate,
-                        leasesEndingDate: detail.leasesEndingDate,
-                        complaintDetails: detail.complaintDetails,
-                        imageFile: detail.imageFile,
-                        allAvailableOutdoorSerials: outdoorSerials,
-                        problemSources: problemSources,
-                        detailData: detailData,
-                      )),
+                builder: (_) => ServiceCallValidationScreen(
+                  serialNo: detail.serialNo,
+                  lineNo: detail.lineNo,
+                  transNo: header.transNo,
+                  initialData: existingEntry,
+                  assetAge: detail.assetAge,
+                  rentDate: detail.rentDate,
+                  leasesEndingDate: detail.leasesEndingDate,
+                  complaintDetails: detail.complaintDetails,
+                  imageFile: detail.imageFile,
+                  allAvailableOutdoorSerials: outdoorSerials,
+                  problemSources: problemSources,
+                  detailData: detailData,
+                ),
+              ),
             );
+
+            if (result == true && mounted) {
+              ScaffoldMessenger.of(context).removeCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Validasi berhasil disimpan!'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+
+              _refreshSerials(); // JALANKAN REFRESH DI SINI
+            }
           }
-          if (mounted) _refreshSerials();
         },
       ),
     );
