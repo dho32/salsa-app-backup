@@ -40,6 +40,13 @@ import '../../../../models/service_call/validation_status.dart';
 import '../../service_call_validation/components/remote_validation/remote_validation_screen.dart';
 import '../../service_call_validation/service_call_validation_screen.dart';
 
+class ValidationLoadResult {
+  final Map<String, ValidationStatus> statuses;
+  final List<ServiceCallValidationEntryModel> entries;
+
+  ValidationLoadResult({required this.statuses, required this.entries});
+}
+
 class ServiceCallDetailBodyMobile extends StatefulWidget {
   final String transNo;
   final Box<TransactionInfoModel>
@@ -170,52 +177,56 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
-  Future<Map<String, ValidationStatus>> _loadValidationStatuses(
-      String transNo) async {
+  Future<ValidationLoadResult> _loadValidationData(String transNo) async {
     try {
-      // <-- Tambahkan try-catch di sini
       final box =
-          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       final statuses = <String, ValidationStatus>{};
-      final entries = box.values.where((e) => e.transNo == transNo);
 
-      for (final entry in entries) {
+      // Kita .toList() agar bisa digunakan ulang
+      final List<ServiceCallValidationEntryModel> relevantEntries =
+      box.values.where((e) => e.transNo == transNo).toList();
+
+      for (final entry in relevantEntries) {
         final serial = entry.serialNo.trim().toUpperCase();
         statuses[serial] = entry.isCompleted
             ? ValidationStatus.completed
             : ValidationStatus.inProgress;
       }
       print(
-          "✅ Selesai _loadValidationStatuses. Ditemukan ${statuses.length} status."); // Log Sukses
-      return statuses;
+          "✅ Selesai _loadValidationData. Ditemukan ${statuses.length} status.");
+
+      // Kembalikan objek baru yang berisi KEDUANYA
+      return ValidationLoadResult(statuses: statuses, entries: relevantEntries);
     } catch (e) {
-      print("🔴 ERROR di _loadValidationStatuses: $e"); // Log Error
-      // Jika gagal, kembalikan map kosong agar FutureBuilder tidak macet
-      return {};
+      print("🔴 ERROR di _loadValidationData: $e");
+      // Kembalikan data kosong jika error
+      return ValidationLoadResult(statuses: {}, entries: []);
     }
   }
 
   void _refreshSerials() {
     final blocState = context.read<ServiceCallDetailBloc>().state;
     if (blocState is ServiceCallDetailLoaded) {
-      // Panggil _loadValidationStatuses dan TANGANI hasilnya
-      _loadValidationStatuses(blocState.data.header.transNo).then((statuses) {
-        // Hanya panggil setState jika widget masih ada
+      final formCubit = context.read<ScFormCubit>();
+      final List<ServiceCallUnitDetail> allUnits = blocState.data.detail;
+
+      // Panggil fungsi BARU
+      _loadValidationData(blocState.data.header.transNo).then((result) {
         if (mounted) {
-          // Kita tidak perlu menyimpan Future lagi, langsung update UI jika perlu
-          // atau trigger BLoC jika state bergantung pada status ini.
-          // Untuk sekarang, kita anggap FutureBuilder akan menangani tampilan status.
-          // Cukup pastikan future-nya dipanggil.
+          // 1. Update UI (FutureBuilder) dengan 'statuses'
           setState(() {
-            // Jika Anda masih pakai FutureBuilder, update future nya di sini
-            _validationStatusFuture = Future.value(statuses);
+            _validationStatusFuture = Future.value(result.statuses);
           });
-          print("🔄 Status validasi di-refresh di UI.");
+
+          // 2. Update Cubit (Business Logic) dengan 'entries'
+          formCubit.updateValidationProgress(allUnits, result.entries);
+
+          print("🔄 Status validasi di-refresh di UI dan Cubit (with temp data).");
         }
       }).catchError((error) {
         print("🔴 Gagal me-refresh status validasi: $error");
         if (mounted) {
-          // Opsional: Tampilkan SnackBar error
           _showValidationSnackbar(
               context, "Gagal memuat status validasi unit.");
           setState(() {
@@ -226,7 +237,6 @@ class _ServiceCallDetailBodyMobileState
       });
     } else {
       print("ℹ️ _refreshSerials dipanggil TAPI detailState bukan Loaded.");
-      // Set future ke nilai default agar FutureBuilder tidak loading terus
       if (mounted) {
         setState(() {
           _validationStatusFuture = Future.value({});

@@ -180,13 +180,15 @@ class SaveValidationData extends ValidationDropdownEvent {
   final String transNo; // Menggunakan transNo dari ServiceCallValidationEntryModel
   final String serialNo; // Menggunakan serialNo dari ServiceCallValidationEntryModel
   final bool markAsCompleted;
+  final bool showNotification;
 
   const SaveValidationData({
     required this.transNo,
     required this.serialNo,
     this.markAsCompleted = false,
+    this.showNotification = true,
   });
 
   @override
-  List<Object?> get props => [transNo, serialNo, markAsCompleted];
+  List<Object?> get props => [transNo, serialNo, markAsCompleted, showNotification];
 }

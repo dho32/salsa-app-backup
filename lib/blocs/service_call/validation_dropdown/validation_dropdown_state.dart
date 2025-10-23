@@ -10,7 +10,14 @@ enum ValidationViewMode {
   after,
 }
 
-enum ValidationSaveStatus { initial, saving, successDraft, successFinal, error }
+enum ValidationSaveStatus {
+  initial,
+  saving,
+  successDraft,
+  successSilent,
+  successFinal,
+  error
+}
 
 abstract class ValidationDropdownState extends Equatable {
   const ValidationDropdownState();
@@ -112,21 +119,27 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
       data: data ?? this.data,
       selectedUnitType: selectedUnitType ?? this.selectedUnitType,
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
-      capturedMeasurementsBefore: capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
+      capturedMeasurementsBefore:
+          capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
       selectedProblemCards: selectedProblemCards ?? this.selectedProblemCards,
       capturedPhotosAfter: capturedPhotosAfter ?? this.capturedPhotosAfter,
-      capturedMeasurementsAfter: capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
+      capturedMeasurementsAfter:
+          capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
       currentStep: currentStep ?? this.currentStep,
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
       selectedOutdoorSerialNo:
-      selectedOutdoorSerialNo ?? this.selectedOutdoorSerialNo,
+          selectedOutdoorSerialNo ?? this.selectedOutdoorSerialNo,
       noteIndoorOptions: noteIndoorOptions ?? this.noteIndoorOptions,
       noteOutdoorOptions: noteOutdoorOptions ?? this.noteOutdoorOptions,
-      selectedIndoorNoteBefore: selectedIndoorNoteBefore ?? this.selectedIndoorNoteBefore,
-      selectedOutdoorNoteBefore: selectedOutdoorNoteBefore ?? this.selectedOutdoorNoteBefore,
-      selectedIndoorNoteAfter: selectedIndoorNoteAfter ?? this.selectedIndoorNoteAfter,
-      selectedOutdoorNoteAfter: selectedOutdoorNoteAfter ?? this.selectedOutdoorNoteAfter,
+      selectedIndoorNoteBefore:
+          selectedIndoorNoteBefore ?? this.selectedIndoorNoteBefore,
+      selectedOutdoorNoteBefore:
+          selectedOutdoorNoteBefore ?? this.selectedOutdoorNoteBefore,
+      selectedIndoorNoteAfter:
+          selectedIndoorNoteAfter ?? this.selectedIndoorNoteAfter,
+      selectedOutdoorNoteAfter:
+          selectedOutdoorNoteAfter ?? this.selectedOutdoorNoteAfter,
       saveStatus: saveStatus ?? this.saveStatus,
       saveMessage: saveMessage,
     );
@@ -134,25 +147,26 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
 
   @override
   List<Object?> get props => [
-    data,
-    selectedUnitType,
-    selectedProblemCards,
-    capturedPhotosBefore,
-    capturedMeasurementsBefore,
-    capturedPhotosAfter,
-    capturedMeasurementsAfter,
-    currentStep,
-    currentViewMode,
-    outdoorSerialNumbers,
-    selectedOutdoorSerialNo,
-    noteIndoorOptions,
-    noteOutdoorOptions,
-    selectedIndoorNoteBefore,
-    selectedOutdoorNoteBefore,
-    selectedIndoorNoteAfter,
-    selectedOutdoorNoteAfter,
-    saveStatus, saveMessage,
-  ];
+        data,
+        selectedUnitType,
+        selectedProblemCards,
+        capturedPhotosBefore,
+        capturedMeasurementsBefore,
+        capturedPhotosAfter,
+        capturedMeasurementsAfter,
+        currentStep,
+        currentViewMode,
+        outdoorSerialNumbers,
+        selectedOutdoorSerialNo,
+        noteIndoorOptions,
+        noteOutdoorOptions,
+        selectedIndoorNoteBefore,
+        selectedOutdoorNoteBefore,
+        selectedIndoorNoteAfter,
+        selectedOutdoorNoteAfter,
+        saveStatus,
+        saveMessage,
+      ];
 }
 
 class SelectedProblemCard extends Equatable {

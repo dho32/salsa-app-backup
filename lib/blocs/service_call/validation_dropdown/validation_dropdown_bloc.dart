@@ -34,6 +34,7 @@ class ValidationDropdownBloc
 
   List<MeasurementEntry> _getDefaultMeasurements() {
     return kMeasurementLimits.values
+        .where((limits) => limits.id != 'final_temp_in_sc')
         .map((limits) => MeasurementEntry(
               measurementId: limits.id,
               value: 0.0,
@@ -345,11 +346,19 @@ class ValidationDropdownBloc
           saveMessage: "Validasi berhasil disimpan!",
         ));
       } else {
-        // Jika ini adalah SIMPAN DRAFT (dari Step 1, baik tombol Lanjut atau Simpan Draft)
-        emit((state as ValidationDropdownLoaded).copyWith(
-          saveStatus: ValidationSaveStatus.successDraft,
-          saveMessage: "Draft berhasil disimpan",
-        ));
+        if (event.showNotification) {
+          // Jika "Simpan Draft" diklik (showNotification: true)
+          emit((state as ValidationDropdownLoaded).copyWith(
+            saveStatus: ValidationSaveStatus.successDraft, // Tetap 'Draft'
+            saveMessage: "Draft berhasil disimpan",
+          ));
+        } else {
+          // Jika "Lanjut" diklik (showNotification: false)
+          emit((state as ValidationDropdownLoaded).copyWith(
+            saveStatus: ValidationSaveStatus.successSilent, // <-- Pakai status BARU
+            // Tidak perlu 'saveMessage'
+          ));
+        }
       }
       // --- AKHIR PERBAIKAN ---
 

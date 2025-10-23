@@ -214,14 +214,8 @@ class _ServiceCallValidationScreenState
                   bloc.add(SaveValidationData(
                     transNo: widget.transNo,
                     serialNo: widget.serialNo,
+                    showNotification: true,
                   ));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Draft berhasil disimpan'),
-                      backgroundColor: Colors.blue,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
                 },
                 label: Text('Simpan Draft'),
                 style: OutlinedButton.styleFrom(
@@ -259,6 +253,7 @@ class _ServiceCallValidationScreenState
                   bloc.add(SaveValidationData(
                     transNo: widget.transNo,
                     serialNo: widget.serialNo,
+                    showNotification: false,
                   ));
                   bloc.add(ChangeValidationStep(1));
                 },
