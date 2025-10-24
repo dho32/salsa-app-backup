@@ -44,6 +44,8 @@ class ServiceCallHeader {
   final String storeName;
   final String storeAddress;
   final String storeEmail;
+  final String storeLat;
+  final String storeLong;
   final String contactName;
   final String contactPhone;
   final String transNo;
@@ -64,6 +66,8 @@ class ServiceCallHeader {
     required this.storeName,
     required this.storeAddress,
     required this.storeEmail,
+    required this.storeLat,
+    required this.storeLong,
     required this.contactName,
     required this.contactPhone,
     required this.transNo,
@@ -86,6 +90,8 @@ class ServiceCallHeader {
       storeName: json['store_name'] ?? '',
       storeAddress: json['store_address'] ?? '',
       storeEmail: json['store_email'] ?? '',
+      storeLat: json['latitude'] ?? '',
+      storeLong: json['longitude'] ?? '',
       contactName: json['contact_name'] ?? '',
       contactPhone: json['contact_phone'] ?? '',
       transNo: json['trans_no'] ?? '',

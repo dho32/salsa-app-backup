@@ -14,6 +14,9 @@ import 'package:path_provider/path_provider.dart';
 
 // --- Impor BLoC & State yang relevan ---
 import '../../../../blocs/auth/auth_storage.dart';
+import '../../../../blocs/location_validation/location_validation_bloc.dart';
+import '../../../../blocs/otp/otp_bloc.dart';
+import '../../../../blocs/otp/otp_repository.dart';
 import '../../../../blocs/service_call/sc_form/sc_form_cubit.dart';
 import '../../../../blocs/service_call/sc_form/sc_form_state.dart';
 import '../../../../blocs/service_call/service_call_detail/service_call_detail_bloc.dart';
@@ -29,6 +32,7 @@ import '../../../../components/shared_function.dart';
 import '../../../../components/shared_widgets.dart';
 import '../../../../components/widgets/full_screen_image_viewer.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
+import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/common/captured_image_detail.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
@@ -180,12 +184,12 @@ class _ServiceCallDetailBodyMobileState
   Future<ValidationLoadResult> _loadValidationData(String transNo) async {
     try {
       final box =
-      Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       final statuses = <String, ValidationStatus>{};
 
       // Kita .toList() agar bisa digunakan ulang
       final List<ServiceCallValidationEntryModel> relevantEntries =
-      box.values.where((e) => e.transNo == transNo).toList();
+          box.values.where((e) => e.transNo == transNo).toList();
 
       for (final entry in relevantEntries) {
         final serial = entry.serialNo.trim().toUpperCase();
@@ -221,8 +225,6 @@ class _ServiceCallDetailBodyMobileState
 
           // 2. Update Cubit (Business Logic) dengan 'entries'
           formCubit.updateValidationProgress(allUnits, result.entries);
-
-          print("🔄 Status validasi di-refresh di UI dan Cubit (with temp data).");
         }
       }).catchError((error) {
         print("🔴 Gagal me-refresh status validasi: $error");
@@ -345,85 +347,131 @@ class _ServiceCallDetailBodyMobileState
                     final validationStatuses = snapshot.data ?? {};
                     final stateUpload =
                         context.watch<ServiceCallSubmittedBloc>().state;
+                    final header = detailState.data.header;
 
-                    return Stack(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 65.0),
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 35),
-                            child: Column(
-                              children: [
-                                _buildCustomerSection(header),
-                                _buildSection(
-                                    title: 'Tiket Service Call',
-                                    child: _buildTicketSection(header)),
-                                _buildPicPanel(context, formState),
-                                _buildSection(
-                                    title: 'Teknisi Bertugas',
-                                    child: _buildTechnicianPanel(
-                                        context, formState)),
-                                _buildSection(
-                                  title: 'Validasi Unit',
-                                  child: Column(
-                                    children: [
-                                      _buildScanQRButton(context, detailState),
-                                      const SizedBox(height: 8),
-                                      ...detailList.map((item) =>
-                                          _buildDetailCard(header, item,
-                                              validationStatuses)),
-                                    ],
-                                  ),
-                                ),
-                                // Widget Suhu Akhir (Kondisional)
-                                BlocBuilder<ScFormCubit, ScFormState>(
-                                  buildWhen: (prev, current) =>
-                                      prev.allUnitsValidated !=
-                                      current.allUnitsValidated,
-                                  builder: (context, formStateForTemp) {
-                                    final bool isEnabled =
-                                        formStateForTemp.allUnitsValidated;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 16.0),
-                                      child: Stack(
-                                        children: [
-                                          Opacity(
-                                            opacity: isEnabled ? 1.0 : 0.5,
-                                            child: AbsorbPointer(
-                                              absorbing: !isEnabled,
-                                              child: _buildFinalTempSection(
-                                                  context, formStateForTemp),
-                                            ),
-                                          ),
-                                          if (!isEnabled)
-                                            Positioned.fill(
-                                              child: InkWell(
-                                                onTap: () =>
-                                                    _showValidationSnackbar(
-                                                        context,
-                                                        'Selesaikan validasi semua unit dahulu.'),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                child: Container(
-                                                    color: Colors.transparent),
-                                              ),
-                                            ),
-                                        ],
+                    return BlocListener<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
+                      listener: (context, state) {
+                        if (state is ScProceedToOtpDialog) {
+                          // Ambil formState yang sudah divalidasi dari BLoC state
+                          final formState = state.formState;
+                          final double storeLat = double.tryParse(header.storeLat ?? '') ?? 0.0;
+                          final double storeLong = double.tryParse(header.storeLong ?? '') ?? 0.0;
+
+                          showDialog<void>(
+                            context: context,
+                            builder: (_) {
+                              return MultiBlocProvider(
+                                providers: [
+                                  BlocProvider(create: (_) => OtpBloc(repository: OtpRepository())),
+                                  BlocProvider(create: (_) => LocationValidationBloc()),
+                                  BlocProvider.value(value: context.read<UploadProgressCubit>()),
+                                ],
+                                child: OtpDialog(
+                                  transNo: header.transNo,
+                                  shipTo: header.storeId, // Sesuaikan field
+                                  email: header.storeEmail, // Sesuaikan field
+                                  storeLat: storeLat,
+                                  storeLong: storeLong,
+                                  onVerified: () {
+                                    // SAAT OTP BERHASIL, BARU KIRIM EVENT SUBMIT SEBENARNYA
+                                    final progressCubit = context.read<UploadProgressCubit>();
+                                    context.read<ServiceCallSubmittedBloc>().add(
+                                      SubmitValidation(
+                                        transNo: header.transNo,
+                                        createdBy: maintenanceBy,
+                                        createdByName: technicianName,
+                                        createdByIP: maintenanceByIP,
+                                        pathAttachment: header.pathAttachment,
+                                        progressCubit: progressCubit,
+                                        formState: formState, // Gunakan formState dari state
                                       ),
                                     );
                                   },
                                 ),
-                              ],
+                              );
+                            },
+                          );
+                        }
+                      },
+                      child: Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 65.0),
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 35),
+                              child: Column(
+                                children: [
+                                  _buildCustomerSection(header),
+                                  _buildSection(
+                                      title: 'Tiket Service Call',
+                                      child: _buildTicketSection(header)),
+                                  _buildPicPanel(context, formState),
+                                  _buildSection(
+                                      title: 'Teknisi Bertugas',
+                                      child: _buildTechnicianPanel(
+                                          context, formState)),
+                                  _buildSection(
+                                    title: 'Validasi Unit',
+                                    child: Column(
+                                      children: [
+                                        _buildScanQRButton(context, detailState),
+                                        const SizedBox(height: 8),
+                                        ...detailList.map((item) =>
+                                            _buildDetailCard(header, item,
+                                                validationStatuses)),
+                                      ],
+                                    ),
+                                  ),
+                                  // Widget Suhu Akhir (Kondisional)
+                                  BlocBuilder<ScFormCubit, ScFormState>(
+                                    buildWhen: (prev, current) =>
+                                        prev.allUnitsValidated !=
+                                        current.allUnitsValidated,
+                                    builder: (context, formStateForTemp) {
+                                      final bool isEnabled =
+                                          formStateForTemp.allUnitsValidated;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 16.0),
+                                        child: Stack(
+                                          children: [
+                                            Opacity(
+                                              opacity: isEnabled ? 1.0 : 0.5,
+                                              child: AbsorbPointer(
+                                                absorbing: !isEnabled,
+                                                child: _buildFinalTempSection(
+                                                    context, formStateForTemp),
+                                              ),
+                                            ),
+                                            if (!isEnabled)
+                                              Positioned.fill(
+                                                child: InkWell(
+                                                  onTap: () =>
+                                                      _showValidationSnackbar(
+                                                          context,
+                                                          'Selesaikan validasi semua unit dahulu.'),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  child: Container(
+                                                      color: Colors.transparent),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        // Tombol Submit/Retry
-                        if (_hasRetryUploadState(stateUpload))
-                          _buildRetryButton(
-                              stateUpload as ValidationUploadPartial)
-                        else
-                          _buildSubmitButton(context, header, formState),
-                      ],
+                          // Tombol Submit/Retry
+                          if (_hasRetryUploadState(stateUpload))
+                            _buildRetryButton(
+                                stateUpload as ValidationUploadPartial)
+                          else
+                            _buildSubmitButton(context, header, formState),
+                        ],
+                      ),
                     );
                   },
                 );
@@ -558,68 +606,9 @@ class _ServiceCallDetailBodyMobileState
               ),
             ],
           ),
-          // Tambahkan logika foto PIC di sini jika diperlukan
-          const SizedBox(height: 12),
-          _buildPicPhotoButton(context, formState),
         ],
       ),
     );
-  }
-
-  Widget _buildPicPhotoButton(BuildContext context, ScFormState formState) {
-    final formCubit = context.read<ScFormCubit>();
-    final imageDetail = formState.picImageDetail; // Ambil dari state
-
-    if (_isTakingPicPhoto) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8.0),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (imageDetail != null) {
-      return Stack(
-        alignment: Alignment.topRight,
-        children: [
-          GestureDetector(
-            onTap: () => _showFullSizeImage(imageDetail),
-            child: Hero(
-              tag: imageDetail.imagePath,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(
-                  File(imageDetail.imagePath),
-                  width: double.infinity, // Lebarkan
-                  height: 150, // Sesuaikan tinggi
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              formCubit.picImageChanged(null); // Update Cubit
-              formCubit.onFieldChanged();
-            },
-            child: Container(
-              decoration: const BoxDecoration(
-                  color: Colors.black54, shape: BoxShape.circle),
-              padding: const EdgeInsets.all(4),
-              child: const Icon(Icons.close, color: Colors.white, size: 16),
-            ),
-          ),
-        ],
-      );
-    } else {
-      return SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _takePicPhoto,
-          icon: const Icon(Icons.camera_alt_outlined),
-          label: const Text('Ambil Foto PIC'),
-        ),
-      );
-    }
   }
 
   Widget _buildTechnicianPanel(BuildContext context, ScFormState formState) {
@@ -868,7 +857,8 @@ class _ServiceCallDetailBodyMobileState
     final formCubit = context.read<ScFormCubit>();
     final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
-    final String label = '${baseLimits.label} (Min: ${minLimit.toStringAsFixed(1)}${baseLimits.unit})';
+    final String label =
+        '${baseLimits.label} (Min: ${minLimit.toStringAsFixed(1)}${baseLimits.unit})';
 
     final finalTempLimits = MeasurementLimits(
       id: baseLimits.id,
@@ -918,25 +908,20 @@ class _ServiceCallDetailBodyMobileState
             onPressed: () {
               FocusScope.of(context).unfocus();
               final scFormCubit = context.read<ScFormCubit>();
-              // Paksa sinkronisasi controller suhu akhir
-              if (scFormCubit.state.finalTempIn != _finalTempController.text) {
-                scFormCubit.finalTempInChanged(_finalTempController.text);
-                scFormCubit.onFieldChanged();
-              }
+              // Paksa sinkronisasi
+              scFormCubit.picNameChanged(_picNameController.text);
+              scFormCubit.picPhoneChanged(_picPhoneController.text);
+              scFormCubit.picNikChanged(_picNikController.text);
+              scFormCubit.picPositionChanged(_picPositionController.text);
+              scFormCubit.technician2Changed(_technician2Controller.text);
+              scFormCubit.technician3Changed(_technician3Controller.text);
+              scFormCubit.finalTempInChanged(_finalTempController.text);
+              scFormCubit.onFieldChanged();
               final latestFormState = scFormCubit.state;
 
               if (latestFormState.isFormReadyToSubmit) {
-                // Langsung kirim event submit SC
-                final progressCubit = context.read<UploadProgressCubit>();
                 context.read<ServiceCallSubmittedBloc>().add(
-                      SubmitValidation(
-                        transNo: header.transNo,
-                        createdBy: maintenanceBy,
-                        createdByName: technicianName,
-                        createdByIP: maintenanceByIP,
-                        pathAttachment: header.pathAttachment,
-                        progressCubit: progressCubit,
-                      ),
+                      ScFinalValidationRequested(formState: latestFormState),
                     );
               } else {
                 // Tampilkan pesan error spesifik

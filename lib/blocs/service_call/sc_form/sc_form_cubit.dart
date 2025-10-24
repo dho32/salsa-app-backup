@@ -15,6 +15,8 @@ class ScFormCubit extends Cubit<ScFormState> {
   final String transNo;
   late final Box<TransactionInfoModel> _transactionInfoBox; // Gunakan Box SC
 
+  String _normalizeHiveKey(String key) => key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
   ScFormCubit({required this.transNo}) : super(const ScFormState()) {
     _initAndLoadData();
   }
@@ -28,9 +30,9 @@ class ScFormCubit extends Cubit<ScFormState> {
   }
 
   void _loadInitialData() {
+    final String normalizedKey = _normalizeHiveKey(transNo); // ✅ Normalisasi kunci
     try {
-      // <-- ✅ TRY: Tangkap error jika data lama tidak kompatibel
-      final info = _transactionInfoBox.get(transNo);
+      final info = _transactionInfoBox.get(normalizedKey); // ✅ Gunakan kunci baru
       if (info != null) {
         emit(state.copyWith(
           picName: info.picName ?? '',
@@ -46,14 +48,10 @@ class ScFormCubit extends Cubit<ScFormState> {
         ));
       }
     } catch (e) {
-      // <-- ✅ CATCH: Jika gagal load, mulai dengan state kosong
       print(
           "🔴 Gagal memuat draft ScFormCubit (kemungkinan data lama tidak kompatibel): $e");
-      // Tidak perlu emit() state kosong, karena state awal sudah kosong.
-      // Opsional: Hapus data yang rusak
-      _transactionInfoBox.delete(transNo);
+      _transactionInfoBox.delete(normalizedKey); // ✅ Gunakan kunci baru
     } finally {
-      // Selalu panggil validate setelah mencoba load
       _validateForm();
     }
   }
@@ -124,10 +122,9 @@ class ScFormCubit extends Cubit<ScFormState> {
   }
 
   Future<void> _saveStateToHive() async {
-    // Pastikan box sudah terbuka sebelum menulis
     if (!_transactionInfoBox.isOpen) {
       _transactionInfoBox =
-          await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
+      await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
     }
 
     final infoToSave = TransactionInfoModel(transNo: transNo)
@@ -141,7 +138,8 @@ class ScFormCubit extends Cubit<ScFormState> {
       ..finalTemperatureIn = state.finalTempIn
       ..finalTemperatureInImage = state.finalTempInImage;
 
-    await _transactionInfoBox.put(transNo, infoToSave);
+    final String normalizedKey = _normalizeHiveKey(transNo);
+    await _transactionInfoBox.put(normalizedKey, infoToSave);
   }
 
   void updateValidationProgress(

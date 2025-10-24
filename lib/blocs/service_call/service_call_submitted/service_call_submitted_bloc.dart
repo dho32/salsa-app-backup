@@ -14,13 +14,21 @@ import '../../../models/task_maintenance/confirmation_task_queue.dart';
 class ServiceCallSubmittedBloc
     extends Bloc<ServiceCallSubmittedEvent, ServiceCallSubmittedState> {
   final ServiceCallSubmittedRepository repository;
-  String _normalizeHiveKey(String key) => key.replaceAll('/', '');
+  String _normalizeHiveKey(String key) => key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   ServiceCallSubmittedBloc({required this.repository})
       : super(ValidationInitial()) {
     on<SubmitValidation>(_onSubmitValidation);
     on<RetryUpload>(_onRetryUpload);
     on<LoadValidationPartial>(_onLoadValidationPartial);
+    on<ScFinalValidationRequested>(_onScFinalValidationRequested);
+  }
+
+  Future<void> _onScFinalValidationRequested(
+      ScFinalValidationRequested event,
+      Emitter<ServiceCallSubmittedState> emit,
+      ) async {
+    emit(ScProceedToOtpDialog(event.formState));
   }
 
   Future<void> _onSubmitValidation(
@@ -67,22 +75,25 @@ class ServiceCallSubmittedBloc
         // 3. EMIT STATE BERDASARKAN HASIL UPLOAD
         if (uploadResult.allSuccess) {
           final toDelete = box.keys
-              .where((key) => box.get(key)?.transNo == transNo)
+              .where((key) => box.get(key)?.transNo == event.transNo) // <-- Menggunakan event.transNo
               .toList();
           await box.deleteAll(toDelete);
+
+          final List<String> keysToDelete = entries.map((e) => e.serialNo.trim().toUpperCase()).toList();
+          await box.deleteAll(keysToDelete);
 
           final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
           final normalizedKey = _normalizeHiveKey(event.transNo);
           await infoBox.delete(normalizedKey);
 
           final queueBox = await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-          final task = ConfirmationTaskModel(transNo: transNo);
+          final task = ConfirmationTaskModel(transNo: event.transNo);
           // Kita gunakan transNo sebagai key agar tidak ada duplikasi
-          await queueBox.put(transNo, task);
+          await queueBox.put(event.transNo, task);
 
           // Pancarkan state sukses final
           emit(ValidationSuccess(
-              transNo: transNo,
+              transNo: event.transNo,
               presignedDetail: [])); // presignedDetail bisa dikosongkan
         } else {
           // Jika gagal sebagian, pancarkan state ValidationUploadPartial

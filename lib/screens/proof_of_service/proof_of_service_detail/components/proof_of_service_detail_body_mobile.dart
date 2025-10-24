@@ -836,9 +836,6 @@ class _ProofOfServiceDetailBodyMobileState
                   }
                 }
 
-                print(finalTempInValue);
-                print(minLimit);
-                print(tempInValue);
                 if (finalTempInValue != null &&
                     minLimit != null &&
                     tempInValue != null) {
@@ -853,7 +850,7 @@ class _ProofOfServiceDetailBodyMobileState
                 context.read<PosSubmittedBloc>().add(FinalValidationRequested(
                       transNo: header.transNo,
                       customerCode: header
-                          .shipToCode, // (Parameter customerCode ini kita hapus nanti jika tidak jadi dipakai)
+                          .shipToCode,
                     ));
               } else {
                 // Logika untuk menampilkan snackbar jika form belum siap (ini sudah benar)

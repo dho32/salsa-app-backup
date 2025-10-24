@@ -1,3 +1,5 @@
+import '../sc_form/sc_form_state.dart';
+
 abstract class ServiceCallSubmittedState {}
 
 class ValidationInitial extends ServiceCallSubmittedState {}
@@ -39,4 +41,9 @@ class ValidationUploadPartial extends ServiceCallSubmittedState {
 
   List<Object?> get props =>
       [successCount, failureCount, failedFiles, transNo, presignedDetail];
+}
+
+class ScProceedToOtpDialog extends ServiceCallSubmittedState {
+  final ScFormState formState;
+  ScProceedToOtpDialog(this.formState);
 }

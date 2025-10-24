@@ -124,7 +124,7 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
                     return BlocBuilder<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
                         builder: (context, submittedState){
                           final bool shouldShowButton = submittedState is! ValidationUploadPartial ||
-                              (submittedState is ValidationUploadPartial && submittedState.transNo != widget.transNo);
+                              (submittedState.transNo != widget.transNo);
 
                           if (shouldShowButton){
                             return Padding(
