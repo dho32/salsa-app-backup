@@ -146,8 +146,9 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     Widget buildMeasurementWidget(MeasurementEntry mEntry) {
       final limits = availableLimits
           .firstWhereOrNull((ml) => ml.id == mEntry.measurementId);
-      if (limits == null)
+      if (limits == null) {
         return Text("Error: Config for ${mEntry.measurementId} missing");
+      }
 
       final controller = _getController(mEntry);
 
@@ -248,48 +249,46 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ),
           // Dropdown Serial Outdoor (HANYA tampil di step 'Sebelum')
-          if (widget.isBefore) ...[
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child:
-                  BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
-                builder: (context, state) {
-                  if (state is ValidationDropdownLoaded) {
-                    final bool isEnabled = state.currentStep == 0;
-                    return DropdownButtonFormField<String>(
-                      value: state.selectedOutdoorSerialNo,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Pilih Serial No. Outdoor',
-                        border: OutlineInputBorder(),
-                      ),
-                      hint: const Text('Pilih Serial No. Outdoor'),
-                      items: state.outdoorSerialNumbers
-                          .map((serial) => DropdownMenuItem(
-                                value: serial,
-                                child: Text(serial),
-                              ))
-                          .toList(),
-                      onChanged: isEnabled
-                          ? (value) {
-                              if (value != null) {
-                                context
-                                    .read<ValidationDropdownBloc>()
-                                    .add(SelectOutdoorSerial(value));
-                              }
-                            }
-                          : null,
-                      validator: (value) => value == null
-                          ? 'Serial No. Outdoor harus dipilih'
-                          : null,
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child:
+            BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
+              builder: (context, state) {
+                if (state is ValidationDropdownLoaded) {
+                  final bool isEnabled = state.currentStep == 0;
+                  return DropdownButtonFormField<String>(
+                    value: state.selectedOutdoorSerialNo,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Pilih Serial No. Outdoor',
+                      border: OutlineInputBorder(),
+                    ),
+                    hint: const Text('Pilih Serial No. Outdoor'),
+                    items: state.outdoorSerialNumbers
+                        .map((serial) => DropdownMenuItem(
+                      value: serial,
+                      child: Text(serial),
+                    ))
+                        .toList(),
+                    onChanged: isEnabled
+                        ? (value) {
+                      if (value != null) {
+                        context
+                            .read<ValidationDropdownBloc>()
+                            .add(SelectOutdoorSerial(value));
+                      }
+                    }
+                        : null,
+                    validator: (value) => value == null
+                        ? 'Serial No. Outdoor harus dipilih'
+                        : null,
+                  );
+                }
+                return const SizedBox.shrink();
+              },
             ),
-          ],
+          ),
           const SizedBox(height: 8),
           ...outdoorMeasurements.map(buildMeasurementWidget),
           if (isOutdoorSkipped)

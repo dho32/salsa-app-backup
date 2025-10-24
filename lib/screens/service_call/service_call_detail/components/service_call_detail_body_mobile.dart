@@ -1,16 +1,11 @@
 // lib/screens/service_call/service_call_detail/components/service_call_detail_body_mobile.dart
 
-import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hive/hive.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 // --- Impor BLoC & State yang relevan ---
 import '../../../../blocs/auth/auth_storage.dart';
@@ -30,17 +25,16 @@ import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/shared_function.dart';
 import '../../../../components/shared_widgets.dart';
-import '../../../../components/widgets/full_screen_image_viewer.dart';
+import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
-import '../../../../models/common/captured_image_detail.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
-import '../../../../models/service_call/problem_source_model.dart';
 import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
 import '../../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../../models/service_call/transaction_info_model.dart';
 import '../../../../models/service_call/validation_status.dart';
+import '../../../common/services/confirmation_service.dart';
 import '../../service_call_validation/components/remote_validation/remote_validation_screen.dart';
 import '../../service_call_validation/service_call_validation_screen.dart';
 
@@ -73,7 +67,6 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _picNameController;
   late final TextEditingController _picPhoneController;
   late final TextEditingController _picNikController;
-  late final TextEditingController _picPositionController;
   late final TextEditingController _technician1Controller;
   late final TextEditingController _technician2Controller;
   late final TextEditingController _technician3Controller;
@@ -84,7 +77,6 @@ class _ServiceCallDetailBodyMobileState
   String technicianName = '';
   String maintenanceBy = '';
   String maintenanceByIP = '';
-  bool _isTakingPicPhoto = false;
 
   @override
   void initState() {
@@ -98,8 +90,6 @@ class _ServiceCallDetailBodyMobileState
     _picPhoneController =
         TextEditingController(text: initialFormState.picPhone);
     _picNikController = TextEditingController(text: initialFormState.picNik);
-    _picPositionController =
-        TextEditingController(text: initialFormState.picPosition);
     _technician1Controller =
         TextEditingController(); // Diisi oleh _loadUserInfo
     _technician2Controller =
@@ -135,12 +125,6 @@ class _ServiceCallDetailBodyMobileState
         formCubit.onFieldChanged();
       }
     });
-    _picPositionController.addListener(() {
-      if (formCubit.state.picPosition != _picPositionController.text) {
-        formCubit.picPositionChanged(_picPositionController.text);
-        formCubit.onFieldChanged();
-      }
-    });
     _technician2Controller.addListener(() {
       if (formCubit.state.technician2 != _technician2Controller.text) {
         formCubit.technician2Changed(_technician2Controller.text);
@@ -160,7 +144,6 @@ class _ServiceCallDetailBodyMobileState
     _picNameController.dispose();
     _picPhoneController.dispose();
     _picNikController.dispose();
-    _picPositionController.dispose();
     _technician1Controller.dispose();
     _technician2Controller.dispose();
     _technician3Controller.dispose();
@@ -247,12 +230,6 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
-  bool _hasRetryUploadState(ServiceCallSubmittedState state) {
-    return state is ValidationUploadPartial &&
-        state.transNo == widget.transNo &&
-        state.failedFiles.isNotEmpty;
-  }
-
   // --- BUILD METHOD UTAMA ---
   @override
   Widget build(BuildContext context) {
@@ -275,9 +252,6 @@ class _ServiceCallDetailBodyMobileState
         }
         if (_picNikController.text != state.picNik) {
           _picNikController.text = state.picNik;
-        }
-        if (_picPositionController.text != state.picPosition) {
-          _picPositionController.text = state.picPosition;
         }
         if (_technician2Controller.text != state.technician2) {
           _technician2Controller.text = state.technician2;
@@ -315,7 +289,6 @@ class _ServiceCallDetailBodyMobileState
           } else if (detailState is ServiceCallDetailError) {
             return Center(child: Text("Error: ${detailState.message}"));
           } else if (detailState is ServiceCallDetailLoaded) {
-            final header = detailState.data.header;
             final detailList = detailState.data.detail;
 
             return BlocBuilder<ScFormCubit, ScFormState>(
@@ -345,8 +318,6 @@ class _ServiceCallDetailBodyMobileState
                       return const Center(child: CircularProgressIndicator());
                     }
                     final validationStatuses = snapshot.data ?? {};
-                    final stateUpload =
-                        context.watch<ServiceCallSubmittedBloc>().state;
                     final header = detailState.data.header;
 
                     return BlocListener<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
@@ -354,8 +325,8 @@ class _ServiceCallDetailBodyMobileState
                         if (state is ScProceedToOtpDialog) {
                           // Ambil formState yang sudah divalidasi dari BLoC state
                           final formState = state.formState;
-                          final double storeLat = double.tryParse(header.storeLat ?? '') ?? 0.0;
-                          final double storeLong = double.tryParse(header.storeLong ?? '') ?? 0.0;
+                          final double storeLat = double.tryParse(header.storeLat) ?? 0.0;
+                          final double storeLong = double.tryParse(header.storeLong) ?? 0.0;
 
                           showDialog<void>(
                             context: context,
@@ -383,12 +354,34 @@ class _ServiceCallDetailBodyMobileState
                                         createdByIP: maintenanceByIP,
                                         pathAttachment: header.pathAttachment,
                                         progressCubit: progressCubit,
-                                        formState: formState, // Gunakan formState dari state
+                                        formState: formState,
+                                        storeName: header.storeName
                                       ),
                                     );
                                   },
                                 ),
                               );
+                            },
+                          );
+                        }else if (state is ValidationUploadPartial) {
+                          // Tampilkan dialog HANYA JIKA GAGAL
+                          if (state.failureCount > 0) {
+                            showPartialUploadDialog(
+                              context,
+                              state.successCount,
+                              state.failureCount,
+                              state.failedFiles,
+                            );
+                          }
+                        }
+                        else if (state is ValidationSuccess) {
+                          // Jika 100% sukses, langsung tutup halaman detail
+                          ConfirmationService().processQueue();
+                          showSuccessDialog(
+                            context,
+                            "Data berhasil dikirim.",
+                            onOk: () {
+                              Navigator.of(context).popUntil((route) => route.isFirst);
                             },
                           );
                         }
@@ -464,12 +457,7 @@ class _ServiceCallDetailBodyMobileState
                               ),
                             ),
                           ),
-                          // Tombol Submit/Retry
-                          if (_hasRetryUploadState(stateUpload))
-                            _buildRetryButton(
-                                stateUpload as ValidationUploadPartial)
-                          else
-                            _buildSubmitButton(context, header, formState),
+                          _buildSubmitButton(context, header, formState),
                         ],
                       ),
                     );
@@ -569,7 +557,7 @@ class _ServiceCallDetailBodyMobileState
       );
 
   Widget _buildPicPanel(BuildContext context, ScFormState formState) {
-    final formCubit = context.read<ScFormCubit>();
+    context.read<ScFormCubit>();
     return _buildSection(
       title: 'PIC Toko',
       child: Column(
@@ -598,11 +586,8 @@ class _ServiceCallDetailBodyMobileState
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildCustomTextField(
-                  controller: _picPositionController,
-                  hintText: 'Jabatan',
-                  icon: Icons.work_outline,
-                ),
+                // ✅ GANTI DENGAN WIDGET DROPDOWN BARU
+                child: buildJabatanDropdown(context, formState),
               ),
             ],
           ),
@@ -912,7 +897,6 @@ class _ServiceCallDetailBodyMobileState
               scFormCubit.picNameChanged(_picNameController.text);
               scFormCubit.picPhoneChanged(_picPhoneController.text);
               scFormCubit.picNikChanged(_picNikController.text);
-              scFormCubit.picPositionChanged(_picPositionController.text);
               scFormCubit.technician2Changed(_technician2Controller.text);
               scFormCubit.technician3Changed(_technician3Controller.text);
               scFormCubit.finalTempInChanged(_finalTempController.text);
@@ -938,46 +922,6 @@ class _ServiceCallDetailBodyMobileState
                       context, 'Periksa kembali data Anda.');
                 }
               }
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRetryButton(ValidationUploadPartial partial) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.refresh),
-            label: const Text("Coba Upload Ulang Foto Gagal"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              final uploadCubit = context.read<UploadProgressCubit>();
-              uploadCubit.reset();
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => BlocProvider.value(
-                  value: uploadCubit,
-                  child: const UploadProgressDialog(),
-                ),
-              );
-              context.read<ServiceCallSubmittedBloc>().add(
-                    RetryUpload(
-                      transNo: partial.transNo,
-                      failedFiles: partial.failedFiles,
-                      presignedDetail: partial.presignedDetail,
-                      progressCubit: uploadCubit,
-                    ),
-                  );
             },
           ),
         ),
@@ -1033,57 +977,4 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  // Fungsi foto PIC
-  Future<void> _takePicPhoto() async {
-    setState(() => _isTakingPicPhoto = true);
-    final formCubit = context.read<ScFormCubit>();
-    try {
-      final picker = ImagePicker();
-      final XFile? photo = await picker.pickImage(source: ImageSource.camera);
-      if (photo == null || !mounted) return;
-
-      final tempDir = await getTemporaryDirectory();
-      final targetPath = p.join(
-          tempDir.path, 'pic_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      final XFile? compressedImage =
-          await FlutterImageCompress.compressAndGetFile(
-        photo.path,
-        targetPath,
-        quality: 70,
-        minWidth: 1080,
-        minHeight: 1920,
-      );
-      if (compressedImage == null) return;
-
-      final userData = await AuthStorage.getUser();
-      final capturedDetail = CapturedImageDetail(
-        imagePath: compressedImage.path,
-        timestamp: DateTime.now(),
-        latitude: 0,
-        longitude: 0,
-        address: "",
-        technicianName: userData['name'] ?? 'Unknown',
-        deviceModel: userData['device_model'] ?? 'Unknown Device',
-        transNo: widget.transNo,
-      );
-
-      formCubit.picImageChanged(capturedDetail); // Update Cubit
-      formCubit.onFieldChanged();
-    } catch (e) {
-      if (mounted)
-        _showValidationSnackbar(context, "Gagal mengambil detail foto: $e");
-    } finally {
-      if (mounted) setState(() => _isTakingPicPhoto = false);
-    }
-  }
-
-  void _showFullSizeImage(CapturedImageDetail? imageDetail) {
-    if (imageDetail != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => FullScreenImageViewer(imageDetail: imageDetail)),
-      );
-    }
-  }
 }

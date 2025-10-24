@@ -75,42 +75,43 @@ class ServiceCallSubmittedBloc
         // 3. EMIT STATE BERDASARKAN HASIL UPLOAD
         if (uploadResult.allSuccess) {
           final toDelete = box.keys
-              .where((key) => box.get(key)?.transNo == event.transNo) // <-- Menggunakan event.transNo
+              .where((key) => box.get(key)?.transNo == event.transNo)
               .toList();
           await box.deleteAll(toDelete);
 
-          final List<String> keysToDelete = entries.map((e) => e.serialNo.trim().toUpperCase()).toList();
-          await box.deleteAll(keysToDelete);
-
-          final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
-          final normalizedKey = _normalizeHiveKey(event.transNo);
+          // 1.B. SUKSES: Hapus data info PIC/Teknisi
           await infoBox.delete(normalizedKey);
 
+          // 1.C. SUKSES: Tambah ke antrian konfirmasi
           final queueBox = await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
           final task = ConfirmationTaskModel(transNo: event.transNo);
-          // Kita gunakan transNo sebagai key agar tidak ada duplikasi
           await queueBox.put(event.transNo, task);
 
-          // Pancarkan state sukses final
+          // 1.D. SUKSES: Pancarkan state sukses
           emit(ValidationSuccess(
               transNo: event.transNo,
-              presignedDetail: [])); // presignedDetail bisa dikosongkan
+              presignedDetail: []));
         } else {
-          // Jika gagal sebagian, pancarkan state ValidationUploadPartial
-          // Simpan juga info retry ke cache di sini
+          // 2.A. GAGAL: Simpan info kegagalan ke cache
           final cacheBox =
-              await Hive.openBox(kServiceCallValidationPartialHiveBox);
-          await cacheBox.put(transNo, {
-            'transNo': transNo,
+          await Hive.openBox(kServiceCallValidationPartialHiveBox);
+
+          await cacheBox.put(event.transNo, {
+            'transNo': event.transNo,
             'failedFiles': uploadResult.failedFiles,
             'presignedDetail': presignedDetail,
+            'storeName': event.storeName,
           });
 
+          // 2.B. GAGAL: JANGAN HAPUS DATA DARI HIVE!
+
+          // 2.C. GAGAL: Emit ValidationUploadPartial
+          // Ini akan ditangkap UI untuk menampilkan dialog
           emit(ValidationUploadPartial(
             successCount: uploadResult.successCount,
             failureCount: uploadResult.failureCount,
             failedFiles: uploadResult.failedFiles,
-            transNo: transNo,
+            transNo: event.transNo,
             presignedDetail: presignedDetail,
           ));
         }

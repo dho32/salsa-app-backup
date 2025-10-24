@@ -18,6 +18,7 @@ class SubmitValidation extends ServiceCallSubmittedEvent {
   final String pathAttachment;
   final UploadProgressCubit progressCubit;
   final ScFormState formState;
+  final String storeName;
 
   const SubmitValidation({
     required this.transNo,
@@ -27,6 +28,7 @@ class SubmitValidation extends ServiceCallSubmittedEvent {
     required this.pathAttachment,
     required this.progressCubit,
     required this.formState,
+    required this.storeName,
   });
 
   @override

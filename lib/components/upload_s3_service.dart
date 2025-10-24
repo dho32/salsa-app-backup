@@ -14,6 +14,8 @@ import '../models/proof_of_service/pos_validation_entry_model.dart';
 import '../models/service_call/sc_unserviceable_model.dart';
 import '../models/service_call/transaction_info_model.dart';
 
+
+
 class UploadResult {
   final int successCount;
   final int failureCount;
@@ -50,13 +52,24 @@ Future<UploadResult> uploadAllImagesToS3(
 
   final Map<String, String> localFileMap = {};
 
+  // Gunakan fungsi helper yang sudah kita tambahkan
   final transactionInfo = infoBox.get(getHiveKeyForTransaction(transNo));
+
+  // 1. Ambil Foto PIC (jika ada)
   if (transactionInfo?.picImageDetail != null) {
     final imageDetail = transactionInfo!.picImageDetail!;
     final filename = imageDetail.imagePath.split('/').last;
     localFileMap[filename] = imageDetail.imagePath;
   }
 
+  // 2. Ambil Foto Final Temp In (INI YANG HILANG)
+  if (transactionInfo?.finalTemperatureInImage != null) {
+    final imageDetail = transactionInfo!.finalTemperatureInImage!;
+    final filename = imageDetail.imagePath.split('/').last;
+    localFileMap[filename] = imageDetail.imagePath;
+  }
+
+  // 3. Ambil semua foto dari validasi unit
   final validationEntries = validationBox.values.where((e) => e.transNo == transNo);
   for (final entry in validationEntries) {
     List<CapturedImageDetail> allUnitImages = [

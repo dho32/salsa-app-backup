@@ -14,7 +14,6 @@ import '../../../models/service_call/validation_status.dart';
 class ScFormCubit extends Cubit<ScFormState> {
   final String transNo;
   late final Box<TransactionInfoModel> _transactionInfoBox; // Gunakan Box SC
-
   String _normalizeHiveKey(String key) => key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   ScFormCubit({required this.transNo}) : super(const ScFormState()) {
@@ -33,11 +32,14 @@ class ScFormCubit extends Cubit<ScFormState> {
     final String normalizedKey = _normalizeHiveKey(transNo); // ✅ Normalisasi kunci
     try {
       final info = _transactionInfoBox.get(normalizedKey); // ✅ Gunakan kunci baru
+      final String? validPosition = kJabatanOptions.contains(info?.picPosition ?? '')
+          ? info?.picPosition!
+          : '';
       if (info != null) {
         emit(state.copyWith(
           picName: info.picName ?? '',
           picNik: info.picNik ?? '',
-          picPosition: info.picPosition ?? '',
+          picPosition: validPosition ?? '',
           picPhone: info.picPhone ?? '',
           technician2: info.technician2 ?? '',
           technician3: info.technician3 ?? '',
