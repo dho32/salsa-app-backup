@@ -182,22 +182,50 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           isSkipEnabled: true,
           isSkipped: mEntry.isSkipped ?? false,
           onSkipChanged: (isSkipped) {
+            final bloc = context.read<ValidationDropdownBloc>();
+            // Dapatkan state saat ini untuk memeriksa measurement lain
+            final currentState = bloc.state;
+            if (currentState is! ValidationDropdownLoaded) return; // Guard clause
+
+            final measurementId = mEntry.measurementId;
+            // Tentukan apakah measurement ini Indoor atau Outdoor
+            final bool isIndoor = measurementId.toLowerCase().contains('temperature');
+
             if (isSkipped) {
-              // Jika di-skip, bersihkan controller dan kirim update
+              // --- Logika saat MENJADI SKIPPED (Kode lama Anda sudah benar) ---
               controller.clear();
               final event = widget.isBefore
-                  ? UpdateMeasurementBefore(mEntry.copyWith(
-                      value: 0.0, capturedImage: null, isSkipped: true))
-                  : UpdateMeasurementAfter(mEntry.copyWith(
-                      value: 0.0, capturedImage: null, isSkipped: true));
-              context.read<ValidationDropdownBloc>().add(event);
+                  ? UpdateMeasurementBefore(mEntry.copyWith(value: 0.0, capturedImage: null, isSkipped: true))
+                  : UpdateMeasurementAfter(mEntry.copyWith(value: 0.0, capturedImage: null, isSkipped: true));
+              bloc.add(event);
             } else {
-              // Jika di-unskip, kirim update HANYA untuk flag isSkipped
-              // Nilai dan foto akan diisi oleh pengguna nanti
+              // --- Logika saat MENJADI UNSKIPPED (Skip dibatalkan) ---
+              // 1. Update flag isSkipped di BLoC (seperti kode lama Anda)
               final event = widget.isBefore
                   ? UpdateMeasurementBefore(mEntry.copyWith(isSkipped: false))
                   : UpdateMeasurementAfter(mEntry.copyWith(isSkipped: false));
-              context.read<ValidationDropdownBloc>().add(event);
+              bloc.add(event);
+
+              // 2. Periksa apakah ada measurement LAIN di grup yang SAMA
+              //    (Indoor/Outdoor dan Sebelum/Sesudah) yang MASIH di-skip.
+              final List<MeasurementEntry> relevantMeasurements = widget.isBefore
+                  ? currentState.capturedMeasurementsBefore
+                  : currentState.capturedMeasurementsAfter;
+
+              final bool anyOtherSkippedInGroup = relevantMeasurements
+                  .where((m) => m.measurementId != measurementId) // Kecualikan diri sendiri
+                  .any((m) {
+                bool otherIsIndoor = m.measurementId.toLowerCase().contains('temperature');
+                // Cek: Apakah grupnya sama (Indoor==Indoor atau Outdoor==Outdoor)?
+                // DAN Apakah item lain itu di-skip?
+                return (isIndoor == otherIsIndoor) && (m.isSkipped ?? false);
+              });
+
+              // 3. JIKA TIDAK ADA measurement lain yang di-skip di grup ini,
+              //    maka reset note untuk grup ini.
+              if (!anyOtherSkippedInGroup) {
+                bloc.add(NoteChanged(null, isIndoor: isIndoor, isBefore: widget.isBefore)); // Kirim null untuk reset
+              }
             }
           },
         ),

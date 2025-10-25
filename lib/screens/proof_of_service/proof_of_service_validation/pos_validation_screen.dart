@@ -45,9 +45,17 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   final _noteController = TextEditingController();
 
   bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
+    print(measurements.first.isSkipped);
+    print(measurements.first.value);
+    print(measurements.first.unit);
+    print(measurements.first.capturedImage);
+    print(measurements.first.measurementId);
+    print(measurements.isEmpty);
     if (measurements.isEmpty) return true;
+    print(measurements.every(((m) => m.isSkipped ?? false || (m.capturedImage != null && m.value != 0))));
     return measurements
         .every((m) => m.isSkipped ?? false || (m.capturedImage != null && m.value != 0));
+    
   }
 
   @override

@@ -8,6 +8,7 @@ import 'package:salsa/components/upload_s3_service.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model_ext.dart';
 
+import '../../../components/services/hive_clear_service.dart';
 import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 
@@ -74,13 +75,15 @@ class ServiceCallSubmittedBloc
 
         // 3. EMIT STATE BERDASARKAN HASIL UPLOAD
         if (uploadResult.allSuccess) {
-          final toDelete = box.keys
-              .where((key) => box.get(key)?.transNo == event.transNo)
-              .toList();
-          await box.deleteAll(toDelete);
+          // final toDelete = box.keys
+          //     .where((key) => box.get(key)?.transNo == event.transNo)
+          //     .toList();
+          // await box.deleteAll(toDelete);
+          //
+          // // 1.B. SUKSES: Hapus data info PIC/Teknisi
+          // await infoBox.delete(normalizedKey);
 
-          // 1.B. SUKSES: Hapus data info PIC/Teknisi
-          await infoBox.delete(normalizedKey);
+          await clearTransactionData(event.transNo);
 
           // 1.C. SUKSES: Tambah ke antrian konfirmasi
           final queueBox = await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
@@ -137,24 +140,25 @@ class ServiceCallSubmittedBloc
         progressCubit: event.progressCubit,
       );
 
-      final cacheBox = await Hive.openBox(kServiceCallValidationPartialHiveBox);
-      final box = await Hive.openBox<ServiceCallValidationEntryModel>(
-          kServiceCallHiveBox);
-
       if (result.allSuccess) {
         // Cleanup Hive
-        final toDelete = box.keys.where((key) {
-          final item = box.get(key);
-          return item?.transNo == event.transNo;
-        }).toList();
-        await box.deleteAll(toDelete);
+        // final toDelete = box.keys.where((key) {
+        //   final item = box.get(key);
+        //   return item?.transNo == event.transNo;
+        // }).toList();
+        // await box.deleteAll(toDelete);
+        //
+        // final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
+        // final normalizedKey = _normalizeHiveKey(event.transNo);
+        // await infoBox.delete(normalizedKey);
+        //
+        // await cacheBox.delete(event.transNo);
+        // await cacheBox.flush();
 
-        final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
-        final normalizedKey = _normalizeHiveKey(event.transNo);
-        await infoBox.delete(normalizedKey);
-
-        await cacheBox.delete(event.transNo);
-        await cacheBox.flush();
+        await clearTransactionData(event.transNo);
+        final queueBox = await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+        final task = ConfirmationTaskModel(transNo: event.transNo);
+        await queueBox.put(event.transNo, task);
 
         emit(ValidationSuccess(
           transNo: event.transNo,
@@ -164,6 +168,7 @@ class ServiceCallSubmittedBloc
         // Reset state setelah success → agar tombol kembali normal
         // emit(ValidationInitial());
       } else {
+        final cacheBox = await Hive.openBox(kServiceCallValidationPartialHiveBox);
         await cacheBox.put(event.transNo, {
           'transNo': event.transNo,
           'failedFiles': result.failedFiles,

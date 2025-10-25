@@ -102,17 +102,15 @@ class _AppInitializerState extends State<AppInitializer> {
     await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
     await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
     await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox); // <-- Error Null->bool mungkin terjadi di sini
+    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
     await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
     await Hive.openBox('otp_state');
     await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
     await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
 
     ConfirmationService().processQueue();
   }
 
-  // Fungsi gabungan untuk initState (TETAP SAMA)
   // Fungsi ini dipanggil oleh initState dan future-nya ditampung
   Future<void> _initialize() async {
     if (!_oneTimeSetupDone) {
@@ -122,12 +120,10 @@ class _AppInitializerState extends State<AppInitializer> {
     await _loadRetryableData();
   }
 
-  // Fungsi retry (TETAP SAMA)
   // Fungsi ini HARUS pakai setState untuk memicu FutureBuilder
   void _retryInitialization() {
     setState(() {
       // Kita hanya mengulang proses yang bisa gagal (load data),
-      // bukan setup sekali jalan.
       _initializationFuture = _loadRetryableData();
     });
   }
@@ -136,7 +132,7 @@ class _AppInitializerState extends State<AppInitializer> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: _initializationFuture, // <-- Variabel ini sekarang 100% aman
+      future: _initializationFuture,
       builder: (context, snapshot) {
         // Cek status future
         print(snapshot.connectionState);
@@ -145,7 +141,6 @@ class _AppInitializerState extends State<AppInitializer> {
           // JIKA SEMUA INISIALISASI SELESAI
           if (snapshot.hasError) {
             // Jika ada error, tampilkan halaman error
-            // Error 'Null' to 'bool' dari Hive akan masuk ke sini
             return MaterialApp(
               debugShowCheckedModeBanner: false,
               home: ErrorRetryScreen(
@@ -224,7 +219,6 @@ class _AppInitializerState2 extends State<AppInitializer> {
     await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
     await Hive.openBox('otp_state');
     await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
     await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
 
     await SystemChrome.setPreferredOrientations([

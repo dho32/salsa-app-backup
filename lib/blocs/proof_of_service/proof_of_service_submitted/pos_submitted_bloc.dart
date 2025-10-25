@@ -9,6 +9,7 @@ import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/proof_of_service/pos_validasion_entry_model_ext.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
+import '../../../components/services/hive_clear_service.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 
@@ -131,12 +132,13 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
         if (uploadResult.allSuccess) {
           // 5. Jika semua sukses, hapus data dari Hive
-          for (var entry in entries) {
-            await validationBox.delete(entry.serialNo.trim().toUpperCase());
-          }
-          await infoBox.delete(
-              getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
+          // for (var entry in entries) {
+          //   await validationBox.delete(entry.serialNo.trim().toUpperCase());
+          // }
+          // await infoBox.delete(
+          //     getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
 
+          await clearTransactionData(event.transNo);
           final queueBox =
               await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
           final task = ConfirmationTaskModel(
@@ -192,22 +194,22 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         progressCubit: event.progressCubit,
       );
 
-      final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
-      final validationBox =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-      final infoBox = await Hive.openBox<PosTransactionInfoModel>(
-          kPosTransactionInfoHiveBox);
+      // final validationBox =
+      //     await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      // final infoBox = await Hive.openBox<PosTransactionInfoModel>(
+      //     kPosTransactionInfoHiveBox);
 
       if (result.allSuccess) {
         // Jika retry berhasil, hapus semua data
-        final toDelete =
-            validationBox.values.where((e) => e.transNo == event.transNo);
-        for (var entry in toDelete) {
-          await validationBox.delete(entry.serialNo.trim().toUpperCase());
-        }
-        await infoBox.delete(getHiveKeyForTransaction(event.transNo));
-        await cacheBox.delete(event.transNo);
+        // final toDelete =
+        //     validationBox.values.where((e) => e.transNo == event.transNo);
+        // for (var entry in toDelete) {
+        //   await validationBox.delete(entry.serialNo.trim().toUpperCase());
+        // }
+        // await infoBox.delete(getHiveKeyForTransaction(event.transNo));
+        // await cacheBox.delete(event.transNo);
 
+        await clearTransactionData(event.transNo);
         final queueBox =
             await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
         final task =
@@ -217,6 +219,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         emit(PosValidationSuccess());
       } else {
         // Jika masih gagal, update cache dengan sisa file yang masih gagal
+        final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
         final cleanFailedFiles = result.failedFiles.map((e) => e.split(' (').first).toList();
 
         await cacheBox.put(event.transNo, {

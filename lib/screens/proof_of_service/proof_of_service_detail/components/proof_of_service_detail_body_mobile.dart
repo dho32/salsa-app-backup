@@ -23,6 +23,7 @@ import '../../../../blocs/proof_of_service/proof_of_service_submitted/pos_submit
 import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/shared_widgets.dart';
+import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
@@ -575,15 +576,7 @@ class _ProofOfServiceDetailBodyMobileState
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildCustomTextField(
-                  initialValue: formState.picPosition,
-                  hintText: 'Jabatan',
-                  icon: Icons.work_outline,
-                  onChanged: (value) {
-                    formCubit.picPositionChanged(value);
-                    formCubit.onFieldChanged();
-                  },
-                ),
+                child: posPositionDropdown(context, formState),
               ),
             ],
           )

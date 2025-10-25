@@ -9,6 +9,7 @@ import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import '../../../components/services/hive_clear_service.dart';
 import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/proof_of_service/pos_transaction_info_model.dart';
@@ -309,28 +310,30 @@ class PosUnserviceableBloc
 
   // Method baru untuk membersihkan semua data terkait transaksi ini
   Future<void> _clearAllTransactionData() async {
-    // 1. Hapus draft laporan unserviceable
-    await _draftBox.delete(transNo);
+    // // 1. Hapus draft laporan unserviceable
+    // await _draftBox.delete(transNo);
+    //
+    // // 2. Hapus cache detail utama dari halaman sebelumnya
+    // final detailCacheBox =
+    //     await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+    // await detailCacheBox.delete(transNo);
+    //
+    // // 3. Hapus info transaksi (PIC, teknisi, dll)
+    // final infoBox =
+    //     await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+    // await infoBox.delete(getHiveKeyForTransaction(transNo));
+    //
+    // // 4. Hapus data validasi unit (jika teknisi sempat mengisinya)
+    // final validationBox =
+    //     await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+    // final validationKeysToDelete = validationBox.keys.where((key) {
+    //   final entry = validationBox.get(key);
+    //   return entry != null && entry.transNo == transNo;
+    // }).toList();
+    // await validationBox.deleteAll(validationKeysToDelete);
 
-    // 2. Hapus cache detail utama dari halaman sebelumnya
-    final detailCacheBox =
-        await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-    await detailCacheBox.delete(transNo);
 
-    // 3. Hapus info transaksi (PIC, teknisi, dll)
-    final infoBox =
-        await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    await infoBox.delete(getHiveKeyForTransaction(transNo));
-
-    // 4. Hapus data validasi unit (jika teknisi sempat mengisinya)
-    final validationBox =
-        await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    final validationKeysToDelete = validationBox.keys.where((key) {
-      final entry = validationBox.get(key);
-      return entry != null && entry.transNo == transNo;
-    }).toList();
-    await validationBox.deleteAll(validationKeysToDelete);
-
+    await clearTransactionData(transNo);
     final queueBox =
     await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
     final task =

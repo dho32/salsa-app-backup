@@ -13,6 +13,7 @@ import 'package:salsa/blocs/service_call/service_call_unserviceable/sc_unservice
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart';
 
 import '../../../components/constants.dart';
+import '../../../components/services/hive_clear_service.dart';
 import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/common/captured_image_detail.dart';
@@ -315,23 +316,24 @@ class SCUnserviceableBloc
   Future<void> _clearAllTransactionData() async {
     try {
       // 1. Hapus draft (box ini sudah dibuka di constructor BLoC, jadi aman)
-      await _draftBox.delete(transNo);
-
-      // --- ✅ PERBAIKAN: Gunakan Hive.box() ✅ ---
-      // 2. Akses info transaksi SC (Box SC) yang sudah dibuka di main.dart
-      final infoBox = Hive.box<TransactionInfoModel>(kTransactionInfoHiveBox);
-      await infoBox.delete(getHiveKeyForTransaction(transNo));
-
-      // 3. Akses data validasi unit SC (Box SC) yang sudah dibuka di main.dart
-      final validationBox = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-      // --- AKHIR PERBAIKAN ---
-
-      // Logika mencari keys tetap sama
-      final validationKeysToDelete = validationBox.keys.where((key) {
-        final entry = validationBox.get(key);
-        return entry != null && entry.transNo == transNo;
-      }).toList();
-      await validationBox.deleteAll(validationKeysToDelete);
+      // await _draftBox.delete(transNo);
+      //
+      // // --- ✅ PERBAIKAN: Gunakan Hive.box() ✅ ---
+      // // 2. Akses info transaksi SC (Box SC) yang sudah dibuka di main.dart
+      // final infoBox = Hive.box<TransactionInfoModel>(kTransactionInfoHiveBox);
+      // await infoBox.delete(getHiveKeyForTransaction(transNo));
+      //
+      // // 3. Akses data validasi unit SC (Box SC) yang sudah dibuka di main.dart
+      // final validationBox = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      // // --- AKHIR PERBAIKAN ---
+      //
+      // // Logika mencari keys tetap sama
+      // final validationKeysToDelete = validationBox.keys.where((key) {
+      //   final entry = validationBox.get(key);
+      //   return entry != null && entry.transNo == transNo;
+      // }).toList();
+      // await validationBox.deleteAll(validationKeysToDelete);
+      await clearTransactionData(transNo);
 
       // 4. Akses antrian konfirmasi yang sudah dibuka di main.dart
       final queueBox = Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox);

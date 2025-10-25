@@ -12,6 +12,7 @@ class ErrorRetryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print(errorMessage);
     return Scaffold(
       body: Center(
         child: Padding(

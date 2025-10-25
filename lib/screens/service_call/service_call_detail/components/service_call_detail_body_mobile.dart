@@ -587,7 +587,7 @@ class _ServiceCallDetailBodyMobileState
               const SizedBox(width: 12),
               Expanded(
                 // ✅ GANTI DENGAN WIDGET DROPDOWN BARU
-                child: buildJabatanDropdown(context, formState),
+                child: scPositionDropdown(context, formState),
               ),
             ],
           ),
