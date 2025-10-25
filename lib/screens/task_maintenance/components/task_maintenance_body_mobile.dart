@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:salsa/screens/task_maintenance/components/widget/task_maintenance_widgets.dart';
 
@@ -11,7 +14,9 @@ import '../../../blocs/failed_uploads/failed_uploads_event.dart';
 import '../../../blocs/failed_uploads/failed_uploads_state.dart';
 import '../../../blocs/task_maintenance/task_maintenance_bloc.dart';
 import '../../../blocs/task_maintenance/task_maintenance_event.dart';
+import '../../../blocs/task_maintenance/task_maintenance_repository.dart';
 import '../../../blocs/task_maintenance/task_maintenance_state.dart';
+import '../../../components/constants.dart';
 import '../../../components/widgets/scan_qr.dart';
 import '../../../models/task_maintenance/task_maintenance_model.dart';
 import '../../common/failed_uploads/failed_uploads_screen.dart';
@@ -235,13 +240,19 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                         // KONDISI 1: Hanya ada 1 hasil DAN itu sudah selesai
                         if (suggestions.length == 1 &&
                             suggestions.first.status.toUpperCase() != 'AKTIF') {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(suggestions.first.status),
-                              backgroundColor: Colors.orange[500],
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                          final suggestion = suggestions.first;
+                          if (suggestion.status == "Email & Lokasi Toko Belum Terdaftar") {
+                            // Tampilkan dialog update
+                            _showUpdateInfoDialog(suggestion);
+                          }else{
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(suggestions.first.status),
+                                backgroundColor: Colors.orange[500],
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
                           return;
                         }
 
@@ -249,7 +260,9 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                         if (suggestions.length == 1 &&
                             suggestions.first.transNo.trim().toUpperCase() ==
                                 userInput.toUpperCase()) {
-                          _navigateToDetail(suggestions.first);
+
+                          final suggestion = suggestions.first;
+                          _navigateToDetail(suggestion);
                         }
                         // KONDISI 3: Tampilkan dialog sugesti (lebih dari 1 hasil, atau 1 hasil tapi tidak cocok persis)
                         else {
@@ -397,5 +410,205 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       print('✅ Kembali ke Task Maintenance, memuat ulang daftar gagal...');
       context.read<FailedUploadsBloc>().add(LoadFailedUploads());
     });
+  }
+
+  Future<void> _showUpdateInfoDialog(TransactionSuggestion suggestion) async {
+    final emailController = TextEditingController();
+    // Gunakan GlobalKey untuk mengakses FormState jika perlu validasi email
+    final formKey = GlobalKey<FormState>();
+    bool isLoading = false; // State lokal untuk loading di dalam dialog
+    String? errorMessage;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // User harus berinteraksi
+      builder: (dialogContext) {
+        // StatefulBuilder agar bisa update loading di dalam dialog
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Update Info Toko'),
+              content: SingleChildScrollView( // Agar tidak overflow jika keyboard muncul
+                child: Form( // Bungkus dengan Form
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          'Email dan lokasi untuk toko "${suggestion.customerName}" (${suggestion.customerCode}) belum terdaftar.'),
+                      const SizedBox(height: 16),
+                      const Text(kStringDialogUpdateLocation),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email Toko',
+                          hintText: 'contoh@email.com',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) { // Contoh validasi email sederhana
+                          if (value == null || value.isEmpty) {
+                            return 'Email tidak boleh kosong';
+                          }
+                          if (!value.contains('@') || !value.contains('.')) {
+                            return 'Format email tidak valid';
+                          }
+                          return null;
+                        },
+                        onChanged: (_) {
+                          if (errorMessage != null) {
+                            setStateDialog(() => errorMessage = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      // Tampilkan loading jika sedang proses
+                      if (isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else if (errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 13),
+                          ),
+                        ),
+
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                // Tombol Batal (nonaktif jika loading)
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Batal'),
+                ),
+                // Tombol Update (nonaktif jika loading)
+                ElevatedButton(
+                  onPressed: isLoading ? null : () async {
+                    // Validasi form dulu
+                    if (formKey.currentState?.validate() ?? false) {
+                      setStateDialog(() => isLoading = true); // Mulai loading
+                      try {
+                        // 1. Ambil Lokasi
+                        final position = await _getCurrentLocation();
+
+                        // 2. Panggil API Update (buat fungsi helper)
+                        await _callUpdateApi(
+                          widget.userData['user_id'] ?? '',
+                          suggestion.customerCode,
+                          emailController.text,
+                          position.latitude,
+                          position.longitude,
+                        );
+
+                        // 3. Jika Sukses: Tutup dialog & Navigasi
+                        if (mounted) {
+                          Navigator.of(dialogContext).pop(); // Tutup dialog update
+                          _navigateToDetail(suggestion); // Lanjutkan navigasi
+                        }
+
+                      } catch (e) {
+                        // 4. Jika Gagal: Tampilkan error
+                        if (mounted) {
+                          final String displayError = e.toString().replaceFirst("Exception: ", "");
+                          if (mounted) {
+                            // Set state DI DALAM dialog untuk menampilkan error
+                            setStateDialog(() => errorMessage = displayError);
+                          }
+                        }
+                      } finally {
+                        // Pastikan loading berhenti
+                        if (mounted) {
+                          setStateDialog(() => isLoading = false);
+                        }
+                      }
+                    }
+                  },
+                  child: const Text('Update'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<Position> _getCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Test if location services are enabled.
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled don't continue
+      // accessing the position and request users of the
+      // App to enable the location services.
+      return Future.error('Location services are disabled.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied, next time you could try
+        // requesting permissions again (this is also where
+        // Android's shouldShowRequestPermissionRationale
+        // returned true. According to Android guidelines
+        // your App should show an explanatory UI now.
+        return Future.error('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever, handle appropriately.
+      // Opsional: Buka pengaturan aplikasi
+      // await openAppSettings();
+      return Future.error(
+          'Location permissions are permanently denied, we cannot request permissions.');
+    }
+
+    // When we reach here, permissions are granted and we can
+    // continue accessing the position of the device.
+    try {
+      // Tingkatkan akurasi dan tambahkan timeout
+      return await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.best,
+      );
+    } on TimeoutException {
+      print("🔴 [Location] TimeoutException"); // Log timeout
+      return Future.error('Gagal mendapatkan lokasi: Waktu habis. Coba lagi.');
+    } catch (e) {
+      print("🔴 [Location] Other Exception: ${e.toString()}"); // Log error lain
+      return Future.error('Gagal mendapatkan lokasi: ${e.toString()}');
+    }
+  }
+
+  Future<void> _callUpdateApi(
+      String updatedBy,
+      String customerCode,
+      String email,
+      double latitude,
+      double longitude
+      ) async {
+    // Buat instance dari repository Anda
+    final repository = TaskMaintenanceRepository();
+
+    try {
+      // Panggil method baru yang ada di repository
+      await repository.updateStoreInfo(
+        updatedBy: updatedBy,
+        customerCode: customerCode,
+        email: email,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    } catch (e) {
+      throw Exception(e.toString()); // Lempar pesan error asli
+    }
   }
 }

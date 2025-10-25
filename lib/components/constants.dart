@@ -39,6 +39,10 @@ Ditemukan unit AC bermasalah yang belum memiliki tiket Service Call aktif pada t
 Mohon koordinasikan dengan PIC toko untuk melakukan input complaint terlebih dahulu. 
 Setelah complaint dibuat, Pekerjaan Service/Cleaning ini baru dapat diselesaikan di aplikasi SALSA.""";
 
+const kStringDialogUpdateLocation = """
+Masukkan alamat email toko. 
+Lokasi toko akan diambil secara otomatis dari lokasi anda saat ini.""";
+
 const List<String> kJabatanOptions = ["COS", "ACOS", "KASIR"];
 
 
