@@ -54,8 +54,9 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       FetchPosValidationData event, Emitter<PosValidationState> emit) {
     emit(PosValidationLoading());
     final initialData = event.initialData;
+    bool isComplete = initialData?.isCompleted ?? false;
 
-    if (initialData != null && initialData.isCompleted) {
+    if (initialData != null && isComplete) {
       // Jika ya, panggil event MarkAsInProgress dari dalam BLoC itu sendiri
       add(MarkAsInProgress(
         transNo: event.transNo,

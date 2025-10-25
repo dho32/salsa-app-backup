@@ -55,23 +55,23 @@ class PosFormCubit extends Cubit<PosFormState> {
       emit(state.copyWith(finalTempInImage: image));
 
   void recalculateFinalTempLimit() {
-    final validationBox = Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
+    final validationBox =
+        Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
 
-    final indoorEntries = validationBox.values.where((e) =>
-    e.transNo == transNo &&
-        e.articleType?.toUpperCase() == 'IN' &&
-        e.isCompleted
-    );
+    final indoorEntries = validationBox.values.where((e) {
+      bool isComplete = e.isCompleted ?? false;
+      return e.transNo == transNo &&
+          e.articleType?.toUpperCase() == 'IN' &&
+          isComplete;
+    });
 
     double minTemp = double.infinity; // Mulai dengan nilai yang sangat tinggi
 
     for (final entry in indoorEntries) {
-      final tempMeasurement = entry.measurementsAfter.firstWhereOrNull(
-              (m) {
-                bool isSkip = m.isSkipped ?? false;
-                return m.measurementId == 'temperature' && isSkip;
-              }
-      );
+      final tempMeasurement = entry.measurementsAfter.firstWhereOrNull((m) {
+        bool isSkip = m.isSkipped ?? false;
+        return m.measurementId == 'temperature' && isSkip;
+      });
       if (tempMeasurement != null) {
         minTemp = min(minTemp, tempMeasurement.value);
       }

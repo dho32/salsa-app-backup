@@ -22,7 +22,7 @@ class PosValidationEntryModel extends HiveObject {
   List<MeasurementEntry> measurementsAfter;
 
   @HiveField(5)
-  bool isCompleted;
+  bool? isCompleted;
 
   @HiveField(6)
   String? note;
