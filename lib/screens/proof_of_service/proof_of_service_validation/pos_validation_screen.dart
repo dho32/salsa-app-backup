@@ -47,7 +47,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
     if (measurements.isEmpty) return true;
     return measurements
-        .every((m) => m.isSkipped || (m.capturedImage != null && m.value != 0));
+        .every((m) => m.isSkipped ?? false || (m.capturedImage != null && m.value != 0));
   }
 
   @override
@@ -173,7 +173,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   if (latestState is! PosValidationLoaded) return;
 
                   final bool isAnyMeasurementSkipped =
-                  latestState.measurementsAfter.any((m) => m.isSkipped);
+                  latestState.measurementsAfter.any((m) => m.isSkipped ?? false);
 
                   if (latestState.photosAfter.isEmpty) {
                     _showValidationErrorSnackbar(
@@ -194,7 +194,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   }
 
                   for (final measurement in latestState.measurementsAfter) {
-                    if (measurement.isSkipped) continue;
+                    if (measurement.isSkipped ?? false) continue;
 
                     final limits = kPOSMeasurementLimits[measurement.measurementId];
                     if (limits != null) {

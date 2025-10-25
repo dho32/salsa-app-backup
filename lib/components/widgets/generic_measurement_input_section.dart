@@ -81,7 +81,7 @@ class GenericMeasurementInputSection extends StatelessWidget {
                 onUpdate(mEntry.copyWith(capturedImage: newImage));
               },
               isSkipEnabled: true,
-              isSkipped: mEntry.isSkipped,
+              isSkipped: mEntry.isSkipped ?? false,
               onSkipChanged: (isSkipped) {
                 if (isSkipped) {
                   onUpdate(mEntry.copyWith(isSkipped: true));

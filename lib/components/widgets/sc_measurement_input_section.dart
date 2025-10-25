@@ -67,7 +67,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
     // Buat/Update controller
     for (var mEntry in widget.measurements) {
-      final valueText = mEntry.isSkipped
+      final valueText = mEntry.isSkipped ?? false
           ? ''
           : (mEntry.value == mEntry.value.truncateToDouble()
               ? mEntry.value.truncate().toString()
@@ -135,8 +135,8 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         .where((m) => !m.measurementId.toLowerCase().contains('temperature'))
         .toList();
 
-    final bool isIndoorSkipped = indoorMeasurements.any((m) => m.isSkipped);
-    final bool isOutdoorSkipped = outdoorMeasurements.any((m) => m.isSkipped);
+    final bool isIndoorSkipped = indoorMeasurements.any((m) => m.isSkipped ?? false);
+    final bool isOutdoorSkipped = outdoorMeasurements.any((m) => m.isSkipped ?? false);
 
     // Ambil daftar Limits dari konstanta
     final List<MeasurementLimits> availableLimits =
@@ -180,7 +180,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
             context.read<ValidationDropdownBloc>().add(event);
           },
           isSkipEnabled: true,
-          isSkipped: mEntry.isSkipped,
+          isSkipped: mEntry.isSkipped ?? false,
           onSkipChanged: (isSkipped) {
             if (isSkipped) {
               // Jika di-skip, bersihkan controller dan kirim update

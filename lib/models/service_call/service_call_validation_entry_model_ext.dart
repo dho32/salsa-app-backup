@@ -51,9 +51,9 @@ extension MeasurementEntryJson on MeasurementEntry {
   Map<String, dynamic> toJson() {
     return {
       'measurement_id': measurementId,
-      'value': isSkipped?0:value,
+      'value': isSkipped ?? false ?0:value,
       'unit': unit,
-      'image': isSkipped?null:capturedImage?.toJson(),
+      'image': isSkipped ?? false?null:capturedImage?.toJson(),
       'is_skipped': isSkipped,
     };
   }

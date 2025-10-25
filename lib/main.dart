@@ -43,6 +43,143 @@ class AppInitializer extends StatefulWidget {
 }
 
 class _AppInitializerState extends State<AppInitializer> {
+  // Tetap 'late' tapi HAPUS 'final'
+  late Future<void> _initializationFuture;
+
+  // Tandai apakah setup sekali jalan sudah selesai
+  bool _oneTimeSetupDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // INI PERBAIKANNYA:
+    // Langsung assign Future-nya di initState.
+    // FutureBuilder akan otomatis "await" future ini.
+    _initializationFuture = _initialize();
+  }
+
+  // Fungsi setup sekali jalan (TETAP SAMA)
+  Future<void> _setupOneTimeThings() async {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
+    await initializeDateFormatting('id_ID', null);
+    await Hive.initFlutter();
+
+    // Registrasi adapter
+    Hive.registerAdapter(ValidationProblemAdapter());
+    Hive.registerAdapter(ServiceCallValidationEntryModelAdapter());
+    Hive.registerAdapter(ProofOfServiceDetailDataAdapter());
+    Hive.registerAdapter(CapturedImageDetailAdapter());
+    Hive.registerAdapter(MeasurementEntryAdapter());
+    Hive.registerAdapter(TransactionInfoModelAdapter());
+    Hive.registerAdapter(ConfirmationTaskModelAdapter());
+    Hive.registerAdapter(PosTransactionInfoModelAdapter());
+    Hive.registerAdapter(PosValidationEntryModelAdapter());
+    Hive.registerAdapter(ProofOfServiceDetailModelAdapter());
+    Hive.registerAdapter(ProofOfServiceHeaderAdapter());
+    Hive.registerAdapter(ProofOfServiceItemDetailAdapter());
+    Hive.registerAdapter(PosUnserviceableModelAdapter());
+    Hive.registerAdapter(SCUnserviceableModelAdapter());
+
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+
+    _oneTimeSetupDone = true;
+  }
+
+  // Fungsi yang bisa di-retry (TETAP SAMA)
+  Future<void> _loadRetryableData() async {
+    // Hanya berisi hal-hal yang bisa gagal & di-retry
+    await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+    await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
+    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox); // <-- Error Null->bool mungkin terjadi di sini
+    await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+    await Hive.openBox('otp_state');
+    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableVisitQueueBox);
+    await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+
+    ConfirmationService().processQueue();
+  }
+
+  // Fungsi gabungan untuk initState (TETAP SAMA)
+  // Fungsi ini dipanggil oleh initState dan future-nya ditampung
+  Future<void> _initialize() async {
+    if (!_oneTimeSetupDone) {
+      await _setupOneTimeThings();
+    }
+    // Langsung panggil (tanpa setState)
+    await _loadRetryableData();
+  }
+
+  // Fungsi retry (TETAP SAMA)
+  // Fungsi ini HARUS pakai setState untuk memicu FutureBuilder
+  void _retryInitialization() {
+    setState(() {
+      // Kita hanya mengulang proses yang bisa gagal (load data),
+      // bukan setup sekali jalan.
+      _initializationFuture = _loadRetryableData();
+    });
+  }
+
+  // Build method Anda (TETAP SAMA, tidak perlu diubah)
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: _initializationFuture, // <-- Variabel ini sekarang 100% aman
+      builder: (context, snapshot) {
+        // Cek status future
+        print(snapshot.connectionState);
+        print(ConnectionState.done);
+        if (snapshot.connectionState == ConnectionState.done) {
+          // JIKA SEMUA INISIALISASI SELESAI
+          if (snapshot.hasError) {
+            // Jika ada error, tampilkan halaman error
+            // Error 'Null' to 'bool' dari Hive akan masuk ke sini
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              home: ErrorRetryScreen(
+                errorMessage: snapshot.error.toString(),
+                onRetry: _retryInitialization,
+              ),
+            );
+          }
+
+          // Jika berhasil, bangun aplikasi utama Anda
+          final authRepository = AuthRepository();
+          return RepositoryProvider.value(
+            value: authRepository,
+            child: BlocProvider(
+              create: (_) => AuthBloc(authRepository: authRepository)..add(AppLoaded()),
+              child: const MyApp(),
+            ),
+          );
+        }
+
+        // SELAMA MENUNGGU, tampilkan loading indicator
+        return const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AppInitializerState2 extends State<AppInitializer> {
   late final Future<void> _initializationFuture;
 
   @override
@@ -110,6 +247,8 @@ class _AppInitializerState extends State<AppInitializer> {
       future: _initializationFuture,
       builder: (context, snapshot) {
         // Cek status future
+        print(snapshot.connectionState);
+        print(ConnectionState.done);
         if (snapshot.connectionState == ConnectionState.done) {
           // JIKA SEMUA INISIALISASI SELESAI
           if (snapshot.hasError) {

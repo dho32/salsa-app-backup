@@ -67,7 +67,10 @@ class PosFormCubit extends Cubit<PosFormState> {
 
     for (final entry in indoorEntries) {
       final tempMeasurement = entry.measurementsAfter.firstWhereOrNull(
-              (m) => m.measurementId == 'temperature' && !m.isSkipped
+              (m) {
+                bool isSkip = m.isSkipped ?? false;
+                return m.measurementId == 'temperature' && isSkip;
+              }
       );
       if (tempMeasurement != null) {
         minTemp = min(minTemp, tempMeasurement.value);

@@ -184,7 +184,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       // =================================================================
       for (final measurement in currentState.measurementsAfter) {
         // Jangan validasi jika pengukuran di-skip
-        if (measurement.isSkipped) continue;
+        if (measurement.isSkipped ?? false) continue;
 
         // Ambil batas (limits) dari konstanta
         final limits = kPOSMeasurementLimits[measurement.measurementId];

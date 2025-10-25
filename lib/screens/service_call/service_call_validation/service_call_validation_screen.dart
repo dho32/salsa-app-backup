@@ -48,7 +48,110 @@ class ServiceCallValidationScreen extends StatefulWidget {
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
   bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
-    return measurements.every((m) => m.isSkipped || m.capturedImage != null);
+    return measurements.every((m) => m.isSkipped ?? false || m.capturedImage != null);
+  }
+
+  bool _isDirty(ValidationDropdownLoaded state) {
+    // Cek apakah ada foto (sebelum/sesudah)
+    if (state.capturedPhotosBefore.isNotEmpty ||
+        state.capturedPhotosAfter.isNotEmpty) {
+      return true;
+    }
+
+    // Cek apakah ada pengukuran (sebelum/sesudah)
+    final allMeasurements = [
+      ...state.capturedMeasurementsBefore,
+      ...state.capturedMeasurementsAfter
+    ];
+    if (allMeasurements.any((m) => m.value != 0.0 || m.capturedImage != null)) {
+      return true;
+    }
+
+    // Cek apakah ada masalah/solusi
+    if (state.selectedProblemCards.isNotEmpty) {
+      return true;
+    }
+
+    // Cek apakah S/N outdoor dipilih
+    if (state.selectedOutdoorSerialNo != null) {
+      return true;
+    }
+
+    // Cek apakah ada note
+    if (state.selectedIndoorNoteBefore != null ||
+        state.selectedIndoorNoteAfter != null ||
+        state.selectedOutdoorNoteBefore != null ||
+        state.selectedOutdoorNoteAfter != null) {
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<void> _handleBackPress() async {
+    // Ambil BLoC dan state saat ini
+    final bloc = context.read<ValidationDropdownBloc>();
+    final state = bloc.state;
+
+    // 1. Jika form bersih (atau state aneh), izinkan 'pop'
+    if (state is! ValidationDropdownLoaded || !_isDirty(state)) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    // 2. Jika form kotor, tampilkan dialog
+    final String? dialogResult = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Simpan Perubahan?'),
+        content: const Text('Apakah Anda ingin menyimpan perubahan sebagai draft?'),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Tidak'),
+            onPressed: () {
+              // Tutup dialog, kirim 'NO'
+              Navigator.of(dialogContext).pop('NO');
+            },
+          ),
+          TextButton(
+            child: const Text('Batal'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey,
+            ),
+            onPressed: () {
+              // Tutup dialog, kirim 'CANCEL'
+              Navigator.of(dialogContext).pop('CANCEL');
+            },
+          ),
+          ElevatedButton(
+            child: const Text('Ya, Simpan'),
+            onPressed: () {
+              // Kirim event untuk simpan draft
+              bloc.add(SaveValidationData(
+                transNo: widget.transNo,
+                serialNo: widget.serialNo,
+                markAsCompleted: false, // 'false' berarti ini DRAFT
+                showNotification: false, // Tidak perlu notif snackbar
+              ));
+              // Tutup dialog, kirim 'YES'
+              Navigator.of(dialogContext).pop('YES');
+            },
+          ),
+        ],
+      ),
+    );
+
+    // 3. Handle hasil dialog
+    if (dialogResult == 'YES' || dialogResult == 'NO') {
+      if (mounted) {
+        // Hanya 'pop' halaman jika user memilih Ya atau Tidak
+        Navigator.of(context).pop();
+      }
+    }
+    // Jika 'CANCEL', jangan lakukan apa-apa (tetap di halaman)
   }
 
   @override
@@ -94,25 +197,35 @@ class _ServiceCallValidationScreenState
         },
         child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
           builder: (context, state) {
-            return Scaffold(
-              appBar: AppBar(title: const Text("Validasi Service Call")),
-              body: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: ServiceCallValidationBodyMobile(
-                  transNo: widget.transNo,
-                  serialNo: widget.serialNo,
-                  lineNo: widget.lineNo,
-                  assetAge: widget.assetAge,
-                  rentDate: widget.rentDate,
-                  leasesEndingDate: widget.leasesEndingDate,
-                  initialData: widget.initialData,
-                  complaintDetails: widget.complaintDetails,
-                  imageFile: widget.imageFile,
+            return PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (bool didPop, dynamic result) {
+                // Jika pop tidak terjadi (karena dicegat),
+                // panggil handler kita.
+                if (!didPop) {
+                  _handleBackPress();
+                }
+              },
+              child: Scaffold(
+                appBar: AppBar(title: const Text("Validasi Service Call")),
+                body: GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  child: ServiceCallValidationBodyMobile(
+                    transNo: widget.transNo,
+                    serialNo: widget.serialNo,
+                    lineNo: widget.lineNo,
+                    assetAge: widget.assetAge,
+                    rentDate: widget.rentDate,
+                    leasesEndingDate: widget.leasesEndingDate,
+                    initialData: widget.initialData,
+                    complaintDetails: widget.complaintDetails,
+                    imageFile: widget.imageFile,
+                  ),
                 ),
+                bottomNavigationBar: (state is ValidationDropdownLoaded)
+                    ? _buildFloatingButtons(context, state)
+                    : null,
               ),
-              bottomNavigationBar: (state is ValidationDropdownLoaded)
-                  ? _buildFloatingButtons(context, state)
-                  : null,
             );
           },
         ),
@@ -270,14 +383,20 @@ class _ServiceCallValidationScreenState
     final measurements = isBefore ? state.capturedMeasurementsBefore : state.capturedMeasurementsAfter;
 
     // Cek Indoor
-    final bool isAnyIndoorSkipped = measurements.any((m) => m.measurementId.toLowerCase().contains('temperature') && m.isSkipped);
+    final bool isAnyIndoorSkipped = measurements.any((m) {
+      bool isSkip = m.isSkipped ?? false;
+      return m.measurementId.toLowerCase().contains('temperature') && isSkip;
+    });
     final String? indoorNote = isBefore ? state.selectedIndoorNoteBefore : state.selectedIndoorNoteAfter;
     if (isAnyIndoorSkipped && (indoorNote == null || indoorNote.isEmpty)) {
       return 'Catatan indoor wajib diisi jika ada pengukuran yang di-skip.';
     }
 
     // Cek Outdoor
-    final bool isAnyOutdoorSkipped = measurements.any((m) => !m.measurementId.toLowerCase().contains('temperature') && m.isSkipped);
+    final bool isAnyOutdoorSkipped = measurements.any((m) {
+      bool isSkip = m.isSkipped ?? false;
+      return !m.measurementId.toLowerCase().contains('temperature') && isSkip;
+    });
     final String? outdoorNote = isBefore ? state.selectedOutdoorNoteBefore : state.selectedOutdoorNoteAfter;
     if (isAnyOutdoorSkipped && (outdoorNote == null || outdoorNote.isEmpty)) {
       return 'Catatan outdoor wajib diisi jika ada pengukuran yang di-skip.';
@@ -289,7 +408,7 @@ class _ServiceCallValidationScreenState
   String? _validateMeasurements(List<MeasurementEntry> measurements) {
     for (final mEntry in measurements) {
       // 1. Jika di-skip, lewati ke pengukuran berikutnya (dianggap valid)
-      if (mEntry.isSkipped) continue;
+      if (mEntry.isSkipped ?? false) continue;
 
       // 2. Jika tidak di-skip, periksa kelengkapan
       if (mEntry.capturedImage == null) {

@@ -232,7 +232,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   }
 
   Step _buildStep2(BuildContext context, PosValidationLoaded state) {
-    final bool isAnyMeasurementSkipped = state.measurementsAfter.any((m) => m.isSkipped);
+    final bool isAnyMeasurementSkipped = state.measurementsAfter.any((m) => m.isSkipped ?? false);
 
     const double itemHeight = 40.0;        // Tinggi satu item di menu
     const double searchBarHeight = 50.0;   // Tinggi kotak pencarian

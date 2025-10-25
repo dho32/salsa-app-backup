@@ -37,7 +37,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         final bool isNoteBroken = entry.note?.trim().toLowerCase().contains('ac rusak / bermasalah') ?? false;
 
         // Kondisi 2: Cek apakah ada pengukuran yang di-skip
-        final bool isMeasurementSkipped = entry.measurementsAfter.any((m) => m.isSkipped);
+        final bool isMeasurementSkipped = entry.measurementsAfter.any((m) => m.isSkipped ?? false);
 
         // Hasil akhir: Keduanya harus true
         return isNoteBroken && isMeasurementSkipped;

@@ -173,7 +173,8 @@ class ScFormCubit extends Cubit<ScFormState> {
         final id = measurement.measurementId.toLowerCase();
 
         // Berdasarkan kode Anda sebelumnya, 'temperature' adalah ID untuk suhu indoor
-        if (id.contains('temperature') && !measurement.isSkipped && measurement.value > 0.0) {
+        bool isSkip = measurement.isSkipped ?? false;
+        if (id.contains('temperature') && isSkip && measurement.value > 0.0) {
 
           if (maxIndoorTemp == null || measurement.value > maxIndoorTemp) {
             maxIndoorTemp = measurement.value; // Temukan nilai tertinggi
