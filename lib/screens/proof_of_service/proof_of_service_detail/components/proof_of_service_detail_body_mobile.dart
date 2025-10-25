@@ -797,15 +797,18 @@ class _ProofOfServiceDetailBodyMobileState
               final formCubit = context.read<PosFormCubit>();
               if (formCubit.state.tempIn != _tempInController.text) {
                 formCubit.tempInChanged(_tempInController.text);
-                formCubit.onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
+                formCubit
+                    .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
               }
               if (formCubit.state.tempOut != _tempOutController.text) {
                 formCubit.tempOutChanged(_tempOutController.text);
-                formCubit.onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
+                formCubit
+                    .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
               }
               if (formCubit.state.finalTempIn != _finalTempController.text) {
                 formCubit.finalTempInChanged(_finalTempController.text);
-                formCubit.onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
+                formCubit
+                    .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
               }
 
               // 2. Baca state form terakhir untuk validasi dasar
@@ -849,8 +852,7 @@ class _ProofOfServiceDetailBodyMobileState
 
                 context.read<PosSubmittedBloc>().add(FinalValidationRequested(
                       transNo: header.transNo,
-                      customerCode: header
-                          .shipToCode,
+                      customerCode: header.shipToCode,
                     ));
               } else {
                 // Logika untuk menampilkan snackbar jika form belum siap (ini sudah benar)
@@ -1060,7 +1062,10 @@ class _ProofOfServiceDetailBodyMobileState
           .where((d) => d.unitType.toUpperCase() == 'IN')
           .map((d) => d.serialNo)
           .toList();
-      noteOptions = detailState.data.noteOptions ?? [];
+
+      noteOptions = detail.unitType == 'IN'
+          ? detailState.data.noteIndoorOptions ?? []
+          : detailState.data.noteOutdoorOptions ?? [];
     }
 
     if (!context.mounted) return;

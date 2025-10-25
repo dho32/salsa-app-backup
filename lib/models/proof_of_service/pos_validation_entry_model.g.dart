@@ -23,7 +23,7 @@ class PosValidationEntryModelAdapter
       photosBefore: (fields[2] as List).cast<CapturedImageDetail>(),
       photosAfter: (fields[3] as List).cast<CapturedImageDetail>(),
       measurementsAfter: (fields[4] as List).cast<MeasurementEntry>(),
-      isCompleted: fields[5] as bool,
+      isCompleted: fields[5] as bool?,
       note: fields[6] as String?,
       articleNo: fields[7] as String?,
       articleDesc: fields[8] as String?,
