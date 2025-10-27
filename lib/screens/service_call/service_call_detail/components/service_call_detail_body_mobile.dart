@@ -320,50 +320,63 @@ class _ServiceCallDetailBodyMobileState
                     final validationStatuses = snapshot.data ?? {};
                     final header = detailState.data.header;
 
-                    return BlocListener<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
+                    return BlocListener<ServiceCallSubmittedBloc,
+                        ServiceCallSubmittedState>(
                       listener: (context, state) {
                         if (state is ScProceedToOtpDialog) {
                           // Ambil formState yang sudah divalidasi dari BLoC state
                           final formState = state.formState;
-                          final double storeLat = double.tryParse(header.storeLat) ?? 0.0;
-                          final double storeLong = double.tryParse(header.storeLong) ?? 0.0;
+                          final double storeLat =
+                              double.tryParse(header.storeLat) ?? 0.0;
+                          final double storeLong =
+                              double.tryParse(header.storeLong) ?? 0.0;
 
                           showDialog<void>(
                             context: context,
                             builder: (_) {
                               return MultiBlocProvider(
                                 providers: [
-                                  BlocProvider(create: (_) => OtpBloc(repository: OtpRepository())),
-                                  BlocProvider(create: (_) => LocationValidationBloc()),
-                                  BlocProvider.value(value: context.read<UploadProgressCubit>()),
+                                  BlocProvider(
+                                      create: (_) =>
+                                          OtpBloc(repository: OtpRepository())),
+                                  BlocProvider(
+                                      create: (_) => LocationValidationBloc()),
+                                  BlocProvider.value(
+                                      value:
+                                          context.read<UploadProgressCubit>()),
                                 ],
                                 child: OtpDialog(
                                   transNo: header.transNo,
-                                  shipTo: header.storeId, // Sesuaikan field
-                                  email: header.storeEmail, // Sesuaikan field
+                                  shipTo: header.storeId,
+                                  // Sesuaikan field
+                                  email: header.storeEmail,
+                                  // Sesuaikan field
                                   storeLat: storeLat,
                                   storeLong: storeLong,
                                   onVerified: () {
                                     // SAAT OTP BERHASIL, BARU KIRIM EVENT SUBMIT SEBENARNYA
-                                    final progressCubit = context.read<UploadProgressCubit>();
-                                    context.read<ServiceCallSubmittedBloc>().add(
-                                      SubmitValidation(
-                                        transNo: header.transNo,
-                                        createdBy: maintenanceBy,
-                                        createdByName: technicianName,
-                                        createdByIP: maintenanceByIP,
-                                        pathAttachment: header.pathAttachment,
-                                        progressCubit: progressCubit,
-                                        formState: formState,
-                                        storeName: header.storeName
-                                      ),
-                                    );
+                                    final progressCubit =
+                                        context.read<UploadProgressCubit>();
+                                    context
+                                        .read<ServiceCallSubmittedBloc>()
+                                        .add(
+                                          SubmitValidation(
+                                              transNo: header.transNo,
+                                              createdBy: maintenanceBy,
+                                              createdByName: technicianName,
+                                              createdByIP: maintenanceByIP,
+                                              pathAttachment:
+                                                  header.pathAttachment,
+                                              progressCubit: progressCubit,
+                                              formState: formState,
+                                              storeName: header.storeName),
+                                        );
                                   },
                                 ),
                               );
                             },
                           );
-                        }else if (state is ValidationUploadPartial) {
+                        } else if (state is ValidationUploadPartial) {
                           // Tampilkan dialog HANYA JIKA GAGAL
                           if (state.failureCount > 0) {
                             showPartialUploadDialog(
@@ -373,15 +386,15 @@ class _ServiceCallDetailBodyMobileState
                               state.failedFiles,
                             );
                           }
-                        }
-                        else if (state is ValidationSuccess) {
+                        } else if (state is ValidationSuccess) {
                           // Jika 100% sukses, langsung tutup halaman detail
                           ConfirmationService().processQueue();
                           showSuccessDialog(
                             context,
                             "Data berhasil dikirim.",
                             onOk: () {
-                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
                             },
                           );
                         }
@@ -391,7 +404,8 @@ class _ServiceCallDetailBodyMobileState
                           Padding(
                             padding: const EdgeInsets.only(bottom: 65.0),
                             child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 35),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 35),
                               child: Column(
                                 children: [
                                   _buildCustomerSection(header),
@@ -407,7 +421,8 @@ class _ServiceCallDetailBodyMobileState
                                     title: 'Validasi Unit',
                                     child: Column(
                                       children: [
-                                        _buildScanQRButton(context, detailState),
+                                        _buildScanQRButton(
+                                            context, detailState),
                                         const SizedBox(height: 8),
                                         ...detailList.map((item) =>
                                             _buildDetailCard(header, item,
@@ -424,7 +439,8 @@ class _ServiceCallDetailBodyMobileState
                                       final bool isEnabled =
                                           formStateForTemp.allUnitsValidated;
                                       return Padding(
-                                        padding: const EdgeInsets.only(top: 16.0),
+                                        padding:
+                                            const EdgeInsets.only(top: 16.0),
                                         child: Stack(
                                           children: [
                                             Opacity(
@@ -445,7 +461,8 @@ class _ServiceCallDetailBodyMobileState
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   child: Container(
-                                                      color: Colors.transparent),
+                                                      color:
+                                                          Colors.transparent),
                                                 ),
                                               ),
                                           ],
@@ -655,9 +672,9 @@ class _ServiceCallDetailBodyMobileState
             if (scannedSerialNo == null || !mounted) return;
 
             final matchingItem = detailState.data.detail.firstWhereOrNull(
-              (e) =>
-                  e.serialNo.trim().toUpperCase() ==
-                  scannedSerialNo.trim().toUpperCase(),
+              (e) => e.serialNo.trim().toUpperCase().startsWith(
+                    scannedSerialNo.trim().toUpperCase(),
+                  ),
             );
 
             if (matchingItem != null) {
@@ -842,8 +859,7 @@ class _ServiceCallDetailBodyMobileState
     final formCubit = context.read<ScFormCubit>();
     final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
-    final String label =
-        '${baseLimits.label} (Min: ${minLimit.toStringAsFixed(1)}${baseLimits.unit})';
+    final String label = baseLimits.label;
 
     final finalTempLimits = MeasurementLimits(
       id: baseLimits.id,
@@ -856,7 +872,7 @@ class _ServiceCallDetailBodyMobileState
     );
 
     return _buildSection(
-      title: 'Pengukuran Akhir (*Wajib)',
+      title: 'Suhu Dalam Ruangan Setelah Service (*Wajib)',
       child: MeasurementInputWidget(
         controller: _finalTempController,
         label: finalTempLimits.label,
@@ -916,7 +932,7 @@ class _ServiceCallDetailBodyMobileState
                       context, 'Lengkapi validasi semua unit.');
                 } else if (!latestFormState.isFinalTempValid) {
                   _showValidationSnackbar(
-                      context, 'Lengkapi suhu akhir & fotonya.');
+                      context, 'Lengkapi suhu dalam ruangan & fotonya.');
                 } else {
                   _showValidationSnackbar(
                       context, 'Periksa kembali data Anda.');
@@ -976,5 +992,4 @@ class _ServiceCallDetailBodyMobileState
       ),
     );
   }
-
 }

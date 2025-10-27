@@ -183,49 +183,67 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           isSkipped: mEntry.isSkipped ?? false,
           onSkipChanged: (isSkipped) {
             final bloc = context.read<ValidationDropdownBloc>();
-            // Dapatkan state saat ini untuk memeriksa measurement lain
-            final currentState = bloc.state;
-            if (currentState is! ValidationDropdownLoaded) return; // Guard clause
-
             final measurementId = mEntry.measurementId;
-            // Tentukan apakah measurement ini Indoor atau Outdoor
             final bool isIndoor = measurementId.toLowerCase().contains('temperature');
 
+            // 1. Kirim event update measurement SEGERA
+            final updateEvent = widget.isBefore
+                ? UpdateMeasurementBefore(mEntry.copyWith(
+              isSkipped: isSkipped,
+              // Selalu reset value/image saat state skip berubah
+              // BLoC akan jadi sumber kebenaran jika user input lagi
+              value: 0.0,
+              capturedImage: null,
+            ))
+                : UpdateMeasurementAfter(mEntry.copyWith(
+              isSkipped: isSkipped,
+              value: 0.0,
+              capturedImage: null,
+            ));
+            bloc.add(updateEvent);
+
+            // 2. Update controller LOKAL (untuk feedback UI instan)
+            // Ini penting agar slider/toggle langsung berubah
             if (isSkipped) {
-              // --- Logika saat MENJADI SKIPPED (Kode lama Anda sudah benar) ---
               controller.clear();
-              final event = widget.isBefore
-                  ? UpdateMeasurementBefore(mEntry.copyWith(value: 0.0, capturedImage: null, isSkipped: true))
-                  : UpdateMeasurementAfter(mEntry.copyWith(value: 0.0, capturedImage: null, isSkipped: true));
-              bloc.add(event);
-            } else {
-              // --- Logika saat MENJADI UNSKIPPED (Skip dibatalkan) ---
-              // 1. Update flag isSkipped di BLoC (seperti kode lama Anda)
-              final event = widget.isBefore
-                  ? UpdateMeasurementBefore(mEntry.copyWith(isSkipped: false))
-                  : UpdateMeasurementAfter(mEntry.copyWith(isSkipped: false));
-              bloc.add(event);
+            }
+            // Tidak perlu else di sini, nilai akan diisi BLoC state via BlocBuilder
 
-              // 2. Periksa apakah ada measurement LAIN di grup yang SAMA
-              //    (Indoor/Outdoor dan Sebelum/Sesudah) yang MASIH di-skip.
-              final List<MeasurementEntry> relevantMeasurements = widget.isBefore
-                  ? currentState.capturedMeasurementsBefore
-                  : currentState.capturedMeasurementsAfter;
+            // 3. JIKA MENJADI UNSKIPPED, cek kondisi reset note SAAT INI
+            if (!isSkipped) {
+              // Baca state BLoC TERKINI (setelah event di atas diproses BLoC)
+              // Kita butuh cara untuk memastikan state sudah update.
+              // Cara paling mudah: Gunakan context.read() LAGI di dalam microtask
+              // Ini memastikan kita membaca state *setelah* event diproses BLoC
+              Future.microtask(() {
+                if (!mounted) return;
+                final currentBlocState = context.read<ValidationDropdownBloc>().state;
+                if (currentBlocState is ValidationDropdownLoaded) {
+                  final List<MeasurementEntry> relevantMeasurements = widget.isBefore
+                      ? currentBlocState.capturedMeasurementsBefore
+                      : currentBlocState.capturedMeasurementsAfter;
 
-              final bool anyOtherSkippedInGroup = relevantMeasurements
-                  .where((m) => m.measurementId != measurementId) // Kecualikan diri sendiri
-                  .any((m) {
-                bool otherIsIndoor = m.measurementId.toLowerCase().contains('temperature');
-                // Cek: Apakah grupnya sama (Indoor==Indoor atau Outdoor==Outdoor)?
-                // DAN Apakah item lain itu di-skip?
-                return (isIndoor == otherIsIndoor) && (m.isSkipped ?? false);
+                  // Cek apakah ada measurement LAIN di grup yg SAMA yg MASIH di-skip
+                  final bool anyOtherSkippedInGroup = relevantMeasurements
+                      .where((m) => m.measurementId != measurementId) // Kecualikan diri sendiri
+                      .any((m) {
+                    bool otherIsIndoor = m.measurementId.toLowerCase().contains('temperature');
+                    return (isIndoor == otherIsIndoor) && (m.isSkipped ?? false);
+                  });
+
+                  // Jika TIDAK ADA yg lain di-skip, trigger reset note
+                  if (!anyOtherSkippedInGroup) {
+                    print("📝 [Unskip Microtask] No other skipped. Triggering note reset...");
+                    bloc.add(NoteChanged(null, isIndoor: isIndoor, isBefore: widget.isBefore));
+                  } else {
+                    print("📝 [Unskip Microtask] Still others skipped. Note remains.");
+                  }
+                }
               });
-
-              // 3. JIKA TIDAK ADA measurement lain yang di-skip di grup ini,
-              //    maka reset note untuk grup ini.
-              if (!anyOtherSkippedInGroup) {
-                bloc.add(NoteChanged(null, isIndoor: isIndoor, isBefore: widget.isBefore)); // Kirim null untuk reset
-              }
+            } else {
+              // ✅ BARU: Jika MENJADI SKIPPED, reset note SEGERA
+              print("📝 [Skip] Triggering note reset immediately...");
+              bloc.add(NoteChanged(null, isIndoor: isIndoor, isBefore: widget.isBefore));
             }
           },
         ),
@@ -349,10 +367,12 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     required ValueChanged<String?> onChanged,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+    final dropdownKey = ValueKey('note_dropdown_${label}_${selectedValue ?? 'null'}');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16.0),
       child: DropdownButtonFormField2<String>(
+        key: dropdownKey,
         value: selectedValue,
         isExpanded: true,
         decoration: InputDecoration(

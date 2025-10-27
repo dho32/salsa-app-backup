@@ -96,7 +96,9 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
 
   ValidationDropdownLoaded copyWith({
     List<ProblemSourceModel>? data,
-    String? selectedUnitType,
+    // Gunakan Object() sebagai penanda "tidak diubah" vs "diubah jadi null"
+    // Ini adalah trik umum untuk copyWith nullable fields
+    Object? selectedUnitType = const Object(),
     List<CapturedImageDetail>? capturedPhotosBefore,
     List<MeasurementEntry>? capturedMeasurementsBefore,
     List<SelectedProblemCard>? selectedProblemCards,
@@ -105,43 +107,46 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     int? currentStep,
     ValidationViewMode? currentViewMode,
     List<String>? outdoorSerialNumbers,
-    String? selectedOutdoorSerialNo,
+    Object? selectedOutdoorSerialNo = const Object(),
     List<String>? noteIndoorOptions,
     List<String>? noteOutdoorOptions,
-    String? selectedIndoorNoteBefore,
-    String? selectedOutdoorNoteBefore,
-    String? selectedIndoorNoteAfter,
-    String? selectedOutdoorNoteAfter,
+    Object? selectedIndoorNoteBefore = const Object(),
+    Object? selectedOutdoorNoteBefore = const Object(),
+    Object? selectedIndoorNoteAfter = const Object(),
+    Object? selectedOutdoorNoteAfter = const Object(),
     ValidationSaveStatus? saveStatus,
-    String? saveMessage,
+    Object? saveMessage = const Object(), // saveMessage juga bisa null
   }) {
+    // Helper untuk menangani nullable copyWith
+    T _handleNullable<T>(Object? newValue, T currentValue) {
+      // Jika newValue adalah penanda Object(), berarti field ini tidak diubah
+      if (newValue is Object && identical(newValue, const Object())) {
+        return currentValue;
+      }
+      // Jika newValue BUKAN penanda, gunakan newValue (bisa null atau non-null)
+      return newValue as T;
+    }
+
     return ValidationDropdownLoaded(
       data: data ?? this.data,
-      selectedUnitType: selectedUnitType ?? this.selectedUnitType,
+      selectedUnitType: _handleNullable(selectedUnitType, this.selectedUnitType),
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
-      capturedMeasurementsBefore:
-          capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
+      capturedMeasurementsBefore: capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
       selectedProblemCards: selectedProblemCards ?? this.selectedProblemCards,
       capturedPhotosAfter: capturedPhotosAfter ?? this.capturedPhotosAfter,
-      capturedMeasurementsAfter:
-          capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
+      capturedMeasurementsAfter: capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
       currentStep: currentStep ?? this.currentStep,
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
-      selectedOutdoorSerialNo:
-          selectedOutdoorSerialNo ?? this.selectedOutdoorSerialNo,
+      selectedOutdoorSerialNo: _handleNullable(selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
       noteIndoorOptions: noteIndoorOptions ?? this.noteIndoorOptions,
       noteOutdoorOptions: noteOutdoorOptions ?? this.noteOutdoorOptions,
-      selectedIndoorNoteBefore:
-          selectedIndoorNoteBefore ?? this.selectedIndoorNoteBefore,
-      selectedOutdoorNoteBefore:
-          selectedOutdoorNoteBefore ?? this.selectedOutdoorNoteBefore,
-      selectedIndoorNoteAfter:
-          selectedIndoorNoteAfter ?? this.selectedIndoorNoteAfter,
-      selectedOutdoorNoteAfter:
-          selectedOutdoorNoteAfter ?? this.selectedOutdoorNoteAfter,
+      selectedIndoorNoteBefore: _handleNullable(selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
+      selectedOutdoorNoteBefore: _handleNullable(selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
+      selectedIndoorNoteAfter: _handleNullable(selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
+      selectedOutdoorNoteAfter: _handleNullable(selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
       saveStatus: saveStatus ?? this.saveStatus,
-      saveMessage: saveMessage,
+      saveMessage: _handleNullable(saveMessage, this.saveMessage),
     );
   }
 

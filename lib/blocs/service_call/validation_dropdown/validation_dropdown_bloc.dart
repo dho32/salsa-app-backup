@@ -114,6 +114,8 @@ class ValidationDropdownBloc
 
       if (event.isBefore) {
         if (event.isIndoor) {
+          print("event note");
+          print(event.note);
           emit(currentState.copyWith(selectedIndoorNoteBefore: event.note));
         } else {
           emit(currentState.copyWith(selectedOutdoorNoteBefore: event.note));

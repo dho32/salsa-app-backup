@@ -47,9 +47,32 @@ class ServiceCallValidationScreen extends StatefulWidget {
 
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
-  bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
-    return measurements
-        .every((m) => m.isSkipped ?? false || m.capturedImage != null);
+
+  bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
+    // 1. Kita mulai dengan asumsi semuanya LOLOS
+    bool allItemsPassed = true;
+
+    for (int i = 0; i < measurements.length; i++) {
+      var m = measurements[i];
+
+      // Evaluasi logika
+      bool isSkippedCheck = m.isSkipped ?? false;
+      bool isFilledCheck = (m.capturedImage != null && m.value != 0);
+      bool didPass = isSkippedCheck || isFilledCheck;
+
+      if (didPass) {
+        print('>>> Status: LOLOS');
+      } else {
+        print('>>> !!! STATUS: GAGAL !!! <<<');
+        print('Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
+
+        // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
+        allItemsPassed = false;
+      }
+    }
+
+    // 3. Kembalikan hasil akhir
+    return allItemsPassed;
   }
 
   @override
@@ -162,22 +185,24 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
-                  if (state.selectedUnitType == null ||
-                      state.selectedProblemCards.isEmpty) {
-                    _showErrorSnackbar('Lengkapi data Permasalahan & Solusi.');
-                    return;
-                  }
                   if (state.capturedPhotosAfter.isEmpty ||
-                      !_areAllMeasurementsFilled(
+                      !checkMeasurementDetails(
                           state.capturedMeasurementsAfter)) {
                     _showErrorSnackbar(
                         'Lengkapi semua foto & pengukuran (Sesudah).');
                     return;
                   }
+
                   // Validasi Note "Sesudah"
                   final noteError = _validateNotes(state, isBefore: false);
                   if (noteError != null) {
                     _showErrorSnackbar(noteError);
+                    return;
+                  }
+
+                  if (state.selectedUnitType == null ||
+                      state.selectedProblemCards.isEmpty) {
+                    _showErrorSnackbar('Lengkapi data Permasalahan & Solusi.');
                     return;
                   }
 
