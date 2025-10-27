@@ -291,6 +291,26 @@ class _ServiceCallDetailBodyMobileState
           } else if (detailState is ServiceCallDetailLoaded) {
             final detailList = detailState.data.detail;
 
+            final sortedDetailList = List<ServiceCallUnitDetail>.from(detailList); // Salin list
+            sortedDetailList.sort((a, b) {
+              // Cek apakah item adalah 'REMOTE'
+              bool isARemote = a.articleNameUnit.toUpperCase().contains('REMOTE');
+              bool isBRemote = b.articleNameUnit.toUpperCase().contains('REMOTE');
+
+              // Jika a REMOTE dan b BUKAN, a ditaruh di bawah (return 1)
+              if (isARemote && !isBRemote) {
+                return 1;
+              }
+              // Jika a BUKAN dan b REMOTE, a ditaruh di atas (return -1)
+              else if (!isARemote && isBRemote) {
+                return -1;
+              }
+              // Jika keduanya REMOTE atau keduanya BUKAN REMOTE, sort by serialNo
+              else {
+                return a.serialNo.compareTo(b.serialNo);
+              }
+            });
+
             return BlocBuilder<ScFormCubit, ScFormState>(
               builder: (context, formState) {
                 if (_validationStatusFuture == null) {
@@ -424,7 +444,7 @@ class _ServiceCallDetailBodyMobileState
                                         _buildScanQRButton(
                                             context, detailState),
                                         const SizedBox(height: 8),
-                                        ...detailList.map((item) =>
+                                        ...sortedDetailList.map((item) =>
                                             _buildDetailCard(header, item,
                                                 validationStatuses)),
                                       ],
