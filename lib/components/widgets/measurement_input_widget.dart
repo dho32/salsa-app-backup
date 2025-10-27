@@ -57,7 +57,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   void initState() {
     super.initState();
     _currentImage = widget.initialImage;
-    _updateSliderFromText(widget.controller.text); // Inisialisasi awal tanpa rebuild
+    // _updateSliderFromText(widget.controller.text); // Inisialisasi awal tanpa rebuild
+    _updateSliderAndValidate(widget.controller.text, widget.limits);
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
   }
@@ -77,7 +78,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
       setState(() {
         // 1. Lakukan validasi dan tampilkan error
-        _errorText = _getValidationError(text);
+        _errorText = _getValidationError(widget.controller.text, widget.limits);
         // 2. Update posisi slider sesuai teks final
         _updateSliderFromText(text);
         widget.onEditingComplete?.call(text);
@@ -88,9 +89,17 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   @override
   void didUpdateWidget(covariant MeasurementInputWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Jika batas (limits) berubah, kita harus mengevaluasi ulang semuanya.
+    if (widget.limits != oldWidget.limits) {
+      // Panggil helper method baru kita dengan batas yang BARU.
+      _updateSliderAndValidate(widget.controller.text, widget.limits);
+    }
+
+    // Logika ini untuk sinkronisasi dari BLoC (jika ada)
     if (widget.controller.text != oldWidget.controller.text) {
       _updateSliderFromText(widget.controller.text);
     }
+
     if (widget.initialImage != oldWidget.initialImage) {
       setState(() {
         _currentImage = widget.initialImage;
@@ -98,13 +107,14 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     }
   }
 
-  String? _getValidationError(String text) {
+  String? _getValidationError(String text, MeasurementLimits limits) {
     if (text.isEmpty) return null;
     final value = double.tryParse(text);
     if (value == null) {
       if (!text.endsWith('.')) return 'Angka tidak valid';
     } else {
-      if (value > widget.limits.max) return 'Maks: ${widget.limits.max.toStringAsFixed(0)}';
+      if (value > limits.max) return 'Maks: ${limits.max.toStringAsFixed(0)}';
+      if (value < limits.min) return 'Min: ${limits.min.toStringAsFixed(1)}';
     }
     return null;
   }
@@ -112,6 +122,28 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   String _formatValue(double value) => value == value.truncateToDouble()
       ? value.truncate().toString()
       : value.toStringAsFixed(2);
+
+  void _updateSliderAndValidate(String text, MeasurementLimits limits) {
+    double value = double.tryParse(text) ?? limits.min;
+
+    // Jika nilai saat ini di bawah batas minimum baru, paksa perbarui.
+    if (value < limits.min) {
+      value = limits.min;
+      // Perbarui juga controller agar UI sinkron.
+      // `addPostFrameCallback` memastikan ini berjalan setelah build selesai.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final newText = _formatValue(value);
+          widget.controller.text = newText;
+          widget.onChanged?.call(newText);
+        }
+      });
+    }
+
+    setState(() {
+      _currentSliderValue = value.clamp(limits.min, limits.max);
+    });
+  }
 
   void _updateSliderFromText(String text) {
     final value = double.tryParse(text);

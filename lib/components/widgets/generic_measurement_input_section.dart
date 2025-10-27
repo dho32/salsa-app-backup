@@ -13,6 +13,7 @@ class GenericMeasurementInputSection extends StatelessWidget {
   final Map<String, TextEditingController> controllers; // DITAMBAHKAN: Menerima controller dari induk
   final Function(MeasurementEntry) onUpdate;
   final double? indoorTemp;
+  final VoidCallback? onMaybeResetNote;
 
   const   GenericMeasurementInputSection({
     super.key,
@@ -21,6 +22,7 @@ class GenericMeasurementInputSection extends StatelessWidget {
     required this.controllers, // DITAMBAHKAN: Wajib diisi oleh induk
     required this.onUpdate,
     required this.indoorTemp,
+    this.onMaybeResetNote,
   });
 
   @override
@@ -81,13 +83,15 @@ class GenericMeasurementInputSection extends StatelessWidget {
                 onUpdate(mEntry.copyWith(capturedImage: newImage));
               },
               isSkipEnabled: true,
-              isSkipped: mEntry.isSkipped,
+              isSkipped: mEntry.isSkipped ?? false,
               onSkipChanged: (isSkipped) {
                 if (isSkipped) {
-                  onUpdate(mEntry.copyWith(isSkipped: true));
+                  onUpdate(mEntry.copyWith(isSkipped: true, value: 0.0, capturedImage: null));
                   controller.clear();
+                  onMaybeResetNote?.call();
                 } else {
                   onUpdate(mEntry.copyWith(isSkipped: false));
+                  onMaybeResetNote?.call();
                 }
               },
             ),

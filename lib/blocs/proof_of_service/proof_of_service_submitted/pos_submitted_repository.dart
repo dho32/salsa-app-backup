@@ -26,12 +26,14 @@ class PosSubmittedRepository {
         'pic_phone': transactionInfo?.picPhone ?? '',
         'technician_2_name': transactionInfo?.technician2 ?? '',
         'technician_3_name': transactionInfo?.technician3 ?? '',
-        'temperature_in': double.tryParse(transactionInfo?.temperatureIn ?? '0') ?? 0,
+        'temperature_in_before': double.tryParse(transactionInfo?.temperatureIn ?? '0') ?? 0,
         'temperature_out': double.tryParse(transactionInfo?.temperatureOut ?? '0') ?? 0,
+        'temperature_in_after': double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
         'service_time': transactionInfo?.serviceTime ?? '',
         'pic_image_detail': transactionInfo?.picImageDetail?.toJson(),
-        'temp_in_image_detail': transactionInfo?.temperatureInImage?.toJson(),
+        'temp_in_image_detail_before': transactionInfo?.temperatureInImage?.toJson(),
         'temp_out_image_detail': transactionInfo?.temperatureOutImage?.toJson(),
+        'temp_in_image_detail_after': transactionInfo?.finalTemperatureInImage?.toJson(),
         'items': items,
       };
 
@@ -55,5 +57,27 @@ class PosSubmittedRepository {
       return {'status': 'ERROR', 'message': e.toString()};
     }
   }
-// Anda bisa menambahkan method confirmUploadSuccess di sini juga
+
+  Future<bool> checkActiveServiceCall(String transNo) async {
+    try {
+      Uri uri = getUrl(pathUrl: '/proof_of_service/sc_check_active', params: {
+        'trans_no': transNo,
+      });
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+
+        if (body['status'] == 'OK' && body['result'] != null) {
+          final result = body['result'] as Map<String, dynamic>;
+          return result['has_active_sc'] ?? false;
+        }
+      }
+      return false;
+    } catch (e) {
+      log("Error checking active SC: $e");
+      return false;
+    }
+  }
 }

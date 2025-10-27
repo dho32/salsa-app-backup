@@ -9,6 +9,8 @@ import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/proof_of_service/pos_validasion_entry_model_ext.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
+import '../../../components/services/hive_clear_service.dart';
+import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 
 class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
@@ -18,6 +20,45 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
     on<SubmitPosValidation>(_onSubmitValidation);
     on<RetryPosUpload>(_onRetryUpload);
     on<LoadPosValidationPartial>(_onLoadValidationPartial);
+    on<FinalValidationRequested>(_onFinalValidationRequested);
+  }
+
+  Future<void> _onFinalValidationRequested(
+      FinalValidationRequested event,
+      Emitter<PosSubmittedState> emit,
+      ) async {
+    emit(PosValidationSubmitting()); // Tampilkan loading spinner kecil
+    try {
+      final validationBox = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      final entries = validationBox.values.where((e) => e.transNo == event.transNo).toList();
+
+      print("test");
+      final bool hasBrokenUnit = entries.any((entry) {
+        // Kondisi 1: Cek catatan
+        final bool isNoteBroken = entry.note?.trim().toLowerCase().contains('ac rusak / bermasalah') ?? false;
+
+        // Kondisi 2: Cek apakah ada pengukuran yang di-skip
+        final bool isMeasurementSkipped = entry.measurementsAfter.any((m) => m.isSkipped ?? false);
+
+        // Hasil akhir: Keduanya harus true
+        return isNoteBroken && isMeasurementSkipped;
+      });
+      print(hasBrokenUnit);
+
+      if (hasBrokenUnit) {
+        final bool hasActiveSC = await repository.checkActiveServiceCall(event.transNo);
+        if (!hasActiveSC) {
+          emit(ShowCreateServiceCallDialog());
+          return;
+        }
+      }
+
+      // Jika semua pengecekan lolos, beri perintah untuk lanjut ke OTP
+      emit(ProceedToOtpDialog());
+
+    } catch (e) {
+      emit(PosValidationFailure("Gagal melakukan validasi akhir: ${e.toString()}"));
+    }
   }
 
   Future<void> _onSubmitValidation(
@@ -91,12 +132,13 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
         if (uploadResult.allSuccess) {
           // 5. Jika semua sukses, hapus data dari Hive
-          for (var entry in entries) {
-            await validationBox.delete(entry.serialNo.trim().toUpperCase());
-          }
-          await infoBox.delete(
-              getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
+          // for (var entry in entries) {
+          //   await validationBox.delete(entry.serialNo.trim().toUpperCase());
+          // }
+          // await infoBox.delete(
+          //     getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
 
+          await clearTransactionData(event.transNo);
           final queueBox =
               await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
           final task = ConfirmationTaskModel(
@@ -105,18 +147,27 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
           emit(PosValidationSuccess());
         } else {
+          final cleanFailedFiles = uploadResult.failedFiles.map((fullErrorString) {
+            return fullErrorString.split(' (').first;
+          }).toList();
+
+          final detailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+          final detailData = detailCacheBox.get(event.transNo);
+          final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
+
           final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
-            'failedFiles': uploadResult.failedFiles,
+            'failedFiles': cleanFailedFiles,
             'presignedDetail': presignedDetail,
+            'storeName': storeName,
           });
 
           // Pancarkan state gagal sebagian
           emit(PosValidationUploadPartial(
             successCount: uploadResult.successCount,
             failureCount: uploadResult.failureCount,
-            failedFiles: uploadResult.failedFiles,
+            failedFiles: cleanFailedFiles,
             transNo: event.transNo,
             presignedDetail: presignedDetail,
           ));
@@ -143,22 +194,22 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         progressCubit: event.progressCubit,
       );
 
-      final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
-      final validationBox =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-      final infoBox = await Hive.openBox<PosTransactionInfoModel>(
-          kPosTransactionInfoHiveBox);
+      // final validationBox =
+      //     await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      // final infoBox = await Hive.openBox<PosTransactionInfoModel>(
+      //     kPosTransactionInfoHiveBox);
 
       if (result.allSuccess) {
         // Jika retry berhasil, hapus semua data
-        final toDelete =
-            validationBox.values.where((e) => e.transNo == event.transNo);
-        for (var entry in toDelete) {
-          await validationBox.delete(entry.serialNo.trim().toUpperCase());
-        }
-        await infoBox.delete(getHiveKeyForTransaction(event.transNo));
-        await cacheBox.delete(event.transNo);
+        // final toDelete =
+        //     validationBox.values.where((e) => e.transNo == event.transNo);
+        // for (var entry in toDelete) {
+        //   await validationBox.delete(entry.serialNo.trim().toUpperCase());
+        // }
+        // await infoBox.delete(getHiveKeyForTransaction(event.transNo));
+        // await cacheBox.delete(event.transNo);
 
+        await clearTransactionData(event.transNo);
         final queueBox =
             await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
         final task =
@@ -168,15 +219,18 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         emit(PosValidationSuccess());
       } else {
         // Jika masih gagal, update cache dengan sisa file yang masih gagal
+        final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+        final cleanFailedFiles = result.failedFiles.map((e) => e.split(' (').first).toList();
+
         await cacheBox.put(event.transNo, {
           'transNo': event.transNo,
-          'failedFiles': result.failedFiles,
+          'failedFiles': cleanFailedFiles,
           'presignedDetail': event.presignedDetail,
         });
         emit(PosValidationUploadPartial(
           successCount: result.successCount,
           failureCount: result.failureCount,
-          failedFiles: result.failedFiles,
+          failedFiles: cleanFailedFiles,
           transNo: event.transNo,
           presignedDetail: event.presignedDetail,
         ));

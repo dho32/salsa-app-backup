@@ -11,15 +11,15 @@ extension ServiceCallValidationEntryModelJson on ServiceCallValidationEntryModel
       'outdoor_serial_no': outdoorSerialNo,
       'unit_type': unitType,
       'problems': problems.map((p) => p.toJson()).toList(),
-      // MODIFIKASI START: Tambahkan data Before
       'images_before': imagePathsBefore.map((img) => img.toJson()).toList(),
       'measurements_before': measurementsBefore.map((m) => m.toJson()).toList(),
-      // MODIFIKASI START: Tambahkan data After
       'images_after': imagePathsAfter.map((img) => img.toJson()).toList(),
       'measurements_after': measurementsAfter.map((m) => m.toJson()).toList(),
-      // MODIFIKASI END
-
       'trans_no': transNo,
+      'note_indoor_before': selectedIndoorNoteBefore,
+      'note_indoor_after': selectedIndoorNoteAfter,
+      'note_outdoor_before': selectedOutdoorNoteBefore,
+      'note_outdoor_after': selectedOutdoorNoteAfter,
     };
   }
 }
@@ -51,9 +51,9 @@ extension MeasurementEntryJson on MeasurementEntry {
   Map<String, dynamic> toJson() {
     return {
       'measurement_id': measurementId,
-      'value': isSkipped?0:value,
+      'value': isSkipped ?? false ?0:value,
       'unit': unit,
-      'image': isSkipped?null:capturedImage?.toJson(),
+      'image': isSkipped ?? false?null:capturedImage?.toJson(),
       'is_skipped': isSkipped,
     };
   }

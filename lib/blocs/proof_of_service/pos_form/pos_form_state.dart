@@ -18,11 +18,14 @@ class PosFormState extends Equatable {
   final String technician2;
   final String technician3;
   final bool showTechnician3;
+  final String finalTempIn;
+  final double? minFinalTempInLimit;
 
   // --- Image Fields ---
   final CapturedImageDetail? picImageDetail;
   final CapturedImageDetail? temperatureInImage;
   final CapturedImageDetail? temperatureOutImage;
+  final CapturedImageDetail? finalTempInImage;
 
   // --- Validation & Status Fields ---
   final bool isPicStoreValid;
@@ -36,6 +39,9 @@ class PosFormState extends Equatable {
     this.picPosition = '',
     this.tempIn = '',
     this.tempOut = '',
+    this.finalTempIn = '',
+    this.finalTempInImage,
+    this.minFinalTempInLimit,
     this.serviceTime = '',
     this.picName = '',
     this.picPhone = '',
@@ -58,6 +64,9 @@ class PosFormState extends Equatable {
     String? picPosition,
     String? tempIn,
     String? tempOut,
+    String? finalTempIn,
+    CapturedImageDetail? finalTempInImage,
+    double? minFinalTempInLimit,
     String? serviceTime,
     String? picName,
     String? picPhone,
@@ -78,6 +87,9 @@ class PosFormState extends Equatable {
       picPosition: picPosition ?? this.picPosition,
       tempIn: tempIn ?? this.tempIn,
       tempOut: tempOut ?? this.tempOut,
+      finalTempIn: finalTempIn ?? this.finalTempIn,
+      finalTempInImage: finalTempInImage ?? this.finalTempInImage,
+      minFinalTempInLimit: minFinalTempInLimit ?? this.minFinalTempInLimit,
       serviceTime: serviceTime ?? this.serviceTime,
       picName: picName ?? this.picName,
       picPhone: picPhone ?? this.picPhone,
@@ -101,6 +113,9 @@ class PosFormState extends Equatable {
     picPosition,
     tempIn,
     tempOut,
+    finalTempIn,
+    finalTempInImage,
+    minFinalTempInLimit,
     serviceTime,
     picName,
     picPhone,

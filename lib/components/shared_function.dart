@@ -138,13 +138,6 @@ String getHiveKeyForTransaction(String transNo) {
 }
 
 class LocationHelper {
-  /// Validasi lokasi foto pejabat toko terhadap koordinat toko
-  ///
-  /// [pic]  → hasil foto pejabat toko (CapturedImageDetail, punya lat/lng)
-  /// [tokoLat], [tokoLng] → koordinat toko
-  /// [maxDistance] → toleransi jarak dalam meter (default 500m)
-  ///
-  /// return `true` kalau lokasi valid (≤ maxDistance), else `false`
   static Future<bool> validateLocation({
     required CapturedImageDetail pic,
     required double tokoLat,

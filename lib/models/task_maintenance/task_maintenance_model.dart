@@ -23,12 +23,14 @@ class TaskMaintenanceModel {
 class TransactionSuggestion {
   final String transNo;
   final String customerName;
+  final String customerCode;
   final String type;
   final String status; // 'service' atau 'cuci'
 
   TransactionSuggestion({
     required this.transNo,
     required this.customerName,
+    required this.customerCode,
     required this.type,
     required this.status,
   });
@@ -37,6 +39,7 @@ class TransactionSuggestion {
     return TransactionSuggestion(
       transNo: json['trans_no'] ?? '',
       customerName: json['customer_name'] ?? '',
+      customerCode: json['customer_code'] ?? '',
       type: json['type'] ?? '',
       status: json['status'] ?? '',
     );

@@ -6,6 +6,11 @@ import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_cubit.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_repository.dart';
+import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
+import '../../../blocs/failed_uploads/failed_uploads_event.dart';
+import '../../../blocs/location_validation/location_validation_bloc.dart';
+import '../../../blocs/otp/otp_bloc.dart';
+import '../../../blocs/otp/otp_repository.dart';
 import '../../../blocs/proof_of_service/pos_unserviceable/pos_unserviceable_bloc.dart';
 import '../../../blocs/proof_of_service/pos_unserviceable/pos_unserviceable_event.dart';
 import '../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
@@ -19,6 +24,8 @@ import 'package:salsa/components/constants.dart';
 import 'package:salsa/components/shared_widgets.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/service_call/validation_status.dart';
+import '../../../components/shared_function.dart';
+import '../../../components/widgets/otp.dart';
 import '../../common/services/confirmation_service.dart';
 import '../proof_of_service_report_issue/pos_report_issue_screen.dart';
 import 'components/proof_of_service_detail_body_mobile.dart';
@@ -56,7 +63,7 @@ class _ProofOfServiceDetailScreenState
 
   Future<void> _openHiveBox() async {
     final box =
-    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+        await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
     if (mounted) {
       setState(() {
         _transactionInfoBox = box;
@@ -78,8 +85,8 @@ class _ProofOfServiceDetailScreenState
       providers: [
         BlocProvider(
           create: (context) =>
-          ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
-            ..add(FetchProofOfServiceDetail(widget.transNo)),
+              ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
+                ..add(FetchProofOfServiceDetail(widget.transNo)),
         ),
         BlocProvider(
           create: (context) {
@@ -95,12 +102,18 @@ class _ProofOfServiceDetailScreenState
         BlocProvider(
           create: (context) => UploadProgressCubit(),
         ),
+        BlocProvider(
+          create: (context) => FailedUploadsBloc(
+            progressCubit: context.read<UploadProgressCubit>(),
+          )..add(LoadFailedUploads()),
+        ),
         BlocProvider<PosFormCubit>(
           create: (context) {
             final detailState = context.read<ProofOfServiceDetailBloc>().state;
             bool initialAllUnitsValidated = false;
             if (detailState is ProofOfServiceDetailLoaded) {
-              initialAllUnitsValidated = detailState.data.detail.every((detail) {
+              initialAllUnitsValidated =
+                  detailState.data.detail.every((detail) {
                 final serialKey = detail.serialNo.trim().toUpperCase();
                 return detailState.validationStatuses[serialKey] ==
                     ValidationStatus.completed;
@@ -120,7 +133,7 @@ class _ProofOfServiceDetailScreenState
       child: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage("assets/images/bg_app.png"), // <-- Ganti dengan path gambar Anda
+            image: AssetImage("assets/images/bg_app.png"),
             fit: BoxFit.cover,
           ),
         ),
@@ -137,15 +150,18 @@ class _ProofOfServiceDetailScreenState
                 builder: (context, submitState) {
                   // Tombol hanya muncul jika tidak ada antrian retry
                   if (submitState is! PosValidationUploadPartial) {
-                    return BlocBuilder<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
+                    return BlocBuilder<ProofOfServiceDetailBloc,
+                        ProofOfServiceDetailState>(
                       builder: (context, detailState) {
                         // Dan hanya jika data detail sudah berhasil dimuat
                         if (detailState is ProofOfServiceDetailLoaded) {
                           return Padding(
                             padding: const EdgeInsets.only(right: 16.0),
                             child: ElevatedButton.icon(
-                              icon: const Icon(Icons.warning_amber_rounded, size: 16),
-                              label: const Text("Laporkan Masalah Jika Tidak Bisa Service"),
+                              icon: const Icon(Icons.warning_amber_rounded,
+                                  size: 16),
+                              label: const Text(
+                                  "Laporkan Masalah Jika Tidak Bisa Service"),
                               style: ElevatedButton.styleFrom(
                                 foregroundColor: Colors.orange.shade900,
                                 backgroundColor: Colors.white.withOpacity(0.9),
@@ -154,19 +170,25 @@ class _ProofOfServiceDetailScreenState
                                 visualDensity: VisualDensity.compact,
                               ),
                               onPressed: () {
-                                final List<String> reasons = detailState.data.unserviceableReasons ?? [];
-                                final String transNo = detailState.data.header.transNo;
+                                final List<String> reasons =
+                                    detailState.data.unserviceableReasons ?? [];
+                                final String transNo =
+                                    detailState.data.header.transNo;
 
-                                final posUnserviceableBloc = context.read<PosUnserviceableBloc>();
-                                final uploadProgressCubit = context.read<UploadProgressCubit>();
+                                final posUnserviceableBloc =
+                                    context.read<PosUnserviceableBloc>();
+                                final uploadProgressCubit =
+                                    context.read<UploadProgressCubit>();
 
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => MultiBlocProvider(
                                       providers: [
-                                        BlocProvider.value(value: posUnserviceableBloc),
-                                        BlocProvider.value(value: uploadProgressCubit),
+                                        BlocProvider.value(
+                                            value: posUnserviceableBloc),
+                                        BlocProvider.value(
+                                            value: uploadProgressCubit),
                                       ],
                                       child: PosReportIssueScreen(
                                         transNo: transNo,
@@ -179,11 +201,13 @@ class _ProofOfServiceDetailScreenState
                             ),
                           );
                         }
-                        return const SizedBox.shrink(); // Sembunyikan jika data belum siap
+                        return const SizedBox
+                            .shrink(); // Sembunyikan jika data belum siap
                       },
                     );
                   }
-                  return const SizedBox.shrink(); // Sembunyikan jika ada antrian retry
+                  return const SizedBox
+                      .shrink(); // Sembunyikan jika ada antrian retry
                 },
               ),
             ],
@@ -201,6 +225,18 @@ class _ProofOfServiceDetailScreenState
                     child: const UploadProgressDialog(),
                   ),
                 );
+              } else if (state is PosValidationUploadPartial) {
+                // 1. Tutup dialog progress yang sedang berjalan
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                // 2. Tampilkan dialog informasi kegagalan parsial
+                showPartialUploadDialog(
+                  context,
+                  state.successCount,
+                  state.failureCount,
+                  state.failedFiles,
+                );
               } else if (state is PosValidationSuccess) {
                 if (Navigator.canPop(context)) {
                   Navigator.pop(context);
@@ -210,8 +246,7 @@ class _ProofOfServiceDetailScreenState
                   context,
                   "Data berhasil dikirim.",
                   onOk: () {
-                    Navigator.of(context)
-                        .popUntil((route) => route.isFirst);
+                    Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                 );
               } else if (state is PosValidationFailure) {
@@ -219,18 +254,75 @@ class _ProofOfServiceDetailScreenState
                   Navigator.pop(context);
                 }
                 showFailureDialog(context, state.error);
+              } else if (state is ShowCreateServiceCallDialog) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text("Unit Bermasalah Terdeteksi"),
+                    content: const Text(kStringDialogUnitProblem),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text("OK"),
+                      ),
+                    ],
+                  ),
+                );
+              } else if (state is ProceedToOtpDialog) {
+                final detailState = context.read<ProofOfServiceDetailBloc>().state;
+                if (detailState is ProofOfServiceDetailLoaded) {
+                  final header = detailState.data.header;
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) {
+                      return MultiBlocProvider(
+                        providers: [
+                          BlocProvider(create: (_) => OtpBloc(repository: OtpRepository())),
+                          BlocProvider(create: (_) => LocationValidationBloc()),
+                          BlocProvider.value(value: context.read<UploadProgressCubit>()),
+                        ],
+                        child: OtpDialog(
+                          transNo: header.transNo,
+                          shipTo: header.shipToCode,
+                          email: header.storeEmail,
+                          storeLat: double.tryParse(header.latitude) ?? 0.0,
+                          storeLong: double.tryParse(header.longitude) ?? 0.0,
+                          onVerified: () {
+                            AuthStorage.getUser().then((user) {
+                              getPublicIpAddress().then((ip) {
+                                context.read<PosSubmittedBloc>().add(
+                                  SubmitPosValidation(
+                                    transNo: header.transNo,
+                                    createdBy: user['user_id'] ?? '',
+                                    createdByName: user['name'] ?? '',
+                                    createdByIP: ip,
+                                    progressCubit: context.read<UploadProgressCubit>(),
+                                  ),
+                                );
+                              });
+                            });
+                          },
+                        ),
+                      );
+                    },
+                  );
+                }
               }
             },
-            child: BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
+            child: BlocListener<ProofOfServiceDetailBloc,
+                ProofOfServiceDetailState>(
               listener: (context, detailState) {
                 if (detailState is ProofOfServiceDetailLoaded) {
-                  final allUnitsValidated = detailState.data.detail.every((detail) {
+                  final formCubit = context.read<PosFormCubit>();
+                  final allUnitsValidated =
+                      detailState.data.detail.every((detail) {
                     final serialKey = detail.serialNo.trim().toUpperCase();
-                    return detailState.validationStatuses[serialKey] == ValidationStatus.completed;
+                    return detailState.validationStatuses[serialKey] ==
+                        ValidationStatus.completed;
                   });
-                  context
-                      .read<PosFormCubit>()
-                      .updateAllUnitsValidated(allUnitsValidated);
+                  formCubit.updateAllUnitsValidated(allUnitsValidated);
+                  formCubit.recalculateFinalTempLimit();
                 }
               },
               child: SafeArea(

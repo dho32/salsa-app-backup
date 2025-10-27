@@ -15,7 +15,7 @@ class MeasurementEntry extends HiveObject {
   @HiveField(3) // BARU: Tambahkan field untuk CapturedImageDetail
   CapturedImageDetail? capturedImage; // Path foto terkait, bisa null
   @HiveField(4)
-  bool isSkipped;
+  bool? isSkipped;
 
   MeasurementEntry({
     required this.measurementId,

@@ -14,6 +14,7 @@ import 'package:salsa/screens/service_call/service_call_validation/components/wi
 import 'package:image_picker/image_picker.dart';
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/constants.dart';
+import '../../../../components/widgets/sc_measurement_input_section.dart';
 import '../../../../models/common/captured_image_detail.dart';
 
 const List<String> indoorMeasurementIds = ['Suhu'];
@@ -276,15 +277,11 @@ class _ServiceCallValidationBodyMobileState
               _handleButtonPhotoWidget(context, state, isBefore: true),
               // Tombol ambil foto
               const SizedBox(height: 8),
-              MeasurementInputSection(
-                // ## SOLUSI FINAL SLIDER: Tambahkan Key unik di sini ##
-                key: const ValueKey('measurements_before'),
+              ScMeasurementInputSection(
+                key: const ValueKey('measurements_before'), // Key tetap penting
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsBefore,
-                availableMeasurements: kMeasurementLimits.values.toList(),
-                onUpdate: (m) => context
-                    .read<ValidationDropdownBloc>()
-                    .add(UpdateMeasurementBefore(m)),
+                isBefore: true,
               ),
               SizedBox(
                 height: 20,
@@ -323,14 +320,11 @@ class _ServiceCallValidationBodyMobileState
                   isBefore: false, isLoading: _isTakingUnitPhoto),
               _handleButtonPhotoWidget(context, state, isBefore: false),
               const SizedBox(height: 8),
-              MeasurementInputSection(
-                key: const ValueKey('measurements_after'),
+              ScMeasurementInputSection(
+                key: const ValueKey('measurements_after'), // Key tetap penting
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsAfter,
-                availableMeasurements: kMeasurementLimits.values.toList(),
-                onUpdate: (m) => context
-                    .read<ValidationDropdownBloc>()
-                    .add(UpdateMeasurementAfter(m)),
+                isBefore: false,
               ),
               const SizedBox(height: 16),
               buildUnitTypeSelector(

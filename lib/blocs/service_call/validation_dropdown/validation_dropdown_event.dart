@@ -6,7 +6,8 @@ import '../../../models/common/measurement_entry.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk SaveValidationData
 import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 
-import '../../../models/service_call/problem_source_model.dart'; // BARU: Import ValidationViewMode
+import '../../../models/service_call/problem_source_model.dart';
+import '../../../models/service_call/service_call_detail_model.dart'; // BARU: Import ValidationViewMode
 
 abstract class ValidationDropdownEvent extends Equatable {
   const ValidationDropdownEvent();
@@ -21,6 +22,7 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
   final String currentIndoorSerial;
   final List<String> allAvailableOutdoorSerials;
   final List<ProblemSourceModel> problemSources;
+  final ServiceCallDetailModel detailData;
 
   const FetchValidationDropdownData({
     this.initialData,
@@ -28,6 +30,7 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
     required this.currentIndoorSerial,
     required this.allAvailableOutdoorSerials,
     required this.problemSources,
+    required this.detailData,
   });
 
   @override
@@ -36,7 +39,19 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
     transNo,
     currentIndoorSerial,
     allAvailableOutdoorSerials,
+    detailData,
   ];
+}
+
+class NoteChanged extends ValidationDropdownEvent {
+  final String? note;
+  final bool isIndoor;
+  final bool isBefore;
+
+  const NoteChanged(this.note, {required this.isIndoor, required this.isBefore});
+
+  @override
+  List<Object?> get props => [note, isIndoor, isBefore];
 }
 
 class SelectUnitType extends ValidationDropdownEvent {
@@ -165,13 +180,15 @@ class SaveValidationData extends ValidationDropdownEvent {
   final String transNo; // Menggunakan transNo dari ServiceCallValidationEntryModel
   final String serialNo; // Menggunakan serialNo dari ServiceCallValidationEntryModel
   final bool markAsCompleted;
+  final bool showNotification;
 
   const SaveValidationData({
     required this.transNo,
     required this.serialNo,
     this.markAsCompleted = false,
+    this.showNotification = true,
   });
 
   @override
-  List<Object?> get props => [transNo, serialNo, markAsCompleted];
+  List<Object?> get props => [transNo, serialNo, markAsCompleted, showNotification];
 }

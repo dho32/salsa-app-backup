@@ -1,4 +1,3 @@
-
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,16 +6,17 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
-import 'package:salsa/blocs/upload_progress/upload_progress_cubit.dart';
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import '../../../components/services/hive_clear_service.dart';
 import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/proof_of_service/pos_transaction_info_model.dart';
 import '../../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
+import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import 'pos_unserviceable_event.dart';
 import 'pos_unserviceable_repository.dart';
 import 'pos_unserviceable_state.dart';
@@ -31,8 +31,7 @@ class PosUnserviceableBloc
       : _draftBox = Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox),
         _repository = PosUnserviceableRepository(),
         super(const PosUnserviceableState()) {
-
-    on<LoadUnserviceableDraft>(_onLoadInitialDraft);
+    on<LoadUnserviceableDraft>(_onLoadInitialData);
     on<TakeProofPhoto>(_onTakeProofPhoto);
     on<RemoveProofPhoto>(_onRemoveProofPhoto);
     on<ReasonSelected>(_onReasonSelected);
@@ -45,10 +44,27 @@ class PosUnserviceableBloc
         .listen((state) {
       _saveDraftToHive(state);
     });
+
+    add(LoadUnserviceableDraft());
   }
 
-  void _onLoadInitialDraft(
-      LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) {
+  Future<void> _onLoadInitialData(
+      LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) async {
+    final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final retryData = retryBox.get(transNo);
+
+    if (retryData != null) {
+      final dataMap = Map<String, dynamic>.from(retryData as Map);
+      // Jika ada data retry, langsung emit state partialFailure
+      if (dataMap['type'] == 'unserviceable') {
+        emit(state.copyWith(
+          status: UnserviceableStatus.partialFailure,
+          partialUploadData: dataMap,
+        ));
+        return; // Hentikan proses agar tidak load draft
+      }
+    }
+
     try {
       final initialDraft = _draftBox.get(transNo);
       if (initialDraft != null) {
@@ -56,7 +72,7 @@ class PosUnserviceableBloc
         emit(PosUnserviceableState(
           proofImages: initialDraft.proofImages,
           selectedReason:
-          initialDraft.reason.isNotEmpty ? initialDraft.reason : null,
+              initialDraft.reason.isNotEmpty ? initialDraft.reason : null,
           notes: initialDraft.notes ?? '',
         ));
       }
@@ -71,7 +87,7 @@ class PosUnserviceableBloc
     EasyDebounce.debounce(
       'save-draft-debouncer-$transNo',
       const Duration(milliseconds: 500),
-          () {
+      () {
         if (state.proofImages.isEmpty &&
             state.selectedReason == null &&
             state.notes.isEmpty) {
@@ -109,10 +125,10 @@ class PosUnserviceableBloc
 
       final tempDir = await getTemporaryDirectory();
       final targetPath =
-      p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+          p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final XFile? compressedImage =
-      await FlutterImageCompress.compressAndGetFile(
+          await FlutterImageCompress.compressAndGetFile(
         pickedFile.path,
         targetPath,
         quality: 70,
@@ -165,15 +181,17 @@ class PosUnserviceableBloc
 
   void _onReasonSelected(
       ReasonSelected event, Emitter<PosUnserviceableState> emit) {
-    emit(state.copyWith(selectedReason: event.reason, clearPartialUploadData: true));
+    emit(state.copyWith(
+        selectedReason: event.reason, clearPartialUploadData: true));
   }
 
-  void _onNotesChanged(NotesChanged event, Emitter<PosUnserviceableState> emit) {
+  void _onNotesChanged(
+      NotesChanged event, Emitter<PosUnserviceableState> emit) {
     emit(state.copyWith(notes: event.notes, clearPartialUploadData: true));
   }
 
-  Future<void> _onSubmitReport(
-      SubmitUnserviceableReport event, Emitter<PosUnserviceableState> emit) async {
+  Future<void> _onSubmitReport(SubmitUnserviceableReport event,
+      Emitter<PosUnserviceableState> emit) async {
     if (state.proofImages.isEmpty || state.selectedReason == null) {
       emit(state.copyWith(
         status: UnserviceableStatus.failure,
@@ -210,7 +228,7 @@ class PosUnserviceableBloc
           }
         }
 
-        final uploadResult = await uploadUnserviceableImagesToS3(
+        final uploadResult = await uploadPOSUnserviceableImagesToS3(
           report,
           presignedDetails,
           progressCubit: event.progressCubit,
@@ -220,10 +238,22 @@ class PosUnserviceableBloc
           await _clearAllTransactionData();
           emit(state.copyWith(status: UnserviceableStatus.success));
         } else {
+
+          final detailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+          final detailData = detailCacheBox.get(transNo);
+          final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
+
           final partialData = {
+            'transNo': transNo,
             'presignedDetail': presignedDetails,
+            'successCount': uploadResult.successCount,
             'failedFiles': uploadResult.failedFiles,
+            'type': 'unserviceable',
+            'storeName': storeName,
           };
+          final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          await retryBox.put(transNo, partialData);
+
           emit(state.copyWith(
             status: UnserviceableStatus.partialFailure,
             partialUploadData: partialData,
@@ -242,8 +272,8 @@ class PosUnserviceableBloc
     }
   }
 
-  Future<void> _onRetryUpload(
-      RetryUnserviceableUpload event, Emitter<PosUnserviceableState> emit) async {
+  Future<void> _onRetryUpload(RetryUnserviceableUpload event,
+      Emitter<PosUnserviceableState> emit) async {
     emit(state.copyWith(status: UnserviceableStatus.uploading));
 
     final report = _draftBox.get(transNo);
@@ -254,7 +284,7 @@ class PosUnserviceableBloc
       return;
     }
 
-    final uploadResult = await uploadUnserviceableImagesToS3(
+    final uploadResult = await uploadPOSUnserviceableImagesToS3(
       report,
       event.presignedDetail,
       progressCubit: event.progressCubit,
@@ -262,6 +292,8 @@ class PosUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
+      final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+      await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));
     } else {
@@ -276,30 +308,38 @@ class PosUnserviceableBloc
     }
   }
 
-  // ... (di dalam class PosUnserviceableBloc)
-
   // Method baru untuk membersihkan semua data terkait transaksi ini
   Future<void> _clearAllTransactionData() async {
-    // 1. Hapus draft laporan unserviceable
-    await _draftBox.delete(transNo);
+    // // 1. Hapus draft laporan unserviceable
+    // await _draftBox.delete(transNo);
+    //
+    // // 2. Hapus cache detail utama dari halaman sebelumnya
+    // final detailCacheBox =
+    //     await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+    // await detailCacheBox.delete(transNo);
+    //
+    // // 3. Hapus info transaksi (PIC, teknisi, dll)
+    // final infoBox =
+    //     await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+    // await infoBox.delete(getHiveKeyForTransaction(transNo));
+    //
+    // // 4. Hapus data validasi unit (jika teknisi sempat mengisinya)
+    // final validationBox =
+    //     await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+    // final validationKeysToDelete = validationBox.keys.where((key) {
+    //   final entry = validationBox.get(key);
+    //   return entry != null && entry.transNo == transNo;
+    // }).toList();
+    // await validationBox.deleteAll(validationKeysToDelete);
 
-    // 2. Hapus cache detail utama dari halaman sebelumnya
-    final detailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-    await detailCacheBox.delete(transNo);
 
-    // 3. Hapus info transaksi (PIC, teknisi, dll)
-    final infoBox = await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    await infoBox.delete(getHiveKeyForTransaction(transNo));
-
-    // 4. Hapus data validasi unit (jika teknisi sempat mengisinya)
-    final validationBox = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    final validationKeysToDelete = validationBox.keys.where((key) {
-      final entry = validationBox.get(key);
-      return entry != null && entry.transNo == transNo;
-    }).toList();
-    await validationBox.deleteAll(validationKeysToDelete);
+    await clearTransactionData(transNo);
+    final queueBox =
+    await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+    final task =
+    ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
+    await queueBox.put(transNo.trim().toUpperCase(), task);
 
     print("🧹 Semua data Hive untuk transaksi $transNo telah dibersihkan.");
   }
-
 }

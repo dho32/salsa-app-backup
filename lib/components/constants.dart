@@ -27,8 +27,23 @@ const kPosTransactionInfoHiveBox = 'pos_transaction_info_box';
 const kPosValidationHiveBox = 'pos_validation_box';
 const kPosDetailCacheBox = 'pos_detail_cache_box';
 const kPosValidationPartialHiveBox = 'pos_validation_partial_cache';
-const kPosUnserviceableVisitQueueBox = 'unserviceable_visit_queue_box';
+// const kPosUnserviceableVisitQueueBox = 'unserviceable_visit_queue_box';
 const kPosUnserviceableDraftsBox = 'unserviceable_drafts_box';
+const kScUnserviceableDraftsBox = 'sc_unserviceable_drafts';
+
+
+///string
+const kStringDialogUnitProblem = """
+Ditemukan unit AC bermasalah yang belum memiliki tiket Service Call aktif pada toko ini.
+
+Mohon koordinasikan dengan PIC toko untuk melakukan input complaint terlebih dahulu. 
+Setelah complaint dibuat, Pekerjaan Service/Cleaning ini baru dapat diselesaikan di aplikasi SALSA.""";
+
+const kStringDialogUpdateLocation = """
+Masukkan alamat email toko. 
+Lokasi toko akan diambil secara otomatis dari lokasi anda saat ini.""";
+
+const List<String> kJabatanOptions = ["COS", "ACOS", "KASIR"];
 
 
 ///const
@@ -42,35 +57,27 @@ const Map<String, MeasurementLimits> kMeasurementLimits = {
   'temperature': MeasurementLimits(
       id: 'temperature',
       label: 'Suhu Indoor AC',
-      min: 0,
-      max: 25,
-      unit: '°C',
-      normalMin: 5,
-      normalMax: 15),
+      min: 4, max: 25, unit: '°C', normalMin: 5, normalMax: 15),
   'volt': MeasurementLimits(
       id: 'volt',
       label: 'Tegangan',
-      min: 0,
-      max: 420,
-      unit: 'V',
-      normalMin: 200.0,
-      normalMax: 240.0),
+      min: 150, max: 500, unit: 'V', normalMin: 200.0, normalMax: 240.0),
   'ampere': MeasurementLimits(
       id: 'ampere',
       label: 'Arus',
-      min: 0,
-      max: 15,
-      unit: 'A',
-      normalMin: 6.0,
-      normalMax: 8.0),
+      min: 4, max: 15, unit: 'A', normalMin: 6.0, normalMax: 8.0),
   'psi': MeasurementLimits(
       id: 'psi',
       label: 'Tekanan',
-      min: 0,
-      max: 170,
-      unit: 'PSI',
-      normalMin: 100,
-      normalMax: 150),
+      min: 50, max: 170, unit: 'PSI', normalMin: 100, normalMax: 150),
+  'final_temp_in_sc': MeasurementLimits(
+      id: 'final_temp_in_sc',
+      label: 'Suhu Akhir Ruangan', // Label dasar
+      min: 4,  // Batas bawah default (akan ditimpa oleh BLoC)
+      max: 30, // Batas atas
+      unit: '°C',
+      normalMin: 5,
+      normalMax: 18),
 };
 
 const Map<String, MeasurementLimits> kPOSMeasurementLimits = {

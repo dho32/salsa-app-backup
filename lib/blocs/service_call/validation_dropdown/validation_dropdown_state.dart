@@ -10,6 +10,15 @@ enum ValidationViewMode {
   after,
 }
 
+enum ValidationSaveStatus {
+  initial,
+  saving,
+  successDraft,
+  successSilent,
+  successFinal,
+  error
+}
+
 abstract class ValidationDropdownState extends Equatable {
   const ValidationDropdownState();
 
@@ -46,8 +55,21 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final List<CapturedImageDetail> capturedPhotosAfter;
   final List<MeasurementEntry> capturedMeasurementsAfter;
 
+  // Daftar Opsi Catatan (dari API)
+  final List<String> noteIndoorOptions;
+  final List<String> noteOutdoorOptions;
+
+  //selected note
+  final String? selectedIndoorNoteBefore;
+  final String? selectedOutdoorNoteBefore;
+  final String? selectedIndoorNoteAfter;
+  final String? selectedOutdoorNoteAfter;
+
   final int currentStep;
   final ValidationViewMode currentViewMode;
+
+  final ValidationSaveStatus saveStatus;
+  final String? saveMessage;
 
   const ValidationDropdownLoaded({
     required this.data,
@@ -62,6 +84,14 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.outdoorSerialNumbers = const [],
     this.unitLocation = 'INDOOR',
     this.selectedOutdoorSerialNo,
+    this.noteIndoorOptions = const [],
+    this.noteOutdoorOptions = const [],
+    this.selectedIndoorNoteBefore,
+    this.selectedOutdoorNoteBefore,
+    this.selectedIndoorNoteAfter,
+    this.selectedOutdoorNoteAfter,
+    this.saveStatus = ValidationSaveStatus.initial,
+    this.saveMessage,
   });
 
   ValidationDropdownLoaded copyWith({
@@ -76,37 +106,67 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     ValidationViewMode? currentViewMode,
     List<String>? outdoorSerialNumbers,
     String? selectedOutdoorSerialNo,
+    List<String>? noteIndoorOptions,
+    List<String>? noteOutdoorOptions,
+    String? selectedIndoorNoteBefore,
+    String? selectedOutdoorNoteBefore,
+    String? selectedIndoorNoteAfter,
+    String? selectedOutdoorNoteAfter,
+    ValidationSaveStatus? saveStatus,
+    String? saveMessage,
   }) {
     return ValidationDropdownLoaded(
       data: data ?? this.data,
       selectedUnitType: selectedUnitType ?? this.selectedUnitType,
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
-      capturedMeasurementsBefore: capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
+      capturedMeasurementsBefore:
+          capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
       selectedProblemCards: selectedProblemCards ?? this.selectedProblemCards,
       capturedPhotosAfter: capturedPhotosAfter ?? this.capturedPhotosAfter,
-      capturedMeasurementsAfter: capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
+      capturedMeasurementsAfter:
+          capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
       currentStep: currentStep ?? this.currentStep,
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
       selectedOutdoorSerialNo:
-      selectedOutdoorSerialNo ?? this.selectedOutdoorSerialNo,
+          selectedOutdoorSerialNo ?? this.selectedOutdoorSerialNo,
+      noteIndoorOptions: noteIndoorOptions ?? this.noteIndoorOptions,
+      noteOutdoorOptions: noteOutdoorOptions ?? this.noteOutdoorOptions,
+      selectedIndoorNoteBefore:
+          selectedIndoorNoteBefore ?? this.selectedIndoorNoteBefore,
+      selectedOutdoorNoteBefore:
+          selectedOutdoorNoteBefore ?? this.selectedOutdoorNoteBefore,
+      selectedIndoorNoteAfter:
+          selectedIndoorNoteAfter ?? this.selectedIndoorNoteAfter,
+      selectedOutdoorNoteAfter:
+          selectedOutdoorNoteAfter ?? this.selectedOutdoorNoteAfter,
+      saveStatus: saveStatus ?? this.saveStatus,
+      saveMessage: saveMessage,
     );
   }
 
   @override
   List<Object?> get props => [
-    data,
-    selectedUnitType,
-    selectedProblemCards,
-    capturedPhotosBefore,
-    capturedMeasurementsBefore,
-    capturedPhotosAfter,
-    capturedMeasurementsAfter,
-    currentStep,
-    currentViewMode,
-    outdoorSerialNumbers,
-    selectedOutdoorSerialNo,
-  ];
+        data,
+        selectedUnitType,
+        selectedProblemCards,
+        capturedPhotosBefore,
+        capturedMeasurementsBefore,
+        capturedPhotosAfter,
+        capturedMeasurementsAfter,
+        currentStep,
+        currentViewMode,
+        outdoorSerialNumbers,
+        selectedOutdoorSerialNo,
+        noteIndoorOptions,
+        noteOutdoorOptions,
+        selectedIndoorNoteBefore,
+        selectedOutdoorNoteBefore,
+        selectedIndoorNoteAfter,
+        selectedOutdoorNoteAfter,
+        saveStatus,
+        saveMessage,
+      ];
 }
 
 class SelectedProblemCard extends Equatable {

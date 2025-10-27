@@ -43,3 +43,13 @@ class LoadPosValidationPartial extends PosSubmittedEvent {
   final String transNo;
   const LoadPosValidationPartial(this.transNo);
 }
+
+class FinalValidationRequested extends PosSubmittedEvent {
+  final String transNo;
+  final String customerCode;
+
+  const FinalValidationRequested({required this.transNo, required this.customerCode});
+
+  @override
+  List<Object?> get props => [transNo, customerCode];
+}

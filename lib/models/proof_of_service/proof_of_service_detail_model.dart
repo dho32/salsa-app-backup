@@ -14,15 +14,19 @@ class ProofOfServiceDetailModel {
   final List<ProofOfServiceItemDetail> detail;
 
   @HiveField(2)
-  final List<String>? noteOptions;
+  final List<String>? noteIndoorOptions;
 
   @HiveField(3)
+  final List<String>? noteOutdoorOptions;
+
+  @HiveField(4)
   final List<String>? unserviceableReasons;
 
   ProofOfServiceDetailModel({
     required this.header,
     required this.detail,
-    this.noteOptions,
+    this.noteIndoorOptions,
+    this.noteOutdoorOptions,
     this.unserviceableReasons,
   });
 
@@ -33,7 +37,8 @@ class ProofOfServiceDetailModel {
       detail: (json['detail'] as List<dynamic>? ?? [])
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
-      noteOptions: List<String>.from(json['note_options'] ?? []),
+      noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
+      noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
       unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
     );
   }

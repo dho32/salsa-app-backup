@@ -1,12 +1,17 @@
 // lib/blocs/proof_of_service/pos_form/pos_form_cubit.dart
 
+import 'dart:math';
+
+import 'package:collection/collection.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_state.dart';
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
-import 'package:easy_debounce/easy_debounce.dart'; // Tambahkan package ini: flutter pub add easy_debounce
+import 'package:easy_debounce/easy_debounce.dart';
+
+import '../../../models/proof_of_service/pos_validation_entry_model.dart'; // Tambahkan package ini: flutter pub add easy_debounce
 
 class PosFormCubit extends Cubit<PosFormState> {
   final String transNo;
@@ -36,9 +41,49 @@ class PosFormCubit extends Cubit<PosFormState> {
         picImageDetail: info.picImageDetail,
         temperatureInImage: info.temperatureInImage,
         temperatureOutImage: info.temperatureOutImage,
+        finalTempIn: info.finalTemperatureIn ?? '',
+        finalTempInImage: info.finalTemperatureInImage,
       ));
     }
     _validateForm();
+  }
+
+  void finalTempInChanged(String value) =>
+      emit(state.copyWith(finalTempIn: value));
+
+  void finalTempInImageChanged(CapturedImageDetail? image) =>
+      emit(state.copyWith(finalTempInImage: image));
+
+  void recalculateFinalTempLimit() {
+    final validationBox =
+        Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
+
+    final indoorEntries = validationBox.values.where((e) {
+      bool isComplete = e.isCompleted ?? false;
+      return e.transNo == transNo &&
+          e.articleType?.toUpperCase() == 'IN' &&
+          isComplete;
+    });
+
+    double minTemp = double.infinity; // Mulai dengan nilai yang sangat tinggi
+
+    for (final entry in indoorEntries) {
+      final tempMeasurement = entry.measurementsAfter.firstWhereOrNull((m) {
+        bool isSkip = m.isSkipped ?? false;
+        return m.measurementId == 'temperature' && isSkip;
+      });
+      if (tempMeasurement != null) {
+        minTemp = min(minTemp, tempMeasurement.value);
+      }
+    }
+
+    // Jika tidak ada suhu yang ditemukan, jangan set batas. Jika ada, set batasnya.
+    final newLimit = (minTemp == double.infinity) ? 4.0 : minTemp;
+
+    // Hanya emit state jika nilainya berubah
+    if (state.minFinalTempInLimit != newLimit) {
+      emit(state.copyWith(minFinalTempInLimit: newLimit));
+    }
   }
 
   // --- Methods for UI events ---
@@ -101,7 +146,15 @@ class PosFormCubit extends Cubit<PosFormState> {
         state.temperatureInImage != null &&
         state.temperatureOutImage != null;
 
-    final isReady = picStoreValid && serviceInfoValid && state.allUnitsValidated;
+    final finalTempValid =
+        state.finalTempIn.isNotEmpty && state.finalTempInImage != null;
+
+    // final isReady = picStoreValid && serviceInfoValid && state.allUnitsValidated;
+
+    final isReady = picStoreValid &&
+        serviceInfoValid &&
+        state.allUnitsValidated &&
+        (!state.allUnitsValidated || finalTempValid);
 
     emit(state.copyWith(
       isPicStoreValid: picStoreValid,
@@ -123,9 +176,10 @@ class PosFormCubit extends Cubit<PosFormState> {
       ..serviceTime = state.serviceTime
       ..picImageDetail = state.picImageDetail
       ..temperatureInImage = state.temperatureInImage
-      ..temperatureOutImage = state.temperatureOutImage;
+      ..temperatureOutImage = state.temperatureOutImage
+      ..finalTemperatureIn = state.finalTempIn
+      ..finalTemperatureInImage = state.finalTempInImage;
 
     await _transactionInfoBox.put(transNo, infoToSave);
-    print('✅ Form state saved to Hive for $transNo');
   }
 }

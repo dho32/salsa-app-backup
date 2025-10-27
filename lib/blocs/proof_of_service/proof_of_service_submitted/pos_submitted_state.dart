@@ -23,3 +23,6 @@ class PosValidationUploadPartial extends PosSubmittedState {
     required this.presignedDetail,
   });
 }
+class ShowCreateServiceCallDialog extends PosSubmittedState {}
+
+class ProceedToOtpDialog extends PosSubmittedState {}

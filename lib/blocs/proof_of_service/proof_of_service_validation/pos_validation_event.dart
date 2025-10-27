@@ -143,3 +143,12 @@ class ProceedToNextStep extends PosValidationEvent {
   @override
   List<Object> get props => [];
 }
+
+class UpdateNoteAfter extends PosValidationEvent {
+  final String note;
+
+  const UpdateNoteAfter(this.note);
+
+  @override
+  List<Object?> get props => [note];
+}

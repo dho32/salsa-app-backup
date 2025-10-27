@@ -54,8 +54,9 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       FetchPosValidationData event, Emitter<PosValidationState> emit) {
     emit(PosValidationLoading());
     final initialData = event.initialData;
+    bool isComplete = initialData?.isCompleted ?? false;
 
-    if (initialData != null && initialData.isCompleted) {
+    if (initialData != null && isComplete) {
       // Jika ya, panggil event MarkAsInProgress dari dalam BLoC itu sendiri
       add(MarkAsInProgress(
         transNo: event.transNo,
@@ -184,7 +185,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       // =================================================================
       for (final measurement in currentState.measurementsAfter) {
         // Jangan validasi jika pengukuran di-skip
-        if (measurement.isSkipped) continue;
+        if (measurement.isSkipped ?? false) continue;
 
         // Ambil batas (limits) dari konstanta
         final limits = kPOSMeasurementLimits[measurement.measurementId];

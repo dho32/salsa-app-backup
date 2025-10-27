@@ -56,16 +56,26 @@ class _RemoteValidationScreenState extends State<RemoteValidationScreen> {
 
   Future<void> _loadInitialData() async {
     try {
+      final remoteProblemSource = widget.problemSources.firstWhereOrNull(
+        (src) => src.unitType.toUpperCase() == 'REMOTE',
+      );
+      if (remoteProblemSource == null) {
+        throw Exception("Konfigurasi masalah untuk 'REMOTE' tidak ditemukan.");
+      }
       // 1. Ambil data master masalah & solusi
       setState(() {
-        _problemSources = widget.problemSources;
+        // ✅ Simpan HANYA problem source 'REMOTE'
+        _problemSources = [remoteProblemSource];
+        // ✅ Set unit type secara otomatis ke 'REMOTE'
+        _selectedUnitType = 'REMOTE';
         // 2. Jika ada data awal (draft), pulihkan state
         if (widget.initialData != null) {
-          _selectedUnitType = widget.initialData!.unitType;
-          final initialProblems = widget.initialData!.problems;
-          for (var p in initialProblems) {
-            _selectedProblemCards.add(_ProblemCard(
-                problemId: p.problemId, solutionIds: p.solutionIds));
+          if (widget.initialData!.unitType.toUpperCase() == 'REMOTE') {
+            final initialProblems = widget.initialData!.problems;
+            for (var p in initialProblems) {
+              _selectedProblemCards.add(_ProblemCard(
+                  problemId: p.problemId, solutionIds: p.solutionIds));
+            }
           }
         }
         _isLoading = false;
@@ -133,23 +143,23 @@ class _RemoteValidationScreenState extends State<RemoteValidationScreen> {
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
       ));
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     }
   }
 
   void _showAddProblemDialog() {
-    if (_selectedUnitType == null) {
+    // _selectedUnitType PASTI 'REMOTE' atau null jika belum load
+    if (_selectedUnitType == null || _problemSources.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Pilih sumber permasalahan terlebih dahulu."),
+        content: Text("Data sumber masalah belum siap."),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
       ));
       return;
     }
 
-    final problemsForType = _problemSources
-        .firstWhere((s) => s.unitType == _selectedUnitType)
-        .problems;
+    // ✅ Langsung ambil problems dari _problemSources[0] (karena hanya ada 1)
+    final problemsForType = _problemSources[0].problems;
     final existingIds = _selectedProblemCards.map((p) => p.problemId).toList();
 
     showDialogAddProblem(
@@ -182,7 +192,6 @@ class _RemoteValidationScreenState extends State<RemoteValidationScreen> {
         // Kirim semua data dan FUNGSI ke body
         isLoading: _isLoading,
         problemSources: _problemSources,
-        selectedUnitType: _selectedUnitType,
         selectedProblemCards: _selectedProblemCards
             .map((p) => SelectedProblemCard(
                 selectedProblemId: p.problemId,
@@ -192,12 +201,6 @@ class _RemoteValidationScreenState extends State<RemoteValidationScreen> {
         uniqueId: widget.uniqueId,
         complaintDetails: widget.complaintDetails,
         imageFile: widget.imageFile,
-        onUnitTypeChanged: (value) {
-          setState(() {
-            _selectedUnitType = value;
-            _selectedProblemCards.clear();
-          });
-        },
         onAddProblem: _showAddProblemDialog,
         onRemoveProblem: (card) {
           setState(() {

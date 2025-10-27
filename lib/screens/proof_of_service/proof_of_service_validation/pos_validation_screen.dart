@@ -44,10 +44,43 @@ class PosValidationScreen extends StatefulWidget {
 class _PosValidationScreenState extends State<PosValidationScreen> {
   final _noteController = TextEditingController();
 
-  bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
-    if (measurements.isEmpty) return true;
-    return measurements
-        .every((m) => m.isSkipped || (m.capturedImage != null && m.value != 0));
+  /// Fungsi debug yang mencetak status setiap elemen
+  /// DAN mengembalikan 'true' HANYA JIKA semua elemen lolos.
+  bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
+    print('--- MEMULAI DEBUGGING _areAllMeasurementsFilled ---');
+    print('Total elemen: ${measurements.length}');
+
+    // 1. Kita mulai dengan asumsi semuanya LOLOS
+    bool allItemsPassed = true;
+
+    for (int i = 0; i < measurements.length; i++) {
+      var m = measurements[i];
+
+      // Evaluasi logika
+      bool isSkippedCheck = m.isSkipped ?? false;
+      bool isFilledCheck = (m.capturedImage != null && m.value != 0);
+      bool didPass = isSkippedCheck || isFilledCheck;
+
+      print('\n--- Memeriksa Item ke-$i ---');
+      print('isSkipped: ${m.isSkipped} (Evaluasi: $isSkippedCheck)');
+      print('capturedImage != null: ${m.capturedImage != null}');
+      print('value: ${m.value} (Evaluasi: ${m.value != 0})');
+
+      if (didPass) {
+        print('>>> Status: LOLOS');
+      } else {
+        print('>>> !!! STATUS: GAGAL !!! <<<');
+        print('Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
+
+        // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
+        allItemsPassed = false;
+      }
+    }
+
+    print('\n--- DEBUGGING SELESAI ---');
+
+    // 3. Kembalikan hasil akhir
+    return allItemsPassed;
   }
 
   @override
@@ -173,14 +206,15 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   if (latestState is! PosValidationLoaded) return;
 
                   final bool isAnyMeasurementSkipped =
-                  latestState.measurementsAfter.any((m) => m.isSkipped);
+                  latestState.measurementsAfter.any((m) => m.isSkipped ?? false);
 
                   if (latestState.photosAfter.isEmpty) {
                     _showValidationErrorSnackbar(
                         'Foto unit sesudah cuci wajib dilengkapi.');
                     return;
                   }
-                  if (!_areAllMeasurementsFilled(latestState.measurementsAfter)) {
+
+                  if (!checkMeasurementDetails(latestState.measurementsAfter)) {
                     _showValidationErrorSnackbar(
                         'Harap isi semua nilai & foto hasil pengukuran.');
                     return;
@@ -194,7 +228,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   }
 
                   for (final measurement in latestState.measurementsAfter) {
-                    if (measurement.isSkipped) continue;
+                    if (measurement.isSkipped ?? false) continue;
 
                     final limits = kPOSMeasurementLimits[measurement.measurementId];
                     if (limits != null) {

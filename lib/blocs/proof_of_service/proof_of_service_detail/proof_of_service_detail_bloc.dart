@@ -91,7 +91,8 @@ class ProofOfServiceDetailBloc
       }
 
       if (draft != null) {
-        if (draft.isCompleted) {
+        bool isComplete = draft.isCompleted ?? false;
+        if (isComplete) {
           statuses[key] = ValidationStatus.completed;
         } else {
           statuses[key] = ValidationStatus.inProgress;

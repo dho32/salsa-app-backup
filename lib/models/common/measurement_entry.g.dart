@@ -21,7 +21,7 @@ class MeasurementEntryAdapter extends TypeAdapter<MeasurementEntry> {
       value: fields[1] as double,
       unit: fields[2] as String,
       capturedImage: fields[3] as CapturedImageDetail?,
-      isSkipped: fields[4] as bool,
+      isSkipped: fields[4] as bool?,
     );
   }
 

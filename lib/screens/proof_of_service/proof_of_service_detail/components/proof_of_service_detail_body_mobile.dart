@@ -23,6 +23,7 @@ import '../../../../blocs/proof_of_service/proof_of_service_submitted/pos_submit
 import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/shared_widgets.dart';
+import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
@@ -52,6 +53,7 @@ class _ProofOfServiceDetailBodyMobileState
   // LANGKAH 2: DEKLARASI CONTROLLER DI SINI
   late final TextEditingController _tempInController;
   late final TextEditingController _tempOutController;
+  late final TextEditingController _finalTempController;
 
   final kIndoorLimits = MeasurementLimits(
       id: 'temp_in',
@@ -78,6 +80,8 @@ class _ProofOfServiceDetailBodyMobileState
     final initialFormState = context.read<PosFormCubit>().state;
     _tempInController = TextEditingController(text: initialFormState.tempIn);
     _tempOutController = TextEditingController(text: initialFormState.tempOut);
+    _finalTempController =
+        TextEditingController(text: initialFormState.finalTempIn);
   }
 
   @override
@@ -85,6 +89,7 @@ class _ProofOfServiceDetailBodyMobileState
     // Jangan lupa dispose controller
     _tempInController.dispose();
     _tempOutController.dispose();
+    _finalTempController.dispose();
     super.dispose();
   }
 
@@ -117,15 +122,17 @@ class _ProofOfServiceDetailBodyMobileState
         BlocListener<PosFormCubit, PosFormState>(
           listenWhen: (previous, current) =>
               previous.tempIn != current.tempIn ||
-              previous.tempOut != current.tempOut,
+              previous.tempOut != current.tempOut ||
+              previous.finalTempIn != current.finalTempIn,
           listener: (context, state) {
-            // Update controller hanya jika teksnya berbeda untuk menghindari
-            // kursor lompat saat mengetik
             if (_tempInController.text != state.tempIn) {
               _tempInController.text = state.tempIn;
             }
             if (_tempOutController.text != state.tempOut) {
               _tempOutController.text = state.tempOut;
+            }
+            if (_finalTempController.text != state.finalTempIn) {
+              _finalTempController.text = state.finalTempIn;
             }
           },
         ),
@@ -216,7 +223,8 @@ class _ProofOfServiceDetailBodyMobileState
                                       validationStatuses:
                                           detailState.validationStatuses,
                                       isEnabled: formState.tempOut.isNotEmpty &&
-                                          ((double.tryParse(formState.tempOut) ??
+                                          ((double.tryParse(
+                                                          formState.tempOut) ??
                                                       0) >=
                                                   kOutdoorLimits.min &&
                                               (double.tryParse(
@@ -239,6 +247,50 @@ class _ProofOfServiceDetailBodyMobileState
                                     ),
                                 ],
                               ),
+                            ),
+                            BlocBuilder<PosFormCubit, PosFormState>(
+                              buildWhen: (prev, current) =>
+                                  prev.allUnitsValidated !=
+                                  current.allUnitsValidated,
+                              builder: (context, formState) {
+                                final bool isEnabled =
+                                    formState.allUnitsValidated;
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 16.0),
+                                  child: Stack(
+                                    children: [
+                                      // Layer 1: Widget utama yang diredupkan & dinonaktifkan
+                                      Opacity(
+                                        opacity: isEnabled ? 1.0 : 0.5,
+                                        child: AbsorbPointer(
+                                          absorbing: !isEnabled,
+                                          child: _buildServiceInfoAfterPanel(
+                                              context, formState),
+                                        ),
+                                      ),
+
+                                      // Layer 2: Overlay tak terlihat untuk menangkap klik saat disabled
+                                      if (!isEnabled)
+                                        Positioned.fill(
+                                          child: InkWell(
+                                            onTap: () {
+                                              _showValidationSnackbar(
+                                                context,
+                                                'Selesaikan validasi semua unit terlebih dahulu untuk mengaktifkan.',
+                                              );
+                                            },
+                                            // Beri radius agar efek ripple cocok dengan card
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            child: Container(
+                                                color: Colors.transparent),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -265,7 +317,7 @@ class _ProofOfServiceDetailBodyMobileState
   Widget _buildServiceInfoPanel(BuildContext context, PosFormState formState) {
     final formCubit = context.read<PosFormCubit>();
     return _buildSection(
-      title: 'Informasi Servis',
+      title: 'Informasi Servis Sebelum Cleaning',
       child: Column(
         children: [
           MeasurementInputWidget(
@@ -304,6 +356,49 @@ class _ProofOfServiceDetailBodyMobileState
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildServiceInfoAfterPanel(
+      BuildContext context, PosFormState formState) {
+    final formCubit = context.read<PosFormCubit>();
+
+    // Batasan untuk suhu akhir, bisa sama atau beda dari suhu awal
+    final minLimit = formState.minFinalTempInLimit;
+
+    final String label = minLimit != null
+        ? 'Suhu Dalam Ruangan (Min: ${minLimit.toStringAsFixed(1)}°C)'
+        : 'Suhu Dalam Ruangan (°C)';
+
+    final finalTempLimits = MeasurementLimits(
+      id: 'final_temp_in',
+      label: label,
+      min: minLimit ?? 4,
+      // Gunakan batas dinamis, atau 4 sebagai default
+      max: 35,
+      unit: '°C',
+      normalMin: minLimit ?? 5,
+      normalMax: 18,
+    );
+
+    return _buildSection(
+      title: 'Informasi Servis Sesudah Cleaning',
+      child: MeasurementInputWidget(
+        controller: _finalTempController,
+        label: 'Suhu Dalam Ruangan (°C)',
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        limits: finalTempLimits,
+        transNo: widget.transNo,
+        initialImage: formState.finalTempInImage,
+        onEditingComplete: (finalValue) {
+          formCubit.finalTempInChanged(finalValue);
+          formCubit.onFieldChanged();
+        },
+        onImageChanged: (newImage) {
+          formCubit.finalTempInImageChanged(newImage);
+          formCubit.onFieldChanged();
+        },
       ),
     );
   }
@@ -481,15 +576,7 @@ class _ProofOfServiceDetailBodyMobileState
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildCustomTextField(
-                  initialValue: formState.picPosition,
-                  hintText: 'Jabatan',
-                  icon: Icons.work_outline,
-                  onChanged: (value) {
-                    formCubit.picPositionChanged(value);
-                    formCubit.onFieldChanged();
-                  },
-                ),
+                child: posPositionDropdown(context, formState),
               ),
             ],
           )
@@ -697,15 +784,36 @@ class _ProofOfServiceDetailBodyMobileState
                 shape: const StadiumBorder(),
                 textStyle:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            onPressed: () async {
+            onPressed: () {
+              // 1. Tutup keyboard
               FocusScope.of(context).unfocus();
-              // Menunggu sesaat agar event unfocus selesai diproses
-              await Future.delayed(const Duration(milliseconds: 150));
-              final latestFormState = context.read<PosFormCubit>().state;
+              final formCubit = context.read<PosFormCubit>();
+              if (formCubit.state.tempIn != _tempInController.text) {
+                formCubit.tempInChanged(_tempInController.text);
+                formCubit
+                    .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
+              }
+              if (formCubit.state.tempOut != _tempOutController.text) {
+                formCubit.tempOutChanged(_tempOutController.text);
+                formCubit
+                    .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
+              }
+              if (formCubit.state.finalTempIn != _finalTempController.text) {
+                formCubit.finalTempInChanged(_finalTempController.text);
+                formCubit
+                    .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
+              }
+
+              // 2. Baca state form terakhir untuk validasi dasar
+              final latestFormState = formCubit.state;
 
               if (latestFormState.isFormReadyToSubmit) {
                 final tempInValue = double.tryParse(latestFormState.tempIn);
                 final tempOutValue = double.tryParse(latestFormState.tempOut);
+                final finalTempInValue =
+                    double.tryParse(latestFormState.finalTempIn);
+                final minLimit = latestFormState.minFinalTempInLimit;
+
                 if (tempInValue != null) {
                   if (tempInValue < kIndoorLimits.min ||
                       tempInValue > kIndoorLimits.max) {
@@ -714,6 +822,7 @@ class _ProofOfServiceDetailBodyMobileState
                     return; // Hentikan proses jika tidak valid
                   }
                 }
+
                 if (tempOutValue != null) {
                   if (tempOutValue < kOutdoorLimits.min ||
                       tempOutValue > kOutdoorLimits.max) {
@@ -722,60 +831,31 @@ class _ProofOfServiceDetailBodyMobileState
                     return; // Hentikan proses jika tidak valid
                   }
                 }
-                final user = await AuthStorage.getUser();
-                final maintenanceByIP = await getPublicIpAddress();
-                final technicianName = user['name'] ?? '';
-                final maintenanceBy = user['user_id'] ?? '';
-                final double storeLat =
-                    double.tryParse(header.latitude ?? '') ?? 0.0;
-                final double storeLong =
-                    double.tryParse(header.longitude ?? '') ?? 0.0;
 
-                await showDialog<void>(
-                  context: context,
-                  builder: (_) {
-                    return MultiBlocProvider(
-                      providers: [
-                        // OTP Bloc
-                        BlocProvider(
-                            create: (_) =>
-                                OtpBloc(repository: OtpRepository())),
-                        BlocProvider(create: (_) => LocationValidationBloc()),
-                        BlocProvider.value(
-                            value: context.read<UploadProgressCubit>()),
-                      ],
-                      child: OtpDialog(
-                        transNo: header.transNo,
-                        shipTo: header.shipToCode,
-                        email: header.storeEmail,
-                        storeLat: storeLat,
-                        storeLong: storeLong,
-                        onVerified: () {
-                          final progressCubit =
-                              context.read<UploadProgressCubit>();
-                          context.read<PosSubmittedBloc>().add(
-                                SubmitPosValidation(
-                                  transNo: header.transNo,
-                                  createdBy: maintenanceBy,
-                                  createdByName: technicianName,
-                                  createdByIP: maintenanceByIP,
-                                  progressCubit: progressCubit,
-                                ),
-                              );
-                        },
-                      ),
-                    );
-                  },
-                );
+                if (finalTempInValue != null &&
+                    minLimit != null &&
+                    tempInValue != null) {
+                  if (finalTempInValue < minLimit ||
+                      finalTempInValue > tempInValue) {
+                    _showValidationSnackbar(context,
+                        'Suhu Dalam Ruangan ($finalTempInValue°C) harus di antara $minLimit°C dan $tempInValue°C.');
+                    return; // Hentikan proses jika tidak valid
+                  }
+                }
+
+                context.read<PosSubmittedBloc>().add(FinalValidationRequested(
+                      transNo: header.transNo,
+                      customerCode: header.shipToCode,
+                    ));
               } else {
-                if (!formState.isPicStoreValid) {
+                // Logika untuk menampilkan snackbar jika form belum siap (ini sudah benar)
+                if (!latestFormState.isPicStoreValid) {
                   _showValidationSnackbar(context,
                       'Harap lengkapi informasi PIC Toko terlebih dahulu.');
-                } else if (!formState.isServiceInfoValid) {
+                } else if (!latestFormState.isServiceInfoValid) {
                   _showValidationSnackbar(context,
                       'Harap lengkapi informasi servis dan foto pengukuran suhu.');
-                } else if (!formState.allUnitsValidated) {
-                  // <-- Gunakan state dari Cubit
+                } else if (!latestFormState.allUnitsValidated) {
                   _showValidationSnackbar(context,
                       'Harap lengkapi semua validasi unit terlebih dahulu.');
                 } else {
@@ -784,6 +864,93 @@ class _ProofOfServiceDetailBodyMobileState
                 }
               }
             },
+            // onPressed: () async {
+            //   FocusScope.of(context).unfocus();
+            //   // Menunggu sesaat agar event unfocus selesai diproses
+            //   await Future.delayed(const Duration(milliseconds: 150));
+            //   final latestFormState = context.read<PosFormCubit>().state;
+            //
+            //   if (latestFormState.isFormReadyToSubmit) {
+            //     final tempInValue = double.tryParse(latestFormState.tempIn);
+            //     final tempOutValue = double.tryParse(latestFormState.tempOut);
+            //     if (tempInValue != null) {
+            //       if (tempInValue < kIndoorLimits.min ||
+            //           tempInValue > kIndoorLimits.max) {
+            //         _showValidationSnackbar(context,
+            //             'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.');
+            //         return; // Hentikan proses jika tidak valid
+            //       }
+            //     }
+            //     if (tempOutValue != null) {
+            //       if (tempOutValue < kOutdoorLimits.min ||
+            //           tempOutValue > kOutdoorLimits.max) {
+            //         _showValidationSnackbar(context,
+            //             'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.');
+            //         return; // Hentikan proses jika tidak valid
+            //       }
+            //     }
+            //     final user = await AuthStorage.getUser();
+            //     final maintenanceByIP = await getPublicIpAddress();
+            //     final technicianName = user['name'] ?? '';
+            //     final maintenanceBy = user['user_id'] ?? '';
+            //     final double storeLat =
+            //         double.tryParse(header.latitude ?? '') ?? 0.0;
+            //     final double storeLong =
+            //         double.tryParse(header.longitude ?? '') ?? 0.0;
+            //
+            //     await showDialog<void>(
+            //       context: context,
+            //       builder: (_) {
+            //         return MultiBlocProvider(
+            //           providers: [
+            //             // OTP Bloc
+            //             BlocProvider(
+            //                 create: (_) =>
+            //                     OtpBloc(repository: OtpRepository())),
+            //             BlocProvider(create: (_) => LocationValidationBloc()),
+            //             BlocProvider.value(
+            //                 value: context.read<UploadProgressCubit>()),
+            //           ],
+            //           child: OtpDialog(
+            //             transNo: header.transNo,
+            //             shipTo: header.shipToCode,
+            //             email: header.storeEmail,
+            //             storeLat: storeLat,
+            //             storeLong: storeLong,
+            //             onVerified: () {
+            //               final progressCubit =
+            //                   context.read<UploadProgressCubit>();
+            //               context.read<PosSubmittedBloc>().add(
+            //                     SubmitPosValidation(
+            //                       transNo: header.transNo,
+            //                       createdBy: maintenanceBy,
+            //                       createdByName: technicianName,
+            //                       createdByIP: maintenanceByIP,
+            //                       progressCubit: progressCubit,
+            //                     ),
+            //                   );
+            //             },
+            //           ),
+            //         );
+            //       },
+            //     );
+            //   } else {
+            //     if (!formState.isPicStoreValid) {
+            //       _showValidationSnackbar(context,
+            //           'Harap lengkapi informasi PIC Toko terlebih dahulu.');
+            //     } else if (!formState.isServiceInfoValid) {
+            //       _showValidationSnackbar(context,
+            //           'Harap lengkapi informasi servis dan foto pengukuran suhu.');
+            //     } else if (!formState.allUnitsValidated) {
+            //       // <-- Gunakan state dari Cubit
+            //       _showValidationSnackbar(context,
+            //           'Harap lengkapi semua validasi unit terlebih dahulu.');
+            //     } else {
+            //       _showValidationSnackbar(context,
+            //           'Pastikan semua data sudah terisi dengan benar.');
+            //     }
+            //   }
+            // },
           ),
         ),
       ),
@@ -888,7 +1055,10 @@ class _ProofOfServiceDetailBodyMobileState
           .where((d) => d.unitType.toUpperCase() == 'IN')
           .map((d) => d.serialNo)
           .toList();
-      noteOptions = detailState.data.noteOptions ?? [];
+
+      noteOptions = detail.unitType == 'IN'
+          ? detailState.data.noteIndoorOptions ?? []
+          : detailState.data.noteOutdoorOptions ?? [];
     }
 
     if (!context.mounted) return;

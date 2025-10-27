@@ -30,6 +30,12 @@ class TransactionInfoModel extends HiveObject {
   @HiveField(7)
   CapturedImageDetail? picImageDetail;
 
+  @HiveField(8)
+  String? finalTemperatureIn;
+
+  @HiveField(9)
+  CapturedImageDetail? finalTemperatureInImage;
+
   TransactionInfoModel({
     required this.transNo,
     this.picNik,
@@ -39,5 +45,7 @@ class TransactionInfoModel extends HiveObject {
     this.technician2,
     this.technician3,
     this.picImageDetail,
+    this.finalTemperatureIn,
+    this.finalTemperatureInImage,
   });
 }

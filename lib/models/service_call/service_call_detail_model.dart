@@ -5,12 +5,18 @@ class ServiceCallDetailModel {
   final List<ServiceCallUnitDetail> detail;
   final List<OutdoorUnit> outdoor;
   final List<ProblemSourceModel> problems;
+  final List<String> noteIndoorOptions;
+  final List<String> noteOutdoorOptions;
+  final List<String> unserviceableReasons;
 
   ServiceCallDetailModel({
     required this.header,
     required this.detail,
     required this.outdoor,
     required this.problems,
+    required this.noteIndoorOptions,
+    required this.noteOutdoorOptions,
+    required this.unserviceableReasons,
   });
 
   factory ServiceCallDetailModel.fromJson(Map<String, dynamic> json) {
@@ -24,6 +30,9 @@ class ServiceCallDetailModel {
           .toList(),
       outdoor: outdoorList.map((item) => OutdoorUnit.fromJson(item)).toList(),
       problems: problemList.map((item) => ProblemSourceModel.fromJson(item)).toList(),
+      noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
+      noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
+      unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
     );
   }
 }
@@ -35,6 +44,8 @@ class ServiceCallHeader {
   final String storeName;
   final String storeAddress;
   final String storeEmail;
+  final String storeLat;
+  final String storeLong;
   final String contactName;
   final String contactPhone;
   final String transNo;
@@ -55,6 +66,8 @@ class ServiceCallHeader {
     required this.storeName,
     required this.storeAddress,
     required this.storeEmail,
+    required this.storeLat,
+    required this.storeLong,
     required this.contactName,
     required this.contactPhone,
     required this.transNo,
@@ -77,6 +90,8 @@ class ServiceCallHeader {
       storeName: json['store_name'] ?? '',
       storeAddress: json['store_address'] ?? '',
       storeEmail: json['store_email'] ?? '',
+      storeLat: json['latitude'] ?? '',
+      storeLong: json['longitude'] ?? '',
       contactName: json['contact_name'] ?? '',
       contactPhone: json['contact_phone'] ?? '',
       transNo: json['trans_no'] ?? '',

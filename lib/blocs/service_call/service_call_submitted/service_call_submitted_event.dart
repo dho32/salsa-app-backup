@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../upload_progress/upload_progress_cubit.dart';
+import '../sc_form/sc_form_state.dart';
 
 abstract class ServiceCallSubmittedEvent extends Equatable {
   const ServiceCallSubmittedEvent();
@@ -16,6 +17,8 @@ class SubmitValidation extends ServiceCallSubmittedEvent {
   final String createdByIP;
   final String pathAttachment;
   final UploadProgressCubit progressCubit;
+  final ScFormState formState;
+  final String storeName;
 
   const SubmitValidation({
     required this.transNo,
@@ -24,10 +27,20 @@ class SubmitValidation extends ServiceCallSubmittedEvent {
     required this.createdByIP,
     required this.pathAttachment,
     required this.progressCubit,
+    required this.formState,
+    required this.storeName,
   });
 
   @override
   List<Object?> get props => [transNo, progressCubit];
+}
+
+class ScFinalValidationRequested extends ServiceCallSubmittedEvent {
+  final ScFormState formState;
+  const ScFinalValidationRequested({required this.formState});
+
+  @override
+  List<Object?> get props => [formState];
 }
 
 class RetryUpload extends ServiceCallSubmittedEvent {
