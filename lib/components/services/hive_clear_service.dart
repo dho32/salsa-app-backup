@@ -7,6 +7,7 @@ import 'package:salsa/models/service_call/transaction_info_model.dart';
 
 import '../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../models/proof_of_service/proof_of_service_detail_model.dart';
+import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../../models/service_call/sc_unserviceable_model.dart';
 import '../shared_function.dart';
 
@@ -31,11 +32,10 @@ Future<void> clearTransactionData(String transNo) async {
     final posPartialBox = await Hive.openBox(kPosValidationPartialHiveBox);
     await posPartialBox.delete(transNo);
 
-    final posDetailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(
-        kPosDetailCacheBox);
+    final posDetailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
     await posDetailCacheBox.delete(transNo);
 
-    final posDetailBox = await Hive.openBox<Map<dynamic, dynamic>>(
+    final posDetailBox = await Hive.openBox<ProofOfServiceDetailData>(
         kProofOfServiceHiveBox);
     await posDetailBox.delete(transNo);
 

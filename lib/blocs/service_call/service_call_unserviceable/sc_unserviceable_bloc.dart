@@ -244,7 +244,7 @@ class SCUnserviceableBloc
           emit(state.copyWith(status: UnserviceableStatus.success));
         } else {
 
-          final detailCacheBox = await Hive.openBox<ServiceCallDetailModel>(kPosDetailCacheBox);
+          final detailCacheBox = await Hive.openBox<ServiceCallDetailModel>(kSCDetailCacheBox);
           final detailData = detailCacheBox.get(transNo);
           final storeName = detailData?.header.storeName ?? 'Nama Toko Tidak Ditemukan';
 
@@ -339,8 +339,6 @@ class SCUnserviceableBloc
       final queueBox = Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox);
       final task = ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
       await queueBox.put(transNo.trim().toUpperCase(), task);
-
-      print("🧹 Data Hive unserviceable SC untuk $transNo berhasil dibersihkan.");
 
     } catch (e) {
       print("🔴 Error saat membersihkan data Hive untuk $transNo: $e");
