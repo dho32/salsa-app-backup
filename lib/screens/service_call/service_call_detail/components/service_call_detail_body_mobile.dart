@@ -803,7 +803,7 @@ class _ServiceCallDetailBodyMobileState
           final problemSources = detailState.data.problems;
 
           if (isRemote) {
-            final result = await Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => RemoteValidationScreen(
@@ -820,24 +820,24 @@ class _ServiceCallDetailBodyMobileState
               ),
             );
 
-            if (result == true && mounted) {
+            if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Validasi berhasil disimpan!'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   const SnackBar(
+              //     content: Text('Validasi berhasil disimpan!'),
+              //     backgroundColor: Colors.green,
+              //     behavior: SnackBarBehavior.floating,
+              //   ),
+              // );
 
-              _refreshSerials(); // JALANKAN REFRESH DI SINI
+              _refreshSerials();
             }
           } else {
             final detailData = (context.read<ServiceCallDetailBloc>().state
                     as ServiceCallDetailLoaded)
                 .data;
 
-            final result = await Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ServiceCallValidationScreen(
@@ -857,17 +857,17 @@ class _ServiceCallDetailBodyMobileState
               ),
             );
 
-            if (result == true && mounted) {
+            if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Validasi berhasil disimpan!'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   const SnackBar(
+              //     content: Text('Validasi berhasil disimpan!'),
+              //     backgroundColor: Colors.green,
+              //     behavior: SnackBarBehavior.floating,
+              //   ),
+              // );
 
-              _refreshSerials(); // JALANKAN REFRESH DI SINI
+              _refreshSerials();
             }
           }
         },

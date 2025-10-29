@@ -47,6 +47,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
       if (hasBrokenUnit) {
         final bool hasActiveSC = await repository.checkActiveServiceCall(event.transNo);
+        print(hasActiveSC);
         if (!hasActiveSC) {
           emit(ShowCreateServiceCallDialog());
           return;
@@ -161,6 +162,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             'failedFiles': cleanFailedFiles,
             'presignedDetail': presignedDetail,
             'storeName': storeName,
+            'module': 'POS',
           });
 
           // Pancarkan state gagal sebagian

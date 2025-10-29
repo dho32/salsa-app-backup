@@ -71,7 +71,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           ? ''
           : (mEntry.value == mEntry.value.truncateToDouble()
               ? mEntry.value.truncate().toString()
-              : mEntry.value.toStringAsFixed(1)); // Sesuaikan format jika perlu
+              : mEntry.value.toStringAsFixed(2)); // Sesuaikan format jika perlu
 
       if (_controllers.containsKey(mEntry.measurementId)) {
         // Update jika teks berbeda & tidak di-skip

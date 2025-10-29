@@ -15,7 +15,9 @@ import '../../../models/task_maintenance/confirmation_task_queue.dart';
 class ServiceCallSubmittedBloc
     extends Bloc<ServiceCallSubmittedEvent, ServiceCallSubmittedState> {
   final ServiceCallSubmittedRepository repository;
-  String _normalizeHiveKey(String key) => key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+  String _normalizeHiveKey(String key) =>
+      key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   ServiceCallSubmittedBloc({required this.repository})
       : super(ValidationInitial()) {
@@ -26,9 +28,9 @@ class ServiceCallSubmittedBloc
   }
 
   Future<void> _onScFinalValidationRequested(
-      ScFinalValidationRequested event,
-      Emitter<ServiceCallSubmittedState> emit,
-      ) async {
+    ScFinalValidationRequested event,
+    Emitter<ServiceCallSubmittedState> emit,
+  ) async {
     emit(ScProceedToOtpDialog(event.formState));
   }
 
@@ -50,12 +52,11 @@ class ServiceCallSubmittedBloc
 
       final payload = entries.map((entry) => entry.toJson()).toList();
 
-      final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
+      final infoBox =
+          await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
       final normalizedKey = _normalizeHiveKey(event.transNo);
       final transactionInfo = infoBox.get(normalizedKey);
 
-
-      // 1. Panggil API untuk mendapatkan URL Presigned
       final result = await repository.submitValidation(
           event.transNo,
           event.createdBy,
@@ -73,43 +74,23 @@ class ServiceCallSubmittedBloc
         final uploadResult = await uploadAllImagesToS3(transNo, presignedDetail,
             progressCubit: event.progressCubit);
 
-        // 3. EMIT STATE BERDASARKAN HASIL UPLOAD
         if (uploadResult.allSuccess) {
-          // final toDelete = box.keys
-          //     .where((key) => box.get(key)?.transNo == event.transNo)
-          //     .toList();
-          // await box.deleteAll(toDelete);
-          //
-          // // 1.B. SUKSES: Hapus data info PIC/Teknisi
-          // await infoBox.delete(normalizedKey);
-
           await clearTransactionData(event.transNo);
-
-          // 1.C. SUKSES: Tambah ke antrian konfirmasi
-          final queueBox = await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+          final queueBox =
+              await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
           final task = ConfirmationTaskModel(transNo: event.transNo);
           await queueBox.put(event.transNo, task);
-
-          // 1.D. SUKSES: Pancarkan state sukses
-          emit(ValidationSuccess(
-              transNo: event.transNo,
-              presignedDetail: []));
+          emit(ValidationSuccess(transNo: event.transNo, presignedDetail: []));
         } else {
-          // 2.A. GAGAL: Simpan info kegagalan ke cache
-          final cacheBox =
-          await Hive.openBox(kServiceCallValidationPartialHiveBox);
-
+          final cacheBox = Hive.box<Map<dynamic, dynamic>>(
+              kServiceCallValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
             'failedFiles': uploadResult.failedFiles,
             'presignedDetail': presignedDetail,
             'storeName': event.storeName,
+            'module': 'SC',
           });
-
-          // 2.B. GAGAL: JANGAN HAPUS DATA DARI HIVE!
-
-          // 2.C. GAGAL: Emit ValidationUploadPartial
-          // Ini akan ditangkap UI untuk menampilkan dialog
           emit(ValidationUploadPartial(
             successCount: uploadResult.successCount,
             failureCount: uploadResult.failureCount,
@@ -121,7 +102,7 @@ class ServiceCallSubmittedBloc
       } else {
         emit(ValidationFailure(result['message'] ?? 'Gagal submit'));
       }
-    } catch (e) {
+    } catch (e, stacktrace) {
       emit(ValidationFailure("Error: ${e.toString()}"));
     }
   }
@@ -141,22 +122,9 @@ class ServiceCallSubmittedBloc
       );
 
       if (result.allSuccess) {
-        // Cleanup Hive
-        // final toDelete = box.keys.where((key) {
-        //   final item = box.get(key);
-        //   return item?.transNo == event.transNo;
-        // }).toList();
-        // await box.deleteAll(toDelete);
-        //
-        // final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
-        // final normalizedKey = _normalizeHiveKey(event.transNo);
-        // await infoBox.delete(normalizedKey);
-        //
-        // await cacheBox.delete(event.transNo);
-        // await cacheBox.flush();
-
         await clearTransactionData(event.transNo);
-        final queueBox = await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+        final queueBox =
+            await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
         final task = ConfirmationTaskModel(transNo: event.transNo);
         await queueBox.put(event.transNo, task);
 
@@ -164,15 +132,20 @@ class ServiceCallSubmittedBloc
           transNo: event.transNo,
           presignedDetail: event.presignedDetail,
         ));
-
-        // Reset state setelah success → agar tombol kembali normal
-        // emit(ValidationInitial());
       } else {
-        final cacheBox = await Hive.openBox(kServiceCallValidationPartialHiveBox);
+        final cacheBox = Hive.box<Map<dynamic, dynamic>>(
+            kServiceCallValidationPartialHiveBox); // Use Hive.box
+        // Ambil data lama untuk mempertahankan field lain jika ada
+        final oldData =
+            Map<String, dynamic>.from(cacheBox.get(event.transNo) ?? {});
         await cacheBox.put(event.transNo, {
+          ...oldData,
+          // Pertahankan data lama
           'transNo': event.transNo,
           'failedFiles': result.failedFiles,
+          // Update file gagal
           'presignedDetail': event.presignedDetail,
+          // Mungkin tidak perlu update presigned?
         });
 
         emit(ValidationUploadPartial(
@@ -193,16 +166,20 @@ class ServiceCallSubmittedBloc
     Emitter<ServiceCallSubmittedState> emit,
   ) async {
     try {
-      final cacheBox = await Hive.openBox('validation_partial_cache');
+      final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(
+          kServiceCallValidationPartialHiveBox); // Gunakan tipe yang benar
       final cached = cacheBox.get(event.transNo);
 
       if (cached != null) {
+        final Map<String, dynamic> typedCached =
+            Map<String, dynamic>.from(cached);
         emit(ValidationUploadPartial(
           successCount: 0,
-          failureCount: cached['failedFiles']?.length ?? 0,
-          failedFiles: List<String>.from(cached['failedFiles'] ?? []),
+          failureCount: (typedCached['failedFiles'] as List?)?.length ?? 0,
+          failedFiles: List<String>.from(typedCached['failedFiles'] ?? []),
           transNo: event.transNo,
-          presignedDetail: List<dynamic>.from(cached['presignedDetail'] ?? []),
+          presignedDetail:
+              List<dynamic>.from(typedCached['presignedDetail'] ?? []),
         ));
       }
     } catch (e) {

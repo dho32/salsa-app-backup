@@ -3,12 +3,12 @@ import 'dart:ui';
 import '../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 
 ///path url
-///Production
-const kBaseUrl = 'dxazo32f1j.execute-api.ap-southeast-1.amazonaws.com';
-const kPath = '/production/';
-// ///sandbox
-// const kBaseUrl = 'ujaxnyipj6.execute-api.ap-southeast-1.amazonaws.com';
-// const kPath = '/sandbox/';
+// ///Production
+// const kBaseUrl = 'dxazo32f1j.execute-api.ap-southeast-1.amazonaws.com';
+// const kPath = '/production/';
+///sandbox
+const kBaseUrl = 'ujaxnyipj6.execute-api.ap-southeast-1.amazonaws.com';
+const kPath = '/sandbox/';
 
 ///Route
 const kPathLanding = '/';
@@ -26,10 +26,13 @@ const kConfirmationQueueBox = 'confirmation_queue_box';
 const kPosTransactionInfoHiveBox = 'pos_transaction_info_box';
 const kPosValidationHiveBox = 'pos_validation_box';
 const kPosDetailCacheBox = 'pos_detail_cache_box';
+const kSCDetailCacheBox = 'sc_detail_cache_box';
 const kPosValidationPartialHiveBox = 'pos_validation_partial_cache';
 // const kPosUnserviceableVisitQueueBox = 'unserviceable_visit_queue_box';
 const kPosUnserviceableDraftsBox = 'unserviceable_drafts_box';
 const kScUnserviceableDraftsBox = 'sc_unserviceable_drafts';
+const String kPosUnserviceablePartialBox = 'pos_unserviceable_partial_cache';
+const String kScUnserviceablePartialBox = 'sc_unserviceable_partial_cache';
 
 
 ///string
@@ -72,7 +75,7 @@ const Map<String, MeasurementLimits> kMeasurementLimits = {
       min: 50, max: 170, unit: 'PSI', normalMin: 100, normalMax: 150),
   'final_temp_in_sc': MeasurementLimits(
       id: 'final_temp_in_sc',
-      label: 'Suhu Akhir Ruangan', // Label dasar
+      label: 'Suhu Dalam Ruangan', // Label dasar
       min: 4,  // Batas bawah default (akan ditimpa oleh BLoC)
       max: 30, // Batas atas
       unit: '°C',

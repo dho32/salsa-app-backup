@@ -1,14 +1,24 @@
+// lib/screens/common/failed_uploads/failed_uploads_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/blocs/failed_uploads/failed_uploads_bloc.dart';
-import 'package:salsa/blocs/failed_uploads/failed_uploads_state.dart';
 import 'package:salsa/components/shared_widgets.dart';
-import '../../../blocs/failed_uploads/failed_uploads_event.dart';
+
 import '../services/confirmation_service.dart';
 import 'components/failed_uploads_body_mobile.dart';
 
-class FailedUploadsScreen extends StatelessWidget {
+class FailedUploadsScreen extends StatefulWidget {
   const FailedUploadsScreen({super.key});
+
+  @override
+  State<FailedUploadsScreen> createState() => _FailedUploadsScreenState();
+}
+
+class _FailedUploadsScreenState extends State<FailedUploadsScreen> {
+  BuildContext? _progressDialogContext;
+  String? _retryingTransNo;
+
 
   @override
   Widget build(BuildContext context) {
@@ -16,58 +26,88 @@ class FailedUploadsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Daftar Upload Gagal"),
       ),
-      // Gunakan BlocListener untuk menangani "side-effects" seperti dialog & snackbar
+      // ✅ GANTI BODY LAMA DENGAN BLOCLISTENER INI
       body: BlocListener<FailedUploadsBloc, FailedUploadsState>(
-        // Dengarkan hanya saat ada perubahan status upload atau ada pesan baru
+        // Dengarkan perubahan status ATAU saat pesan/hasil muncul
         listenWhen: (previous, current) {
-          return previous.uploadingTransNo != current.uploadingTransNo ||
-              current.successMessage != null ||
-              current.errorMessage != null;
+          // Hanya trigger listener jika ada perubahan relevan
+          bool statusChanged = previous.status != current.status;
+          bool uploadingChanged = previous.uploadingTransNo != current.uploadingTransNo;
+          bool messageAppeared = (previous.snackbarMessage == null && current.snackbarMessage != null) ||
+              (previous.successMessage == null && current.successMessage != null);
+          return statusChanged || uploadingChanged || messageAppeared;
         },
         listener: (context, state) {
-          final isDialogShowing = ModalRoute.of(context)?.isCurrent != true;
+          // Ambil BLoC untuk kirim event clear
+          final bloc = context.read<FailedUploadsBloc>();
 
-          // 1. Tampilkan dialog progress HANYA saat proses upload dimulai
-          if (state.uploadingTransNo != null && !isDialogShowing) {
+          // --- 1. Logika Menampilkan Dialog Progress ---
+          // Tampilkan HANYA jika status berubah menjadi uploading DAN dialog belum ada
+          if (state.status == FailedUploadsStatus.uploading && state.uploadingTransNo != null && _progressDialogContext == null) {
+            _retryingTransNo = state.uploadingTransNo; // Simpan ID yg di-retry
+// Simpan tipe modul
+
+            print("▶️ Showing progress dialog for $_retryingTransNo");
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (_) => BlocProvider.value(
-                // Teruskan progressCubit agar dialog bisa menampilkan progress
-                value: context.read<FailedUploadsBloc>().progressCubit,
-                child: const UploadProgressDialog(),
-              ),
-            );
-          }
-          // 2. Tutup dialog progress HANYA saat proses upload selesai
-          else if (state.uploadingTransNo == null && isDialogShowing) {
-            Navigator.of(context).pop();
-          }
-
-          // 3. Tampilkan dialog sukses jika ada pesan sukses
-          if (state.successMessage != null) {
-            ConfirmationService().processQueue();
-            showSuccessDialog(context, state.successMessage!).then((_) {
-              // UI tidak lagi berpikir, hanya menjalankan perintah!
-              if (state.successAction == SuccessAction.popToHome) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              } else { // Default-nya adalah stayAndRefresh
-                context.read<FailedUploadsBloc>().add(LoadFailedUploads());
-              }
+              builder: (dialogContext) {
+                _progressDialogContext = dialogContext; // Simpan context
+                return BlocProvider.value(
+                  value: bloc.progressCubit, // Ambil dari BLoC
+                  child: const UploadProgressDialog(),
+                );
+              },
+            ).then((_) {
+              // Reset context saat dialog ditutup (oleh pop atau sistem)
+              _progressDialogContext = null;
+              _retryingTransNo = null;
+              print("☑️ Progress dialog closed.");
+              ConfirmationService().processQueue();
             });
           }
 
-          // 4. Tampilkan snackbar error jika ada pesan error
-          if (state.errorMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.errorMessage!),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+          // --- 2. Logika Menutup Dialog Progress & Menampilkan Hasil ---
+          // Tutup dialog JIKA status TIDAK lagi uploading DAN sebelumnya ADA yg diupload
+          // DAN dialognya memang sedang tampil
+          else if (state.status != FailedUploadsStatus.uploading && _retryingTransNo != null) {
+            print("⏹️ Closing progress dialog for $_retryingTransNo and showing result...");
+            Navigator.of(context).pop();
+
+            Future.delayed(const Duration(milliseconds: 200), () {
+              // Ambil state TERKINI setelah dialog progress ditutup
+              final currentState = context.read<FailedUploadsBloc>().state;
+
+              if (mounted) {
+                if (currentState.successMessage != null) {
+                  print("🎉 Showing success dialog...");
+                  showSuccessDialog(
+                    context,
+                    currentState.successMessage!,
+                  ).then((_) {
+                    print("👍 Success dialog closed. Finalizing...");
+                    // ✅ AMBIL DARI STATE BLOC
+                    final String? finishedTransNo = currentState.lastSuccessfulRetryTransNo;
+                    final String? finishedModule = currentState.lastSuccessfulRetryModuleType;
+
+                    if (finishedTransNo != null && finishedModule != null) {
+                      bloc.add(FinalizeSuccessfulRetry(finishedTransNo, finishedModule));
+                    } else {
+                      // Fallback jika state aneh
+                      print("⚠️ Could not find last successful retry info in state!");
+                      bloc.add(LoadFailedUploads()); // Refresh list
+                      bloc.add(ClearSuccessMessage()); // Clear pesan
+                    }
+                  });
+                } else if (currentState.snackbarMessage != null) {
+                  // ... (Logika tampilkan dialog gagal / snackbar tidak berubah) ...
+                  bloc.add(ClearSnackbarMessage());
+                }
+              }
+            });
           }
         },
+        // Child listener adalah body Anda
         child: const FailedUploadsBodyMobile(),
       ),
     );

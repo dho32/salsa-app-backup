@@ -7,7 +7,6 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_storage.dart';
 import '../../blocs/failed_uploads/failed_uploads_bloc.dart';
-import '../../blocs/failed_uploads/failed_uploads_event.dart';
 import '../../blocs/proof_of_service/proof_of_service_submitted/pos_submitted_bloc.dart';
 import '../../blocs/proof_of_service/proof_of_service_submitted/pos_submitted_repository.dart';
 import '../../blocs/task_maintenance/task_maintenance_bloc.dart';

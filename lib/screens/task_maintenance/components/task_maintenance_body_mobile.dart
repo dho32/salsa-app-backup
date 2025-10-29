@@ -1,17 +1,13 @@
 import 'dart:async';
 
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:salsa/screens/task_maintenance/components/widget/task_maintenance_widgets.dart';
 
 import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
-import '../../../blocs/failed_uploads/failed_uploads_event.dart';
-import '../../../blocs/failed_uploads/failed_uploads_state.dart';
 import '../../../blocs/task_maintenance/task_maintenance_bloc.dart';
 import '../../../blocs/task_maintenance/task_maintenance_event.dart';
 import '../../../blocs/task_maintenance/task_maintenance_repository.dart';

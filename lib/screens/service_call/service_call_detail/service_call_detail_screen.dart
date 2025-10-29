@@ -221,6 +221,8 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
                 return true;
               },
               listener: (context, state) async {
+                print("==============debug============");
+                print(state);
                 if (state is ValidationUploadInProgress) {
                   final uploadCubit = context.read<UploadProgressCubit>();
                   uploadCubit.reset();

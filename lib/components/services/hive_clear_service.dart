@@ -29,20 +29,21 @@ Future<void> clearTransactionData(String transNo) async {
         await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
     await posInfoBox.delete(normalizedKey);
 
-    final posPartialBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final posPartialBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
     await posPartialBox.delete(transNo);
 
-    final posDetailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+    final posDetailCacheBox =
+        await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
     await posDetailCacheBox.delete(transNo);
 
-    final posDetailBox = await Hive.openBox<ProofOfServiceDetailData>(
-        kProofOfServiceHiveBox);
+    final posDetailBox =
+        await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
     await posDetailBox.delete(transNo);
 
-    final posUnserviceAble = await Hive.openBox<PosUnserviceableModel>(
-        kPosUnserviceableDraftsBox);
+    final posUnserviceAble =
+        await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
     await posUnserviceAble.delete(transNo);
-
 
     // Box SC
     final scValidationBox = await Hive.openBox<ServiceCallValidationEntryModel>(
@@ -56,17 +57,17 @@ Future<void> clearTransactionData(String transNo) async {
         await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
     await scInfoBox.delete(normalizedKey);
 
-    final scPartialBox =
-        await Hive.openBox(kServiceCallValidationPartialHiveBox);
+    final scPartialBox = await Hive.openBox<Map<dynamic, dynamic>>(
+        kServiceCallValidationPartialHiveBox);
     await scPartialBox.delete(transNo);
 
-    final assignmentBox = await Hive.openBox(kOutdoorUnitAssignmentsBox);
+    final assignmentBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(kOutdoorUnitAssignmentsBox);
     await assignmentBox.delete(transNo);
 
-    final scUnserviceAble = await Hive.openBox<SCUnserviceableModel>(
-        kScUnserviceableDraftsBox);
+    final scUnserviceAble =
+        await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
     await scUnserviceAble.delete(transNo);
-
 
     print("✅ Hive cleanup complete for: $transNo");
   } catch (e) {
