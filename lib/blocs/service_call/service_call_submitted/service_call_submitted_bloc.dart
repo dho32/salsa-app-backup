@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:salsa/blocs/service_call/service_call_submitted/service_call_submitted_event.dart';
@@ -9,12 +11,14 @@ import 'package:salsa/models/service_call/service_call_validation_entry_model.da
 import 'package:salsa/models/service_call/service_call_validation_entry_model_ext.dart';
 
 import '../../../components/services/hive_clear_service.dart';
+import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 
 class ServiceCallSubmittedBloc
     extends Bloc<ServiceCallSubmittedEvent, ServiceCallSubmittedState> {
   final ServiceCallSubmittedRepository repository;
+  String _cachedAhoNumber = '';
 
   String _normalizeHiveKey(String key) =>
       key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
@@ -25,13 +29,96 @@ class ServiceCallSubmittedBloc
     on<RetryUpload>(_onRetryUpload);
     on<LoadValidationPartial>(_onLoadValidationPartial);
     on<ScFinalValidationRequested>(_onScFinalValidationRequested);
+    on<AhoInputCompleted>(_onAhoInputCompleted);
+  }
+
+  Future<bool> _checkIfAhoIsNeeded(
+      String transNo, List<ProblemSourceModel> problemSources) async {
+    try {
+      log("--- 🏁 Memulai Pengecekan AHO untuk $transNo ---");
+      final box = await Hive.openBox<ServiceCallValidationEntryModel>(
+          kServiceCallHiveBox);
+      final entries = box.values.where((entry) => entry.transNo == transNo);
+
+      if (entries.isEmpty) return false;
+
+      if (entries.isEmpty) {
+        log("🔴 GAGAL: Tidak ada entri Hive ditemukan untuk $transNo");
+        return false;
+      }
+      log("✅ Ditemukan ${entries.length} entri di Hive.");
+
+      // Buat "peta" solusi untuk pencarian cepat
+      final Map<String, Solution> solutionMap = {};
+      for (var source in problemSources) {
+        for (var problem in source.problems) {
+          for (var solution in problem.solutions) {
+            solutionMap[solution.solutionId] = solution;
+          }
+        }
+      }
+
+      log("✅ Peta solusi (solutionMap) dibuat dengan ${solutionMap.length} total solusi.");
+
+      // Cek setiap entri di Hive
+      for (var entry in entries) {
+        log("--- 🕵️ Menganalisis Entri: ${entry.serialNo} ---");
+        for (var problem in entry.problems) {
+          for (var solutionId in problem.solutionIds) {
+            final solution = solutionMap[solutionId];
+
+            if (solution != null) {
+              // Log paling penting ada di sini
+              log("    > Mengecek SolutionID: $solutionId | Nama: ${solution.solutionName} | AHO Flag: '${solution.ahoFlag}'");
+
+              if (solution.ahoFlag.toLowerCase().trim() == 'true') {
+                // Tambahkan .trim()
+                log("    🎉🎉🎉 DITEMUKAN AHO TRUE! Hentikan pencarian.");
+                return true; // Ditemukan!
+              }
+            } else {
+              // Log error jika data tidak sinkron
+              log("    ⚠️ PERINGATAN: SolutionID $solutionId dari Hive tidak ditemukan di Peta Solusi (solutionMap).");
+            }
+          }
+        }
+      }
+
+      log("--- 🛑 Selesai Pengecekan: Tidak ada AHO flag 'true' yang ditemukan. ---");
+      return false; // Tidak ditemukan
+    } catch (e, stacktrace) {
+      log("Error checking AHO flag: $e", error: e, stackTrace: stacktrace);
+      return false;
+    }
   }
 
   Future<void> _onScFinalValidationRequested(
     ScFinalValidationRequested event,
     Emitter<ServiceCallSubmittedState> emit,
   ) async {
-    emit(ScProceedToOtpDialog(event.formState));
+    final bool needsAho = await _checkIfAhoIsNeeded(
+      event.transNo,
+      event.problemSources,
+    );
+
+    log("--- Hasil Pengecekan AHO: needsAho = $needsAho ---");
+    if (needsAho) {
+      log("--- EMITTING ScProceedToAhoDialog ---");
+      emit(ScProceedToAhoDialog(event.formState, initialAho: _cachedAhoNumber));
+    } else {
+      log("--- EMITTING ScProceedToOtpDialog (karena needsAho false) ---");
+      emit(ScProceedToOtpDialog(event.formState,
+          ahoNumber: null)); // <-- Lanjut ke OTP
+    }
+  }
+
+  Future<void> _onAhoInputCompleted(
+    AhoInputCompleted event,
+    Emitter<ServiceCallSubmittedState> emit,
+  ) async {
+    _cachedAhoNumber = event.ahoNumber;
+    // Setelah AHO diisi, baru kita lanjut ke OTP
+    emit(ScProceedToOtpDialog(event.formState, ahoNumber: event.ahoNumber));
   }
 
   Future<void> _onSubmitValidation(
@@ -58,13 +145,15 @@ class ServiceCallSubmittedBloc
       final transactionInfo = infoBox.get(normalizedKey);
 
       final result = await repository.submitValidation(
-          event.transNo,
-          event.createdBy,
-          event.createdByName,
-          event.createdByIP,
-          event.pathAttachment,
-          payload,
-          transactionInfo);
+        event.transNo,
+        event.createdBy,
+        event.createdByName,
+        event.createdByIP,
+        event.pathAttachment,
+        payload,
+        transactionInfo,
+        event.ahoNumber,
+      );
 
       if (result['status'] == 'OK') {
         emit(ValidationUploadInProgress());
@@ -75,6 +164,7 @@ class ServiceCallSubmittedBloc
             progressCubit: event.progressCubit);
 
         if (uploadResult.allSuccess) {
+          _cachedAhoNumber = '';
           await clearTransactionData(event.transNo);
           final queueBox =
               await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
@@ -122,6 +212,7 @@ class ServiceCallSubmittedBloc
       );
 
       if (result.allSuccess) {
+        _cachedAhoNumber = '';
         await clearTransactionData(event.transNo);
         final queueBox =
             await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);

@@ -45,5 +45,13 @@ class ValidationUploadPartial extends ServiceCallSubmittedState {
 
 class ScProceedToOtpDialog extends ServiceCallSubmittedState {
   final ScFormState formState;
-  ScProceedToOtpDialog(this.formState);
+  final String? ahoNumber;
+
+  ScProceedToOtpDialog(this.formState, {this.ahoNumber});
+}
+
+class ScProceedToAhoDialog extends ServiceCallSubmittedState {
+  final ScFormState formState;
+  final String? initialAho;
+  ScProceedToAhoDialog(this.formState, {this.initialAho});
 }

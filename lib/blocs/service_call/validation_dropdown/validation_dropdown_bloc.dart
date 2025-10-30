@@ -372,27 +372,4 @@ class ValidationDropdownBloc
       ));
     }
   }
-
-// Ini adalah helper untuk mengambil foto dengan Geolocation, jika dibutuhkan secara internal oleh Bloc
-// Namun, _handlePhoto di UI sudah memanggil Geocoding/Geolocator, jadi ini mungkin tidak diperlukan
-/*
-  Future<CapturedImageDetail> _capturePhotoWithLocation() async {
-    final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
-    if (image == null) throw Exception('No image selected.');
-
-    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-    Placemark place = placemarks.first;
-    String address = "${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}";
-
-    return CapturedImageDetail(
-      imagePath: image.path,
-      timestamp: DateTime.now(),
-      latitude: position.latitude,
-      longitude: position.longitude,
-      address: address,
-    );
-  }
-  */
 }

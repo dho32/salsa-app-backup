@@ -1,5 +1,7 @@
 // lib/screens/service_call/service_call_detail/components/service_call_detail_body_mobile.dart
 
+import 'dart:developer';
+
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,11 +27,13 @@ import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/shared_function.dart';
 import '../../../../components/shared_widgets.dart';
+import '../../../../components/widgets/aho_dialog.dart';
 import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
+import '../../../../models/service_call/problem_source_model.dart';
 import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
 import '../../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../../models/service_call/transaction_info_model.dart';
@@ -269,6 +273,7 @@ class _ServiceCallDetailBodyMobileState
       child: BlocConsumer<ServiceCallDetailBloc, ServiceCallDetailState>(
         listener: (context, detailState) {
           // Panggil _refreshSerials SETELAH data detail berhasil dimuat
+          log("### UI LISTENER MENERIMA STATE: ${detailState.runtimeType} ###");
           if (detailState is ServiceCallDetailLoaded) {
             print(
                 "🚀 ServiceCallDetailBloc Loaded. Memanggil _refreshSerials...");
@@ -291,11 +296,14 @@ class _ServiceCallDetailBodyMobileState
           } else if (detailState is ServiceCallDetailLoaded) {
             final detailList = detailState.data.detail;
 
-            final sortedDetailList = List<ServiceCallUnitDetail>.from(detailList); // Salin list
+            final sortedDetailList =
+                List<ServiceCallUnitDetail>.from(detailList); // Salin list
             sortedDetailList.sort((a, b) {
               // Cek apakah item adalah 'REMOTE'
-              bool isARemote = a.articleNameUnit.toUpperCase().contains('REMOTE');
-              bool isBRemote = b.articleNameUnit.toUpperCase().contains('REMOTE');
+              bool isARemote =
+                  a.articleNameUnit.toUpperCase().contains('REMOTE');
+              bool isBRemote =
+                  b.articleNameUnit.toUpperCase().contains('REMOTE');
 
               // Jika a REMOTE dan b BUKAN, a ditaruh di bawah (return 1)
               if (isARemote && !isBRemote) {
@@ -339,11 +347,47 @@ class _ServiceCallDetailBodyMobileState
                     }
                     final validationStatuses = snapshot.data ?? {};
                     final header = detailState.data.header;
+                    final problems = detailState.data.problems;
 
                     return BlocListener<ServiceCallSubmittedBloc,
                         ServiceCallSubmittedState>(
-                      listener: (context, state) {
-                        if (state is ScProceedToOtpDialog) {
+                      listener: (context, state) async {
+                        if (state is ScProceedToAhoDialog) {
+                          log(">>> LISTENER: Masuk ke blok 'if (state is ScProceedToAhoDialog)' <<<");
+                          try {
+                            // Tampilkan dialog AHO baru Anda
+                            await showDialog<void>(
+                              // Gunakan await
+                              context: context,
+                              barrierDismissible: false,
+                              // Disarankan false agar tidak mudah tertutup
+                              builder: (_) {
+                                log(">>> LISTENER: Membangun AhoDialog... <<<");
+                                // Pastikan AhoDialog sudah di-import di atas file ini
+                                return AhoDialog(
+                                  formState: state.formState,
+                                  initialAho: state.initialAho,
+                                  onSubmit: (String ahoNumber) {
+                                    log(">>> AhoDialog onSubmit: Mengirim AhoInputCompleted <<<");
+                                    // Kirim event AhoInputCompleted
+                                    context
+                                        .read<ServiceCallSubmittedBloc>()
+                                        .add(
+                                          AhoInputCompleted(
+                                            formState: state.formState,
+                                            ahoNumber: ahoNumber,
+                                          ),
+                                        );
+                                  },
+                                );
+                              },
+                            );
+                            log(">>> LISTENER: showDialog AHO selesai. <<<");
+                          } catch (e, stacktrace) {
+                            log("🔴 ERROR saat menampilkan AhoDialog: $e",
+                                error: e, stackTrace: stacktrace);
+                          }
+                        } else if (state is ScProceedToOtpDialog) {
                           // Ambil formState yang sudah divalidasi dari BLoC state
                           final formState = state.formState;
                           final double storeLat =
@@ -381,15 +425,17 @@ class _ServiceCallDetailBodyMobileState
                                         .read<ServiceCallSubmittedBloc>()
                                         .add(
                                           SubmitValidation(
-                                              transNo: header.transNo,
-                                              createdBy: maintenanceBy,
-                                              createdByName: technicianName,
-                                              createdByIP: maintenanceByIP,
-                                              pathAttachment:
-                                                  header.pathAttachment,
-                                              progressCubit: progressCubit,
-                                              formState: formState,
-                                              storeName: header.storeName),
+                                            transNo: header.transNo,
+                                            createdBy: maintenanceBy,
+                                            createdByName: technicianName,
+                                            createdByIP: maintenanceByIP,
+                                            pathAttachment:
+                                                header.pathAttachment,
+                                            progressCubit: progressCubit,
+                                            formState: formState,
+                                            storeName: header.storeName,
+                                            ahoNumber: state.ahoNumber,
+                                          ),
                                         );
                                   },
                                 ),
@@ -494,7 +540,8 @@ class _ServiceCallDetailBodyMobileState
                               ),
                             ),
                           ),
-                          _buildSubmitButton(context, header, formState),
+                          _buildSubmitButton(
+                              context, header, problems, formState),
                         ],
                       ),
                     );
@@ -914,8 +961,8 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildSubmitButton(
-      BuildContext context, ServiceCallHeader header, ScFormState formState) {
+  Widget _buildSubmitButton(BuildContext context, ServiceCallHeader header,
+      List<ProblemSourceModel> problems, ScFormState formState) {
     return Align(
       alignment: Alignment.bottomCenter,
       child: SafeArea(
@@ -941,7 +988,11 @@ class _ServiceCallDetailBodyMobileState
 
               if (latestFormState.isFormReadyToSubmit) {
                 context.read<ServiceCallSubmittedBloc>().add(
-                      ScFinalValidationRequested(formState: latestFormState),
+                      ScFinalValidationRequested(
+                        transNo: widget.transNo,
+                        formState: latestFormState,
+                        problemSources: problems,
+                      ),
                     );
               } else {
                 // Tampilkan pesan error spesifik
