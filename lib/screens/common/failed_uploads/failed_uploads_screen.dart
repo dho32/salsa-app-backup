@@ -80,27 +80,25 @@ class _FailedUploadsScreenState extends State<FailedUploadsScreen> {
 
               if (mounted) {
                 if (currentState.successMessage != null) {
+                  ConfirmationService().processQueue();
                   print("🎉 Showing success dialog...");
                   showSuccessDialog(
                     context,
                     currentState.successMessage!,
                   ).then((_) {
-                    print("👍 Success dialog closed. Finalizing...");
-                    // ✅ AMBIL DARI STATE BLOC
-                    final String? finishedTransNo = currentState.lastSuccessfulRetryTransNo;
-                    final String? finishedModule = currentState.lastSuccessfulRetryModuleType;
-
-                    if (finishedTransNo != null && finishedModule != null) {
-                      bloc.add(FinalizeSuccessfulRetry(finishedTransNo, finishedModule));
-                    } else {
-                      // Fallback jika state aneh
-                      print("⚠️ Could not find last successful retry info in state!");
-                      bloc.add(LoadFailedUploads()); // Refresh list
-                      bloc.add(ClearSuccessMessage()); // Clear pesan
-                    }
+                    print("👍 Success dialog closed. Clearing message.");
+                    bloc.add(ClearSuccessMessage());
                   });
                 } else if (currentState.snackbarMessage != null) {
-                  // ... (Logika tampilkan dialog gagal / snackbar tidak berubah) ...
+                  if (currentState.errorMessage != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(currentState.errorMessage!),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
                   bloc.add(ClearSnackbarMessage());
                 }
               }

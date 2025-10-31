@@ -99,7 +99,6 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           final outdoorPairSerialNo = pairingMap[entry.serialNo];
           if (outdoorPairSerialNo != null) {
             // Jika ada, isi field 'paired_serial_no' dengan SN outdoor pasangannya.
-            // Nama field di API kita asumsikan tetap sama untuk indoor dan outdoor.
             json['paired_serial_no'] = outdoorPairSerialNo;
           }
         }

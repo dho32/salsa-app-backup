@@ -25,7 +25,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     on<RetrySingleFailedUpload>(_onRetrySingleFailedUpload);
     on<ClearSnackbarMessage>(_onClearSnackbarMessage);
     on<ClearSuccessMessage>(_onClearSuccessMessage);
-    on<FinalizeSuccessfulRetry>(_onFinalizeSuccessfulRetry); // Handler untuk finalisasi
     _listenToHiveChanges();
   }
 
@@ -181,8 +180,12 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       else { throw Exception('Tipe modul tidak dikenali untuk retry.'); }
 
       if (result.allSuccess) {
-        print("✅ Retry successful for $transNo. Emitting success state FIRST.");
-        // JANGAN cleanup data Hive di sini
+        print("✅ Retry successful for $transNo. Melakukan cleanup SEKARANG.");
+
+        await clearTransactionData(transNo); // Panggil helper cleanup lengkap
+
+        // 2. Tambahkan ke queue SEKARANG
+        await _addToConfirmationQueueIfNeeded(transNo, moduleType);
 
         final List<Map<String, dynamic>> updatedList = List.from(state.failedTransactions)
           ..removeWhere((t) => t['transNo'] == transNo);
@@ -195,8 +198,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           retrySuccessCount: originalFailedFiles.length,
           retryFailureCount: 0,
           retryFailedFiles: [],
-          lastSuccessfulRetryTransNo: transNo,
-          lastSuccessfulRetryModuleType: moduleType,
         ));
         // Jangan tambah ke queue di sini
 
@@ -268,37 +269,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
   void _onClearSuccessMessage(
       ClearSuccessMessage event, Emitter<FailedUploadsState> emit) {
     emit(state.copyWith(clearSuccessMessage: true, clearRetryResult: true));
-  }
-
-  // Handler untuk finalisasi SETELAH dialog sukses ditutup oleh UI
-  Future<void> _onFinalizeSuccessfulRetry(
-      FinalizeSuccessfulRetry event, Emitter<FailedUploadsState> emit) async {
-    print("🧹 Finalizing successful retry for ${event.transNo}");
-    try {
-      // 1. Hapus SEMUA data Hive SEKARANG
-      await clearTransactionData(event.transNo); // Panggil helper cleanup lengkap
-
-      // 2. Tambahkan ke queue SEKARANG
-      await _addToConfirmationQueueIfNeeded(event.transNo, event.moduleType);
-
-      // 3. Buat list baru TANPA item yg sudah selesai
-      final List<Map<String, dynamic>> updatedList = List.from(state.failedTransactions)
-        ..removeWhere((t) => t['transNo'] == event.transNo);
-
-      // 4. Emit state loaded final dengan list terupdate & pesan sukses dihapus
-      emit(state.copyWith(
-        status: FailedUploadsStatus.loaded,
-        failedTransactions: updatedList,
-        clearSuccessMessage: true, // Hapus pesan sukses yg sudah tampil
-        clearRetryResult: true,   // Hapus juga hasil retry
-        clearLastSuccessfulRetry: true,
-      ));
-
-    } catch (e) {
-      print("🔴 Error finalizing retry for ${event.transNo}: $e");
-      // Jika error saat finalisasi, load ulang saja listnya
-      add(LoadFailedUploads());
-    }
   }
 
 

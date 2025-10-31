@@ -62,7 +62,8 @@ Future<void> clearTransactionData(String transNo) async {
     await scPartialBox.delete(transNo);
 
     final assignmentBox =
-        await Hive.openBox<Map<dynamic, dynamic>>(kOutdoorUnitAssignmentsBox);
+        // await Hive.openBox<Map<dynamic, dynamic>>(kOutdoorUnitAssignmentsBox);
+    await Hive.openBox(kOutdoorUnitAssignmentsBox);
     await assignmentBox.delete(transNo);
 
     final scUnserviceAble =

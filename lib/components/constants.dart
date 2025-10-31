@@ -46,7 +46,7 @@ const kStringDialogUpdateLocation = """
 Masukkan alamat email toko. 
 Lokasi toko akan diambil secara otomatis dari lokasi anda saat ini.""";
 
-const List<String> kJabatanOptions = ["COS", "ACOS", "KASIR"];
+const List<String> kJabatanOptions = ["COS", "ACOS", "CREW"];
 
 
 ///const
