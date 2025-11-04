@@ -5,18 +5,26 @@ class ServiceCallDetailModel {
   final List<ServiceCallUnitDetail> detail;
   final List<OutdoorUnit> outdoor;
   final List<ProblemSourceModel> problems;
-  final List<String> noteIndoorOptions;
-  final List<String> noteOutdoorOptions;
   final List<String> unserviceableReasons;
+  final List<String> noteIndoorBeforeOptions;
+  final List<String> noteIndoorAfterOptions;
+  final List<String> noteOutdoorBeforeOptions;
+  final List<String> noteOutdoorAfterOptions;
+  final List<String> noteOutdoorPsiBeforeOptions;
+  final List<String> noteOutdoorPsiAfterOptions;
 
   ServiceCallDetailModel({
     required this.header,
     required this.detail,
     required this.outdoor,
     required this.problems,
-    required this.noteIndoorOptions,
-    required this.noteOutdoorOptions,
     required this.unserviceableReasons,
+    required this.noteIndoorBeforeOptions,
+    required this.noteIndoorAfterOptions,
+    required this.noteOutdoorBeforeOptions,
+    required this.noteOutdoorAfterOptions,
+    required this.noteOutdoorPsiBeforeOptions,
+    required this.noteOutdoorPsiAfterOptions,
   });
 
   factory ServiceCallDetailModel.fromJson(Map<String, dynamic> json) {
@@ -30,9 +38,13 @@ class ServiceCallDetailModel {
           .toList(),
       outdoor: outdoorList.map((item) => OutdoorUnit.fromJson(item)).toList(),
       problems: problemList.map((item) => ProblemSourceModel.fromJson(item)).toList(),
-      noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
-      noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
       unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
+      noteIndoorBeforeOptions: List<String>.from(json['note_indoor_before_options'] ?? []),
+      noteIndoorAfterOptions: List<String>.from(json['note_indoor_after_options'] ?? []),
+      noteOutdoorBeforeOptions: List<String>.from(json['note_outdoor_before_options'] ?? []),
+      noteOutdoorAfterOptions: List<String>.from(json['note_outdoor_after_options'] ?? []),
+      noteOutdoorPsiBeforeOptions: List<String>.from(json['note_outdoor_psi_before_options'] ?? []),
+      noteOutdoorPsiAfterOptions: List<String>.from(json['note_outdoor_psi_after_options'] ?? []),
     );
   }
 }
@@ -90,8 +102,8 @@ class ServiceCallHeader {
       storeName: json['store_name'] ?? '',
       storeAddress: json['store_address'] ?? '',
       storeEmail: json['store_email'] ?? '',
-      storeLat: json['latitude'] ?? '',
-      storeLong: json['longitude'] ?? '',
+      storeLat: json['latitude'] ?? '0.0',
+      storeLong: json['longitude'] ?? '0.0',
       contactName: json['contact_name'] ?? '',
       contactPhone: json['contact_phone'] ?? '',
       transNo: json['trans_no'] ?? '',

@@ -36,10 +36,17 @@ extension ServiceCallValidationEntryModelJson
       'images_after': imagePathsAfter.map((img) => img.toJson()).toList(),
       'measurements_after': measurementsAfter.map((m) => m.toJson()).toList(),
       'trans_no': transNo,
-      'note_indoor_before': isIndoorBeforeSkipped ? selectedIndoorNoteBefore : "",
+      'note_indoor_before':
+          isIndoorBeforeSkipped ? selectedIndoorNoteBefore : "",
       'note_indoor_after': isIndoorAfterSkipped ? selectedIndoorNoteAfter : "",
-      'note_outdoor_before': isOutdoorBeforeSkipped ? selectedOutdoorNoteBefore : "",
-      'note_outdoor_after': isOutdoorAfterSkipped ? selectedOutdoorNoteAfter : "",
+      'note_outdoor_before':
+          isOutdoorBeforeSkipped ? selectedOutdoorNoteBefore : "",
+      'note_outdoor_after':
+          isOutdoorAfterSkipped ? selectedOutdoorNoteAfter : "",
+      'note_outdoor_psi_before':
+          isOutdoorBeforeSkipped ? selectedOutdoorPSINoteBefore : "",
+      'note_outdoor_psi_after':
+          isOutdoorAfterSkipped ? selectedOutdoorPSINoteAfter : "",
     };
   }
 }

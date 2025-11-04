@@ -47,7 +47,6 @@ class ServiceCallValidationScreen extends StatefulWidget {
 
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
-
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
     // 1. Kita mulai dengan asumsi semuanya LOLOS
     bool allItemsPassed = true;
@@ -64,7 +63,8 @@ class _ServiceCallValidationScreenState
         print('>>> Status: LOLOS');
       } else {
         print('>>> !!! STATUS: GAGAL !!! <<<');
-        print('Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
+        print(
+            'Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
 
         // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
         allItemsPassed = false;
@@ -307,11 +307,13 @@ class _ServiceCallValidationScreenState
         ? state.capturedMeasurementsBefore
         : state.capturedMeasurementsAfter;
 
+    const indoorIds = {'temperature'};
+    const outdoorElecIds = {'volt', 'ampere'};
+    const outdoorPsiIds = {'psi'};
+
     // Cek Indoor
-    final bool isAnyIndoorSkipped = measurements.any((m) {
-      bool isSkip = m.isSkipped ?? false;
-      return m.measurementId.toLowerCase().contains('temperature') && isSkip;
-    });
+    final bool isAnyIndoorSkipped = measurements.any(
+        (m) => indoorIds.contains(m.measurementId) && (m.isSkipped ?? false));
     final String? indoorNote = isBefore
         ? state.selectedIndoorNoteBefore
         : state.selectedIndoorNoteAfter;
@@ -319,16 +321,25 @@ class _ServiceCallValidationScreenState
       return 'Catatan indoor wajib diisi jika ada pengukuran yang di-skip.';
     }
 
-    // Cek Outdoor
-    final bool isAnyOutdoorSkipped = measurements.any((m) {
-      bool isSkip = m.isSkipped ?? false;
-      return !m.measurementId.toLowerCase().contains('temperature') && isSkip;
-    });
+    // Cek Outdoor Elektrikal
+    final bool isAnyOutdoorSkipped = measurements.any((m) =>
+        outdoorElecIds.contains(m.measurementId) && (m.isSkipped ?? false));
     final String? outdoorNote = isBefore
         ? state.selectedOutdoorNoteBefore
         : state.selectedOutdoorNoteAfter;
     if (isAnyOutdoorSkipped && (outdoorNote == null || outdoorNote.isEmpty)) {
-      return 'Catatan outdoor wajib diisi jika ada pengukuran yang di-skip.';
+      return 'Catatan outdoor (Volt/Ampere) wajib diisi.';
+    }
+
+    // Cek Outdoor PSI
+    final bool isAnyOutdoorPsiSkipped = measurements.any((m) =>
+        outdoorPsiIds.contains(m.measurementId) && (m.isSkipped ?? false));
+    final String? outdoorPsiNote = isBefore
+        ? state.selectedOutdoorPSINoteBefore
+        : state.selectedOutdoorPSINoteAfter;
+    if (isAnyOutdoorPsiSkipped &&
+        (outdoorPsiNote == null || outdoorPsiNote.isEmpty)) {
+      return 'Catatan outdoor (PSI) wajib diisi.';
     }
 
     return null; // Semua valid

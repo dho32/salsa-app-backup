@@ -94,8 +94,12 @@ class ValidationDropdownBloc
           currentViewMode: ValidationViewMode.before,
           outdoorSerialNumbers: availableSerialsForDropdown,
           selectedOutdoorSerialNo: initialData?.outdoorSerialNo,
-          noteIndoorOptions: event.detailData.noteIndoorOptions,
-          noteOutdoorOptions: event.detailData.noteOutdoorOptions,
+          noteIndoorBeforeOptions: event.detailData.noteIndoorBeforeOptions,
+          noteIndoorAfterOptions: event.detailData.noteIndoorAfterOptions,
+          noteOutdoorBeforeOptions: event.detailData.noteOutdoorBeforeOptions,
+          noteOutdoorAfterOptions: event.detailData.noteOutdoorAfterOptions,
+          noteOutdoorPsiBeforeOptions: event.detailData.noteOutdoorPsiBeforeOptions,
+          noteOutdoorPsiAfterOptions: event.detailData.noteOutdoorPsiAfterOptions,
           selectedIndoorNoteBefore: initialData?.selectedIndoorNoteBefore,
           selectedOutdoorNoteBefore: initialData?.selectedOutdoorNoteBefore,
           selectedIndoorNoteAfter: initialData?.selectedIndoorNoteAfter,
@@ -113,19 +117,28 @@ class ValidationDropdownBloc
       final currentState = state as ValidationDropdownLoaded;
 
       if (event.isBefore) {
-        if (event.isIndoor) {
-          print("event note");
-          print(event.note);
-          emit(currentState.copyWith(selectedIndoorNoteBefore: event.note));
-        } else {
-          emit(currentState.copyWith(selectedOutdoorNoteBefore: event.note));
+        switch (event.noteType) {
+          case NoteType.indoor:
+            emit(currentState.copyWith(selectedIndoorNoteBefore: event.note));
+            break;
+          case NoteType.outdoor:
+            emit(currentState.copyWith(selectedOutdoorNoteBefore: event.note));
+            break;
+          case NoteType.outdoorPsi:
+            emit(currentState.copyWith(selectedOutdoorPSINoteBefore: event.note));
+            break;
         }
       } else {
-        // Jika isBefore == false (sesudah)
-        if (event.isIndoor) {
-          emit(currentState.copyWith(selectedIndoorNoteAfter: event.note));
-        } else {
-          emit(currentState.copyWith(selectedOutdoorNoteAfter: event.note));
+        switch (event.noteType) {
+          case NoteType.indoor:
+            emit(currentState.copyWith(selectedIndoorNoteAfter: event.note));
+            break;
+          case NoteType.outdoor:
+            emit(currentState.copyWith(selectedOutdoorNoteAfter: event.note));
+            break;
+          case NoteType.outdoorPsi:
+            emit(currentState.copyWith(selectedOutdoorPSINoteAfter: event.note));
+            break;
         }
       }
     }
@@ -309,6 +322,8 @@ class ValidationDropdownBloc
         selectedOutdoorNoteBefore: stateSaatEventMulai.selectedOutdoorNoteBefore,
         selectedIndoorNoteAfter: stateSaatEventMulai.selectedIndoorNoteAfter,
         selectedOutdoorNoteAfter: stateSaatEventMulai.selectedOutdoorNoteAfter,
+        selectedOutdoorPSINoteBefore: stateSaatEventMulai.selectedOutdoorPSINoteBefore,
+        selectedOutdoorPSINoteAfter: stateSaatEventMulai.selectedOutdoorPSINoteAfter,
       );
 
       // 5. Lakukan proses async (menyimpan ke Hive)
@@ -337,32 +352,23 @@ class ValidationDropdownBloc
       }
       await assignmentBox.put(event.transNo, currentAssignments);
 
-      // --- ✅ PERBAIKAN UTAMA: GUNAKAN 'state' (properti) BUKAN 'stateSaatEventMulai' (variabel) ✅ ---
-      // 'state' (properti BLoC) adalah state paling baru, yang mungkin sudah
-      // memiliki currentStep: 1 dari event ChangeValidationStep.
-
       if (event.markAsCompleted) {
-        // Jika ini adalah SIMPAN FINAL (dari Step 2)
         emit((state as ValidationDropdownLoaded).copyWith(
           saveStatus: ValidationSaveStatus.successFinal,
           saveMessage: "Validasi berhasil disimpan!",
         ));
       } else {
         if (event.showNotification) {
-          // Jika "Simpan Draft" diklik (showNotification: true)
           emit((state as ValidationDropdownLoaded).copyWith(
             saveStatus: ValidationSaveStatus.successDraft, // Tetap 'Draft'
             saveMessage: "Draft berhasil disimpan",
           ));
         } else {
-          // Jika "Lanjut" diklik (showNotification: false)
           emit((state as ValidationDropdownLoaded).copyWith(
-            saveStatus: ValidationSaveStatus.successSilent, // <-- Pakai status BARU
-            // Tidak perlu 'saveMessage'
+            saveStatus: ValidationSaveStatus.successSilent,
           ));
         }
       }
-      // --- AKHIR PERBAIKAN ---
 
     } catch (e) {
       print('Error saving validation data to Hive: $e');

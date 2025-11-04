@@ -56,14 +56,20 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final List<MeasurementEntry> capturedMeasurementsAfter;
 
   // Daftar Opsi Catatan (dari API)
-  final List<String> noteIndoorOptions;
-  final List<String> noteOutdoorOptions;
+  final List<String> noteIndoorBeforeOptions;
+  final List<String> noteIndoorAfterOptions;
+  final List<String> noteOutdoorBeforeOptions;
+  final List<String> noteOutdoorAfterOptions;
+  final List<String> noteOutdoorPsiBeforeOptions;
+  final List<String> noteOutdoorPsiAfterOptions;
 
   //selected note
   final String? selectedIndoorNoteBefore;
   final String? selectedOutdoorNoteBefore;
   final String? selectedIndoorNoteAfter;
   final String? selectedOutdoorNoteAfter;
+  final String? selectedOutdoorPSINoteBefore;
+  final String? selectedOutdoorPSINoteAfter;
 
   final int currentStep;
   final ValidationViewMode currentViewMode;
@@ -84,12 +90,18 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.outdoorSerialNumbers = const [],
     this.unitLocation = 'INDOOR',
     this.selectedOutdoorSerialNo,
-    this.noteIndoorOptions = const [],
-    this.noteOutdoorOptions = const [],
+    this.noteIndoorBeforeOptions = const [],
+    this.noteIndoorAfterOptions = const [],
+    this.noteOutdoorBeforeOptions = const [],
+    this.noteOutdoorAfterOptions = const [],
+    this.noteOutdoorPsiBeforeOptions = const [],
+    this.noteOutdoorPsiAfterOptions = const [],
     this.selectedIndoorNoteBefore,
     this.selectedOutdoorNoteBefore,
     this.selectedIndoorNoteAfter,
     this.selectedOutdoorNoteAfter,
+    this.selectedOutdoorPSINoteBefore,
+    this.selectedOutdoorPSINoteAfter,
     this.saveStatus = ValidationSaveStatus.initial,
     this.saveMessage,
   });
@@ -108,12 +120,18 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     ValidationViewMode? currentViewMode,
     List<String>? outdoorSerialNumbers,
     Object? selectedOutdoorSerialNo = const Object(),
-    List<String>? noteIndoorOptions,
-    List<String>? noteOutdoorOptions,
+    List<String>? noteIndoorBeforeOptions,
+    List<String>? noteIndoorAfterOptions,
+    List<String>? noteOutdoorBeforeOptions,
+    List<String>? noteOutdoorAfterOptions,
+    List<String>? noteOutdoorPsiBeforeOptions,
+    List<String>? noteOutdoorPsiAfterOptions,
     Object? selectedIndoorNoteBefore = const Object(),
     Object? selectedOutdoorNoteBefore = const Object(),
     Object? selectedIndoorNoteAfter = const Object(),
     Object? selectedOutdoorNoteAfter = const Object(),
+    Object? selectedOutdoorPSINoteBefore = const Object(),
+    Object? selectedOutdoorPSINoteAfter = const Object(),
     ValidationSaveStatus? saveStatus,
     Object? saveMessage = const Object(), // saveMessage juga bisa null
   }) {
@@ -139,12 +157,21 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
       selectedOutdoorSerialNo: _handleNullable(selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
-      noteIndoorOptions: noteIndoorOptions ?? this.noteIndoorOptions,
-      noteOutdoorOptions: noteOutdoorOptions ?? this.noteOutdoorOptions,
+
+      noteIndoorBeforeOptions: noteIndoorBeforeOptions ?? this.noteIndoorBeforeOptions,
+      noteIndoorAfterOptions: noteIndoorAfterOptions ?? this.noteIndoorAfterOptions,
+      noteOutdoorBeforeOptions: noteOutdoorBeforeOptions ?? this.noteOutdoorBeforeOptions,
+      noteOutdoorAfterOptions: noteOutdoorAfterOptions ?? this.noteOutdoorAfterOptions,
+      noteOutdoorPsiBeforeOptions: noteOutdoorPsiBeforeOptions ?? this.noteOutdoorPsiBeforeOptions,
+      noteOutdoorPsiAfterOptions: noteOutdoorPsiAfterOptions ?? this.noteOutdoorPsiAfterOptions,
       selectedIndoorNoteBefore: _handleNullable(selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
       selectedOutdoorNoteBefore: _handleNullable(selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
       selectedIndoorNoteAfter: _handleNullable(selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
       selectedOutdoorNoteAfter: _handleNullable(selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
+      selectedOutdoorPSINoteBefore: _handleNullable(selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
+      selectedOutdoorPSINoteAfter: _handleNullable(selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
+
+
       saveStatus: saveStatus ?? this.saveStatus,
       saveMessage: _handleNullable(saveMessage, this.saveMessage),
     );
@@ -163,12 +190,18 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
         currentViewMode,
         outdoorSerialNumbers,
         selectedOutdoorSerialNo,
-        noteIndoorOptions,
-        noteOutdoorOptions,
+        noteIndoorBeforeOptions,
+        noteIndoorAfterOptions,
+        noteOutdoorBeforeOptions,
+        noteOutdoorAfterOptions,
+        noteOutdoorPsiBeforeOptions,
+        noteOutdoorPsiAfterOptions,
         selectedIndoorNoteBefore,
         selectedOutdoorNoteBefore,
         selectedIndoorNoteAfter,
         selectedOutdoorNoteAfter,
+        selectedOutdoorPSINoteBefore,
+        selectedOutdoorPSINoteAfter,
         saveStatus,
         saveMessage,
       ];

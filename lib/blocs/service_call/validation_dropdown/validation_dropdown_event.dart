@@ -9,6 +9,8 @@ import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart'; // BARU: Import ValidationViewMode
 
+enum NoteType { indoor, outdoor, outdoorPsi }
+
 abstract class ValidationDropdownEvent extends Equatable {
   const ValidationDropdownEvent();
 
@@ -45,13 +47,13 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
 
 class NoteChanged extends ValidationDropdownEvent {
   final String? note;
-  final bool isIndoor;
+  final NoteType noteType;
   final bool isBefore;
 
-  const NoteChanged(this.note, {required this.isIndoor, required this.isBefore});
+  const NoteChanged(this.note, {required this.noteType, required this.isBefore});
 
   @override
-  List<Object?> get props => [note, isIndoor, isBefore];
+  List<Object?> get props => [note, noteType, isBefore];
 }
 
 class SelectUnitType extends ValidationDropdownEvent {
