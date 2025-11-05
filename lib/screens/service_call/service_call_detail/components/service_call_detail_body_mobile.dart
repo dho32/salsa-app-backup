@@ -3,6 +3,7 @@
 import 'dart:developer';
 
 import 'package:collection/collection.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -75,6 +76,7 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _technician2Controller;
   late final TextEditingController _technician3Controller;
   late final TextEditingController _finalTempController;
+  final TextEditingController _finalTempNoteSearchController = TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
@@ -152,6 +154,7 @@ class _ServiceCallDetailBodyMobileState
     _technician2Controller.dispose();
     _technician3Controller.dispose();
     _finalTempController.dispose();
+    _finalTempNoteSearchController.dispose();
     super.dispose();
   }
 
@@ -498,9 +501,11 @@ class _ServiceCallDetailBodyMobileState
                                   ),
                                   // Widget Suhu Akhir (Kondisional)
                                   BlocBuilder<ScFormCubit, ScFormState>(
-                                    buildWhen: (prev, current) =>
-                                        prev.allUnitsValidated !=
-                                        current.allUnitsValidated,
+                                    buildWhen: (prev, current) {
+                                      return prev.allUnitsValidated != current.allUnitsValidated || // (status aktif/nonaktif berubah)
+                                          prev.isFinalTempSkipped != current.isFinalTempSkipped || // (status skip berubah)
+                                          prev.finalTempNote != current.finalTempNote; // (note berubah)
+                                    },
                                     builder: (context, formStateForTemp) {
                                       final bool isEnabled =
                                           formStateForTemp.allUnitsValidated;
@@ -927,7 +932,6 @@ class _ServiceCallDetailBodyMobileState
     final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
     final String label = baseLimits.label;
-
     final finalTempLimits = MeasurementLimits(
       id: baseLimits.id,
       label: label,
@@ -937,26 +941,53 @@ class _ServiceCallDetailBodyMobileState
       normalMin: baseLimits.normalMin,
       normalMax: baseLimits.normalMax,
     );
+    final detailState = context.read<ServiceCallDetailBloc>().state;
+    List<String> noteOptions = [];
+    if (detailState is ServiceCallDetailLoaded) {
+      noteOptions = detailState.data.noteIndoorAfterOptions;
+    }
 
     return _buildSection(
       title: 'Suhu Dalam Ruangan Setelah Service (*Wajib)',
-      child: MeasurementInputWidget(
-        controller: _finalTempController,
-        label: finalTempLimits.label,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        limits: finalTempLimits,
-        transNo: widget.transNo,
-        initialImage: formState.finalTempInImage,
-        onEditingComplete: (finalValue) {
-          if (formCubit.state.finalTempIn != finalValue) {
-            formCubit.finalTempInChanged(finalValue);
-            formCubit.onFieldChanged();
-          }
-        },
-        onImageChanged: (newImage) {
-          formCubit.finalTempInImageChanged(newImage);
-          formCubit.onFieldChanged();
-        },
+      child: Column(
+        children: [
+          MeasurementInputWidget(
+            controller: _finalTempController,
+            label: finalTempLimits.label,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            limits: finalTempLimits,
+            transNo: widget.transNo,
+            initialImage: formState.finalTempInImage,
+            onEditingComplete: (finalValue) {
+              if (formCubit.state.finalTempIn != finalValue) {
+                formCubit.finalTempInChanged(finalValue);
+                formCubit.onFieldChanged();
+              }
+            },
+            onImageChanged: (newImage) {
+              formCubit.finalTempInImageChanged(newImage);
+              formCubit.onFieldChanged();
+            },
+            isSkipEnabled: true,
+            isSkipped: formState.isFinalTempSkipped,
+            onSkipChanged: (isSkipped) {
+              // Panggil method baru di Cubit
+              formCubit.finalTempSkippedChanged(isSkipped);
+            },
+          ),
+          if (formState.isFinalTempSkipped)
+            _buildNoteDropdown(
+              context: context,
+              options: noteOptions,
+              selectedValue: formState.finalTempNote,
+              searchController: _finalTempNoteSearchController,
+              label: 'Alasan Skip Suhu Akhir',
+              onChanged: (value) {
+                formCubit.finalTempNoteChanged(value); // Panggil method baru
+                formCubit.onFieldChanged();
+              },
+            ),
+        ],
       ),
     );
   }
@@ -1050,6 +1081,85 @@ class _ServiceCallDetailBodyMobileState
               newValue.copyWith(text: newValue.text.toUpperCase()),
         ),
       ],
+    );
+  }
+
+  Widget _buildNoteDropdown({
+    required BuildContext context,
+    required List<String> options,
+    required String? selectedValue,
+    required TextEditingController searchController,
+    required String label,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+    // ... (Sisa kode _buildNoteDropdown persis sama seperti
+    //      yang ada di ScMeasurementInputSection: Padding, DropdownButtonFormField2, dll.)
+
+    // Pastikan Anda menyalin seluruh method _buildNoteDropdown ke sini
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0), // Sesuaikan padding
+      child: DropdownButtonFormField2<String>(
+        value: selectedValue,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: '$label (*Wajib)',
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        ),
+        hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
+        items: options.map((item) => DropdownMenuItem<String>(
+          value: item,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(item, style: const TextStyle(fontSize: 14)),
+            ),
+          ),
+        )).toList(),
+        onChanged: onChanged,
+        selectedItemBuilder: (context) {
+          return options.map((item) {
+            return Text(
+              item,
+              style: const TextStyle(fontSize: 14, overflow: TextOverflow.ellipsis),
+              maxLines: 1,
+            );
+          }).toList();
+        },
+        dropdownStyleData: DropdownStyleData(
+          maxHeight: maxDropdownHeight,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+        ),
+        menuItemStyleData: const MenuItemStyleData(
+          padding: EdgeInsets.symmetric(horizontal: 14),
+        ),
+        dropdownSearchData: DropdownSearchData(
+          searchController: searchController,
+          searchInnerWidgetHeight: 50,
+          searchInnerWidget: Container(
+            height: 50,
+            padding: const EdgeInsets.all(8),
+            child: TextFormField(
+              expands: true,
+              maxLines: null,
+              controller: searchController,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                hintText: 'Cari alasan...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+          searchMatchFn: (item, searchValue) =>
+              item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+        ),
+        onMenuStateChange: (isOpen) {
+          if (!isOpen) searchController.clear();
+        },
+      ),
     );
   }
 

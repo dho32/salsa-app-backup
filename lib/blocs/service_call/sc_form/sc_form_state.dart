@@ -17,6 +17,8 @@ class ScFormState extends Equatable {
   final String finalTempIn;
   final CapturedImageDetail? finalTempInImage;
   final double? minFinalTempInLimit;
+  final bool isFinalTempSkipped;
+  final String? finalTempNote;
 
   // Validation & Status Fields
   final bool isPicStoreValid;
@@ -36,6 +38,8 @@ class ScFormState extends Equatable {
     this.finalTempIn = '',
     this.finalTempInImage,
     this.minFinalTempInLimit,
+    this.isFinalTempSkipped = false,
+    this.finalTempNote,
     this.isPicStoreValid = false,
     this.allUnitsValidated = false,
     this.isFinalTempValid = false,
@@ -43,12 +47,22 @@ class ScFormState extends Equatable {
   });
 
   ScFormState copyWith({
-    String? picNik, String? picName, String? picPosition, String? picPhone,
-    String? technician2, String? technician3, bool? showTechnician3,
+    String? picNik,
+    String? picName,
+    String? picPosition,
+    String? picPhone,
+    String? technician2,
+    String? technician3,
+    bool? showTechnician3,
     CapturedImageDetail? picImageDetail,
     double? minFinalTempInLimit,
-    String? finalTempIn, CapturedImageDetail? finalTempInImage,
-    bool? isPicStoreValid, bool? allUnitsValidated, bool? isFinalTempValid,
+    String? finalTempIn,
+    CapturedImageDetail? finalTempInImage,
+    bool? isPicStoreValid,
+    bool? allUnitsValidated,
+    bool? isFinalTempValid,
+    bool? isFinalTempSkipped,
+    String? finalTempNote,
     bool? isFormReadyToSubmit,
   }) {
     return ScFormState(
@@ -63,6 +77,8 @@ class ScFormState extends Equatable {
       finalTempIn: finalTempIn ?? this.finalTempIn,
       finalTempInImage: finalTempInImage ?? this.finalTempInImage,
       minFinalTempInLimit: minFinalTempInLimit ?? this.minFinalTempInLimit,
+      isFinalTempSkipped: isFinalTempSkipped ?? this.isFinalTempSkipped,
+      finalTempNote: finalTempNote ?? this.finalTempNote,
       isPicStoreValid: isPicStoreValid ?? this.isPicStoreValid,
       allUnitsValidated: allUnitsValidated ?? this.allUnitsValidated,
       isFinalTempValid: isFinalTempValid ?? this.isFinalTempValid,
@@ -72,8 +88,21 @@ class ScFormState extends Equatable {
 
   @override
   List<Object?> get props => [
-    picNik, picName, picPosition, picPhone, technician2, technician3,
-    showTechnician3, picImageDetail, finalTempIn, finalTempInImage,
-    isPicStoreValid, allUnitsValidated, isFinalTempValid, isFormReadyToSubmit,
-  ];
+        picNik,
+        picName,
+        picPosition,
+        picPhone,
+        technician2,
+        technician3,
+        showTechnician3,
+        picImageDetail,
+        finalTempIn,
+        isFinalTempSkipped,
+        finalTempNote,
+        finalTempInImage,
+        isPicStoreValid,
+        allUnitsValidated,
+        isFinalTempValid,
+        isFormReadyToSubmit,
+      ];
 }

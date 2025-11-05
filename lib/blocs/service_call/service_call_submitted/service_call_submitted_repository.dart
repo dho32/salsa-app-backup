@@ -22,6 +22,7 @@ class ServiceCallSubmittedRepository {
         'aho_number': ahoNumber,
         'temperature_in_after':
             double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
+        'temperature_in_note': transactionInfo?.isFinalTempSkipped ?? false ? transactionInfo?.finalTempNote ?? '' : '',
         'created_by': createdBy,
         'created_by_name': createdByName,
         'created_by_ip': createdByIp,
