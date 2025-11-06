@@ -155,7 +155,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           final detailData = detailCacheBox.get(event.transNo);
           final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
 
-          final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
             'failedFiles': cleanFailedFiles,
@@ -220,7 +220,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         emit(PosValidationSuccess());
       } else {
         // Jika masih gagal, update cache dengan sisa file yang masih gagal
-        final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+        final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
         final cleanFailedFiles = result.failedFiles.map((e) => e.split(' (').first).toList();
 
         await cacheBox.put(event.transNo, {
@@ -246,7 +246,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
     LoadPosValidationPartial event,
     Emitter<PosSubmittedState> emit,
   ) async {
-    final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
     final cached = cacheBox.get(event.transNo);
 
     if (cached != null) {

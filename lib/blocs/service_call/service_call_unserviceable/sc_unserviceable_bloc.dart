@@ -255,7 +255,7 @@ class SCUnserviceableBloc
             'type': 'unserviceable_sc',
             'storeName': storeName,
           };
-          final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
           await retryBox.put(transNo, partialData);
 
           emit(state.copyWith(
@@ -296,7 +296,7 @@ class SCUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
-      final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
       await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));

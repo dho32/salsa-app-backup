@@ -26,14 +26,28 @@ class PosSubmittedRepository {
         'pic_phone': transactionInfo?.picPhone ?? '',
         'technician_2_name': transactionInfo?.technician2 ?? '',
         'technician_3_name': transactionInfo?.technician3 ?? '',
-        'temperature_in_before': double.tryParse(transactionInfo?.temperatureIn ?? '0') ?? 0,
-        'temperature_out': double.tryParse(transactionInfo?.temperatureOut ?? '0') ?? 0,
-        'temperature_in_after': double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
+        'temperature_in_before':
+            double.tryParse(transactionInfo?.temperatureIn ?? '0') ?? 0,
+        'temperature_out':
+            double.tryParse(transactionInfo?.temperatureOut ?? '0') ?? 0,
+        'temperature_in_after':
+            double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
         'service_time': transactionInfo?.serviceTime ?? '',
         'pic_image_detail': transactionInfo?.picImageDetail?.toJson(),
-        'temp_in_image_detail_before': transactionInfo?.temperatureInImage?.toJson(),
+        'temp_in_image_detail_before':
+            transactionInfo?.temperatureInImage?.toJson(),
         'temp_out_image_detail': transactionInfo?.temperatureOutImage?.toJson(),
-        'temp_in_image_detail_after': transactionInfo?.finalTemperatureInImage?.toJson(),
+        'temp_in_image_detail_after':
+            transactionInfo?.finalTemperatureInImage?.toJson(),
+        'temp_in_note': transactionInfo?.isTempInSkipped ?? false
+            ? transactionInfo?.tempInNote ?? ''
+            : '',
+        'temp_out_note': transactionInfo?.isTempOutSkipped ?? false
+            ? transactionInfo?.tempOutNote ?? ''
+            : '',
+        'final_temp_in_note': transactionInfo?.isFinalTempInSkipped ?? false
+            ? transactionInfo?.finalTempInNote ?? ''
+            : '',
         'items': items,
       };
 

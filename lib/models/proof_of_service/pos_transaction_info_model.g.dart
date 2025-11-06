@@ -33,13 +33,19 @@ class PosTransactionInfoModelAdapter
       temperatureOutImage: fields[12] as CapturedImageDetail?,
       finalTemperatureIn: fields[13] as String?,
       finalTemperatureInImage: fields[14] as CapturedImageDetail?,
+      isTempInSkipped: fields[15] as bool?,
+      tempInNote: fields[16] as String?,
+      isTempOutSkipped: fields[17] as bool?,
+      tempOutNote: fields[18] as String?,
+      isFinalTempInSkipped: fields[19] as bool?,
+      finalTempInNote: fields[20] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PosTransactionInfoModel obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -69,7 +75,19 @@ class PosTransactionInfoModelAdapter
       ..writeByte(13)
       ..write(obj.finalTemperatureIn)
       ..writeByte(14)
-      ..write(obj.finalTemperatureInImage);
+      ..write(obj.finalTemperatureInImage)
+      ..writeByte(15)
+      ..write(obj.isTempInSkipped)
+      ..writeByte(16)
+      ..write(obj.tempInNote)
+      ..writeByte(17)
+      ..write(obj.isTempOutSkipped)
+      ..writeByte(18)
+      ..write(obj.tempOutNote)
+      ..writeByte(19)
+      ..write(obj.isFinalTempInSkipped)
+      ..writeByte(20)
+      ..write(obj.finalTempInNote);
   }
 
   @override

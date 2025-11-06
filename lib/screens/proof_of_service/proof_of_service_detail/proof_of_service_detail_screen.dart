@@ -90,7 +90,7 @@ class _ProofOfServiceDetailScreenState
         BlocProvider(
           create: (context) {
             final bloc = PosSubmittedBloc(repository: PosSubmittedRepository());
-            Hive.openBox(kPosValidationPartialHiveBox).then((box) {
+            Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox).then((box) {
               if (box.containsKey(widget.transNo)) {
                 bloc.add(LoadPosValidationPartial(widget.transNo));
               }

@@ -50,11 +50,11 @@ class PosUnserviceableBloc
 
   Future<void> _onLoadInitialData(
       LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) async {
-    final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
     final retryData = retryBox.get(transNo);
 
     if (retryData != null) {
-      final dataMap = Map<String, dynamic>.from(retryData as Map);
+      final dataMap = Map<String, dynamic>.from(retryData);
       // Jika ada data retry, langsung emit state partialFailure
       if (dataMap['type'] == 'unserviceable') {
         emit(state.copyWith(
@@ -251,7 +251,7 @@ class PosUnserviceableBloc
             'type': 'unserviceable',
             'storeName': storeName,
           };
-          final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
           await retryBox.put(transNo, partialData);
 
           emit(state.copyWith(
@@ -292,7 +292,7 @@ class PosUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
-      final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
       await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));

@@ -43,9 +43,61 @@ class PosFormCubit extends Cubit<PosFormState> {
         temperatureOutImage: info.temperatureOutImage,
         finalTempIn: info.finalTemperatureIn ?? '',
         finalTempInImage: info.finalTemperatureInImage,
+        isTempInSkipped: info.isTempInSkipped ?? false,
+        tempInNote: info.tempInNote ?? '',
+        isTempOutSkipped: info.isTempOutSkipped ?? false,
+        tempOutNote: info.tempOutNote ?? '',
+        isFinalTempInSkipped: info.isFinalTempInSkipped ?? false,
+        finalTempInNote: info.finalTempInNote ?? '',
       ));
     }
     _validateForm();
+  }
+
+  void tempInSkipped(bool isSkipped) {
+    emit(state.copyWith(
+      isTempInSkipped: isSkipped,
+      tempIn: isSkipped ? '' : state.tempIn,
+      temperatureInImage: isSkipped ? null : state.temperatureInImage,
+      tempInNote:
+          !isSkipped ? '' : state.tempInNote, // Reset note jika di-unskip
+    ));
+    onFieldChanged();
+  }
+
+  void tempOutSkipped(bool isSkipped) {
+    emit(state.copyWith(
+      isTempOutSkipped: isSkipped,
+      tempOut: isSkipped ? '' : state.tempOut,
+      temperatureOutImage: isSkipped ? null : state.temperatureOutImage,
+      tempOutNote: !isSkipped ? '' : state.tempOutNote, // Reset note
+    ));
+    onFieldChanged();
+  }
+
+  void tempInNoteChanged(String value) {
+    emit(state.copyWith(tempInNote: value));
+    onFieldChanged();
+  }
+
+  void tempOutNoteChanged(String value) {
+    emit(state.copyWith(tempOutNote: value));
+    onFieldChanged();
+  }
+
+  void finalTempInNoteChanged(String value) {
+    emit(state.copyWith(finalTempInNote: value));
+    onFieldChanged();
+  }
+
+  void finalTempInSkipped(bool isSkipped) {
+    emit(state.copyWith(
+      isFinalTempInSkipped: isSkipped,
+      finalTempIn: isSkipped ? '' : state.finalTempIn,
+      finalTempInImage: isSkipped ? null : state.finalTempInImage,
+      finalTempInNote: !isSkipped ? '' : state.finalTempInNote, // Reset note
+    ));
+    onFieldChanged();
   }
 
   void finalTempInChanged(String value) =>
@@ -141,13 +193,18 @@ class PosFormCubit extends Cubit<PosFormState> {
         state.picPosition.isNotEmpty &&
         state.picPhone.isNotEmpty;
 
-    final serviceInfoValid = state.tempIn.isNotEmpty &&
-        state.tempOut.isNotEmpty &&
-        state.temperatureInImage != null &&
-        state.temperatureOutImage != null;
+    final bool tempInValid =
+        (state.tempIn.isNotEmpty && state.temperatureInImage != null) ||
+            (state.isTempInSkipped && state.tempInNote.isNotEmpty);
+    final bool tempOutValid =
+        (state.tempOut.isNotEmpty && state.temperatureOutImage != null) ||
+            (state.isTempOutSkipped && state.tempOutNote.isNotEmpty);
+
+    final serviceInfoValid = tempInValid && tempOutValid;
 
     final finalTempValid =
-        state.finalTempIn.isNotEmpty && state.finalTempInImage != null;
+        (state.finalTempIn.isNotEmpty && state.finalTempInImage != null) ||
+            (state.isFinalTempInSkipped && state.finalTempInNote.isNotEmpty);
 
     // final isReady = picStoreValid && serviceInfoValid && state.allUnitsValidated;
 
@@ -178,7 +235,13 @@ class PosFormCubit extends Cubit<PosFormState> {
       ..temperatureInImage = state.temperatureInImage
       ..temperatureOutImage = state.temperatureOutImage
       ..finalTemperatureIn = state.finalTempIn
-      ..finalTemperatureInImage = state.finalTempInImage;
+      ..finalTemperatureInImage = state.finalTempInImage
+      ..isTempInSkipped = state.isTempInSkipped
+      ..tempInNote = state.tempInNote
+      ..isTempOutSkipped = state.isTempOutSkipped
+      ..tempOutNote = state.tempOutNote
+      ..isFinalTempInSkipped = state.isFinalTempInSkipped
+      ..finalTempInNote = state.finalTempInNote;
 
     await _transactionInfoBox.put(transNo, infoToSave);
   }
