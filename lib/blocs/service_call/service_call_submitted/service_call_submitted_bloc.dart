@@ -14,6 +14,7 @@ import '../../../components/services/hive_clear_service.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 
 class ServiceCallSubmittedBloc
     extends Bloc<ServiceCallSubmittedEvent, ServiceCallSubmittedState> {
@@ -170,6 +171,7 @@ class ServiceCallSubmittedBloc
               await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
           final task = ConfirmationTaskModel(transNo: event.transNo);
           await queueBox.put(event.transNo, task);
+          await ConfirmationService().processQueue();
           emit(ValidationSuccess(transNo: event.transNo, presignedDetail: []));
         } else {
           final cacheBox = Hive.box<Map<dynamic, dynamic>>(
@@ -218,6 +220,7 @@ class ServiceCallSubmittedBloc
             await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
         final task = ConfirmationTaskModel(transNo: event.transNo);
         await queueBox.put(event.transNo, task);
+        await ConfirmationService().processQueue();
 
         emit(ValidationSuccess(
           transNo: event.transNo,

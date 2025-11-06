@@ -9,6 +9,7 @@ import '../../components/upload_s3_service.dart';
 import '../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../models/service_call/sc_unserviceable_model.dart';
 import '../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../screens/common/services/confirmation_service.dart';
 
 part 'failed_uploads_event.dart'; // Pastikan event FinalizeSuccessfulRetry ada di sini
 part 'failed_uploads_state.dart'; // Pastikan state punya field retry...
@@ -40,7 +41,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       try {
         final box = await Hive.openBox<Map<dynamic, dynamic>>(boxName);
         final subscription = box.watch().listen((event) {
-          // Hanya trigger reload jika ada data yg dihapus (untuk mengurangi loop)
           if (event.deleted) {
 
             print("📦 Hive DELETION detected in $boxName for key ${event.key}, scheduling reload...");
@@ -321,6 +321,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         if (!queueBox.containsKey(key)) {
           final task = ConfirmationTaskModel(transNo: key);
           await queueBox.put(key, task);
+          await ConfirmationService().processQueue();
           print("✅ Added $key ($moduleType) to confirmation queue after successful retry.");
         } else {
           print("ℹ️ $key ($moduleType) already in confirmation queue.");

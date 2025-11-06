@@ -19,6 +19,7 @@ import '../../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 import 'pos_unserviceable_event.dart';
 import 'pos_unserviceable_repository.dart';
 import 'pos_unserviceable_state.dart';
@@ -345,6 +346,8 @@ class PosUnserviceableBloc
     final task =
     ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
     await queueBox.put(transNo.trim().toUpperCase(), task);
+
+    await ConfirmationService().processQueue();
 
     print("🧹 Semua data Hive untuk transaksi $transNo telah dibersihkan.");
   }

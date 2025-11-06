@@ -23,6 +23,7 @@ import '../../../models/service_call/sc_unserviceable_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 import '../../auth/auth_storage.dart';
 
 class SCUnserviceableBloc
@@ -349,6 +350,7 @@ class SCUnserviceableBloc
       final queueBox = Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox);
       final task = ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
       await queueBox.put(transNo.trim().toUpperCase(), task);
+      await ConfirmationService().processQueue();
     } catch (e) {
       print("🔴 Error saat membersihkan data Hive untuk $transNo: $e");
       throw Exception(

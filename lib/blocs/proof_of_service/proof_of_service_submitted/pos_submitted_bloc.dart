@@ -12,6 +12,7 @@ import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../components/services/hive_clear_service.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 
 class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
   final PosSubmittedRepository repository;
@@ -144,6 +145,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           final task = ConfirmationTaskModel(
               transNo: event.transNo.trim().toUpperCase());
           await queueBox.put(event.transNo.trim().toUpperCase(), task);
+          await ConfirmationService().processQueue();
 
           emit(PosValidationSuccess());
         } else {
@@ -216,6 +218,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         final task =
             ConfirmationTaskModel(transNo: event.transNo.trim().toUpperCase());
         await queueBox.put(event.transNo.trim().toUpperCase(), task);
+        await ConfirmationService().processQueue();
 
         emit(PosValidationSuccess());
       } else {
