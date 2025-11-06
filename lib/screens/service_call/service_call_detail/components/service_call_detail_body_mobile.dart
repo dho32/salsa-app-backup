@@ -407,7 +407,15 @@ class _ServiceCallDetailBodyMobileState
                                       create: (_) =>
                                           OtpBloc(repository: OtpRepository())),
                                   BlocProvider(
-                                      create: (_) => LocationValidationBloc()),
+                                    create: (context) {
+                                      // 1. Ambil box yang SUDAH DIBUKA oleh ScFormCubit
+                                      final Box scBox = Hive.box<TransactionInfoModel>(
+                                          kTransactionInfoHiveBox);
+
+                                      // 2. Inject box tersebut ke dalam BLoC
+                                      return LocationValidationBloc(transactionBox: scBox);
+                                    },
+                                  ),
                                   BlocProvider.value(
                                       value:
                                           context.read<UploadProgressCubit>()),

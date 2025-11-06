@@ -263,6 +263,6 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
   // Helper untuk normalisasi kunci, pastikan sama dengan yang di UI
   String getHiveKeyForTransaction(String transNo) {
-    return transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    return transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
   }
 }

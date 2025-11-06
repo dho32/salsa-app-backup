@@ -1,11 +1,13 @@
 import 'package:hive/hive.dart';
 
 import '../common/captured_image_detail.dart';
+import '../common/i_pic_photo_storable.dart';
 
 part 'pos_transaction_info_model.g.dart';
 
 @HiveType(typeId: 7)
-class PosTransactionInfoModel extends HiveObject {
+class PosTransactionInfoModel extends HiveObject implements IPicPhotoStorable {
+  @override
   @HiveField(0)
   String transNo;
 
@@ -36,6 +38,7 @@ class PosTransactionInfoModel extends HiveObject {
   @HiveField(9)
   String? serviceTime;
 
+  @override
   @HiveField(10)
   CapturedImageDetail? picImageDetail;
 

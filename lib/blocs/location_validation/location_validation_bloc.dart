@@ -7,26 +7,30 @@ import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../../components/constants.dart';
 import '../../components/shared_function.dart';
 import 'location_validation_event.dart';
 import 'location_validation_state.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
-import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
+import 'package:salsa/models/common/i_pic_photo_storable.dart';
 
 class LocationValidationBloc
     extends Bloc<LocationValidationEvent, LocationValidationState> {
-  LocationValidationBloc() : super(LocationValidationInitial()) {
+  final Box transactionBox;
+
+  LocationValidationBloc({required this.transactionBox})
+      : super(LocationValidationInitial()) {
     on<LoadLocationPhoto>(_onLoadPhoto);
     on<TakeLocationPhoto>(_onTakePhoto);
     on<RemoveLocationPhoto>(_onRemovePhoto);
     on<SubmitLocationValidation>(_onSubmitValidation);
   }
 
+  String _getHiveKey(String transNo) =>
+      transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
   Future<void> _onLoadPhoto(
       LoadLocationPhoto event, Emitter<LocationValidationState> emit) async {
-    final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    final txn = box.get(event.transNo);
+    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     final photo = txn?.picImageDetail;
 
     if (photo != null) {
@@ -48,25 +52,26 @@ class LocationValidationBloc
       TakeLocationPhoto event, Emitter<LocationValidationState> emit) async {
     emit(LocationValidationLoading());
 
+    print("masukkkkk");
+
     final picker = ImagePicker();
     // Ambil gambar dengan kualitas asli terlebih dahulu
     final pickedFile = await picker.pickImage(source: ImageSource.camera);
 
     if (pickedFile == null) {
-      final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-      final txn = box.get(event.transNo);
+      final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
       emit(LocationPhotoLoaded(txn?.picImageDetail));
       return;
     }
 
     final tempDir = await getTemporaryDirectory();
     // Buat nama file baru yang standar menggunakan timestamp
-    final targetPath = p.join(
-        tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+    final targetPath =
+        p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
     // Kompres gambar dan simpan ke targetPath
     final XFile? compressedImage =
-    await FlutterImageCompress.compressAndGetFile(
+        await FlutterImageCompress.compressAndGetFile(
       pickedFile.path,
       targetPath,
       quality: 70,
@@ -77,7 +82,6 @@ class LocationValidationBloc
       emit(LocationValidationFailure("Gagal memproses gambar.", photo: null));
       return;
     }
-    // --- AKHIR LOGIKA BARU ---
 
     final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.best,
@@ -101,20 +105,27 @@ class LocationValidationBloc
       tokoLng: event.tokoLng,
     );
 
-    final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    final txn = box.get(event.transNo);
+    print("masukkkkk lagi");
+
+    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     if (txn != null) {
       txn.picImageDetail = detail;
       await txn.save();
+    } else {
+      // Handle jika 'txn' null (seharusnya tidak terjadi jika form cubit sudah jalan)
+      print(
+          "PERINGATAN: Gagal menemukan TransactionInfo/PosTransactionInfo untuk ${event.transNo}");
     }
+
+    print("keluar");
+
 
     emit(LocationPhotoLoaded(detail, distance: distance));
   }
 
   Future<void> _onRemovePhoto(
       RemoveLocationPhoto event, Emitter<LocationValidationState> emit) async {
-    final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    final txn = box.get(event.transNo);
+    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     if (txn != null) {
       txn.picImageDetail = null;
       await txn.save();
@@ -128,8 +139,7 @@ class LocationValidationBloc
     // Beri jeda singkat agar UI punya waktu untuk me-render ulang loading spinner
     await Future.delayed(const Duration(milliseconds: 50));
 
-    final box = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    final txn = box.get(event.transNo);
+    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     final photo = txn?.picImageDetail;
 
     if (photo == null) {

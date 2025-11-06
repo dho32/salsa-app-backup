@@ -15,7 +15,7 @@ class ScFormCubit extends Cubit<ScFormState> {
   final String transNo;
   late final Box<TransactionInfoModel> _transactionInfoBox; // Gunakan Box SC
   String _normalizeHiveKey(String key) =>
-      key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      key.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   ScFormCubit({required this.transNo}) : super(const ScFormState()) {
     _initAndLoadData();
