@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
@@ -64,10 +65,14 @@ class LocationValidationBloc
       return;
     }
 
-    final tempDir = await getTemporaryDirectory();
+    final appDir = await getApplicationDocumentsDirectory();
+    final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+    if (!await imagesDir.exists()) {
+      await imagesDir.create();
+    }
     // Buat nama file baru yang standar menggunakan timestamp
     final targetPath =
-        p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+        p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
     // Kompres gambar dan simpan ke targetPath
     final XFile? compressedImage =

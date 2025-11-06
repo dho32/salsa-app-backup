@@ -1,4 +1,6 @@
 // lib/services/image_service.dart
+import 'dart:io';
+
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
@@ -17,9 +19,13 @@ class ImageService {
 
     if (image == null) return null; // Pengguna membatalkan
 
-    final tempDir = await getTemporaryDirectory();
+    final appDir = await getApplicationDocumentsDirectory();
+    final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+    if (!await imagesDir.exists()) {
+      await imagesDir.create();
+    }
     final targetPath =
-    p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+        p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
     // Kompres file untuk ukuran yang lebih kecil
     final compressedFile = await FlutterImageCompress.compressAndGetFile(

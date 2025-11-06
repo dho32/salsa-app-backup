@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -123,9 +125,13 @@ class PosUnserviceableBloc
         return;
       }
 
-      final tempDir = await getTemporaryDirectory();
+      final appDir = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+      if (!await imagesDir.exists()) {
+        await imagesDir.create();
+      }
       final targetPath =
-          p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+          p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final XFile? compressedImage =
           await FlutterImageCompress.compressAndGetFile(

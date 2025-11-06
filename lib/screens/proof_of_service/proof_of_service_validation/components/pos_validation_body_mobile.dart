@@ -1,5 +1,6 @@
 // pos_validation_body_mobile.dart
 
+import 'dart:io';
 import 'dart:math';
 
 import 'package:dropdown_button2/dropdown_button2.dart';
@@ -116,9 +117,13 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
       if (image == null) return;
 
-      final tempDir = await getTemporaryDirectory();
+      final appDir = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+      if (!await imagesDir.exists()) {
+        await imagesDir.create();
+      }
       final targetPath =
-          p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+          p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final compressFuture = FlutterImageCompress.compressAndGetFile(
         image.path,

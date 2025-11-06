@@ -5,7 +5,7 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 
 part 'sc_unserviceable_model.g.dart';
 
-@HiveType(typeId: 14) // Pastikan typeId ini unik
+@HiveType(typeId: 14)
 class SCUnserviceableModel extends HiveObject {
   @HiveField(0)
   String transNo;
