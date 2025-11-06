@@ -86,7 +86,7 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
               repository: ServiceCallSubmittedRepository(),
             );
             // Muat data partial (tidak berubah)
-            Hive.openBox(kServiceCallValidationPartialHiveBox).then((box) {
+            Hive.openBox<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox).then((box) {
               final data = box.get(widget.transNo);
               if (data != null) {
                 bloc.add(LoadValidationPartial(widget.transNo));

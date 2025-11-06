@@ -56,11 +56,11 @@ class SCUnserviceableBloc
 
   Future<void> _onLoadInitialData(LoadUnserviceableDraft event,
       Emitter<SCUnserviceableState> emit) async {
-    final retryBox = await Hive.openBox(kServiceCallValidationPartialHiveBox);
+    final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox);
     final retryData = retryBox.get(transNo);
 
     if (retryData != null) {
-      final dataMap = Map<String, dynamic>.from(retryData as Map);
+      final dataMap = Map<String, dynamic>.from(retryData);
       // Jika ada data retry, langsung emit state partialFailure
       if (dataMap['type'] == 'unserviceable') {
         emit(state.copyWith(
