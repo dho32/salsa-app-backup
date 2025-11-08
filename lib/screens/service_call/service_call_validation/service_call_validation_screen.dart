@@ -5,6 +5,7 @@ import '../../../blocs/service_call/validation_dropdown/validation_dropdown_even
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import '../../../components/constants.dart';
 import '../../../models/common/measurement_entry.dart';
+import '../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
@@ -178,8 +179,8 @@ class _ServiceCallValidationScreenState
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 onPressed: () {
                   // --- Validasi "Sesudah" ---
-                  final measurementError =
-                      _validateMeasurements(state.capturedMeasurementsAfter);
+                  final measurementError = _validateMeasurements(
+                      state.capturedMeasurementsAfter, kMeasurementLimits);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -237,8 +238,9 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
-                  final measurementError =
-                      _validateMeasurements(state.capturedMeasurementsBefore);
+                  final measurementError = _validateMeasurements(
+                      state.capturedMeasurementsBefore,
+                      kSCMeasurementLimitsBefore);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -278,8 +280,9 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
-                  final measurementError =
-                      _validateMeasurements(state.capturedMeasurementsBefore);
+                  final measurementError = _validateMeasurements(
+                      state.capturedMeasurementsBefore,
+                      kSCMeasurementLimitsBefore);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -345,26 +348,29 @@ class _ServiceCallValidationScreenState
     return null; // Semua valid
   }
 
-  String? _validateMeasurements(List<MeasurementEntry> measurements) {
+  String? _validateMeasurements(
+    List<MeasurementEntry> measurements,
+    Map<String, MeasurementLimits> limitsMap,
+  ) {
     for (final mEntry in measurements) {
       // 1. Jika di-skip, lewati ke pengukuran berikutnya (dianggap valid)
       if (mEntry.isSkipped ?? false) continue;
 
       // 2. Jika tidak di-skip, periksa kelengkapan
       if (mEntry.capturedImage == null) {
-        final label = kMeasurementLimits[mEntry.measurementId]?.label ??
-            mEntry.measurementId;
+        final label =
+            limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
         return 'Foto untuk "$label" wajib diisi.';
       }
       // Kita anggap 0.0 adalah default (kosong)
       if (mEntry.value == 0.0) {
-        final label = kMeasurementLimits[mEntry.measurementId]?.label ??
-            mEntry.measurementId;
+        final label =
+            limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
         return 'Nilai untuk "$label" wajib diisi.';
       }
 
       // 3. Jika lengkap, periksa rentang nilainya
-      final limits = kMeasurementLimits[mEntry.measurementId];
+      final limits = limitsMap[mEntry.measurementId];
       if (limits == null) continue;
 
       if (mEntry.value < limits.min || mEntry.value > limits.max) {

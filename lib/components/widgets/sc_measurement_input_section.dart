@@ -13,15 +13,16 @@ import '../../../../../models/schedule/proof_of_service/proof_of_service_detail_
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
-  final List<MeasurementEntry>
-      measurements; // Data pengukuran (Before ATAU After)
-  final bool isBefore; // Flag penanda
+  final List<MeasurementEntry> measurements;
+  final bool isBefore;
+  final Map<String, MeasurementLimits> limitsMap;
 
   const ScMeasurementInputSection({
     super.key,
     required this.transNo,
     required this.measurements,
     required this.isBefore,
+    required this.limitsMap,
   });
 
   @override
@@ -93,6 +94,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     _disposeControllers();
     _indoorNoteSearchController.dispose();
     _outdoorNoteSearchController.dispose();
+    _outdoorPSINoteSearchController.dispose();
     super.dispose();
   }
 
@@ -152,13 +154,14 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         outdoorPsiMeasurements.any((m) => m.isSkipped ?? false);
 
     // Ambil daftar Limits dari konstanta
-    final List<MeasurementLimits> availableLimits =
-        kMeasurementLimits.values.toList();
+    // final List<MeasurementLimits> availableLimits =
+    //     kMeasurementLimits.values.toList();
 
     // Fungsi helper untuk merender satu MeasurementInputWidget
     Widget buildMeasurementWidget(MeasurementEntry mEntry) {
-      final limits = availableLimits
-          .firstWhereOrNull((ml) => ml.id == mEntry.measurementId);
+      // final limits = availableLimits
+      //     .firstWhereOrNull((ml) => ml.id == mEntry.measurementId);
+      final limits = widget.limitsMap[mEntry.measurementId];
       if (limits == null) {
         return Text("Error: Config for ${mEntry.measurementId} missing");
       }

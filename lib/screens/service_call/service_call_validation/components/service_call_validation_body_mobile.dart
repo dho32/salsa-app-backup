@@ -288,6 +288,7 @@ class _ServiceCallValidationBodyMobileState
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsBefore,
                 isBefore: true,
+                limitsMap: kSCMeasurementLimitsBefore,
               ),
               SizedBox(
                 height: 20,
@@ -331,6 +332,7 @@ class _ServiceCallValidationBodyMobileState
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsAfter,
                 isBefore: false,
+                limitsMap: kMeasurementLimits,
               ),
               const SizedBox(height: 16),
               buildUnitTypeSelector(
