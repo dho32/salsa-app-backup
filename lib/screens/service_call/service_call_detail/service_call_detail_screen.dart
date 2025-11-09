@@ -86,7 +86,7 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
               repository: ServiceCallSubmittedRepository(),
             );
             // Muat data partial (tidak berubah)
-            Hive.openBox(kServiceCallValidationPartialHiveBox).then((box) {
+            Hive.openBox<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox).then((box) {
               final data = box.get(widget.transNo);
               if (data != null) {
                 bloc.add(LoadValidationPartial(widget.transNo));
@@ -96,7 +96,6 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
           },
         ),
         BlocProvider(create: (_) => UploadProgressCubit()),
-        // Sediakan ScFormCubit
         BlocProvider(
           create: (context) => ScFormCubit(transNo: widget.transNo),
         ),
@@ -114,78 +113,78 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: true,
           appBar: AppBar(
-            title: const Text(""),
+            title: const Text("Close Complaint"),
             backgroundColor: Colors.transparent,
-            actions: [
-              // Tombol Laporkan Masalah (tidak berubah)
-              BlocBuilder<ServiceCallDetailBloc, ServiceCallDetailState>(
-                builder: (context, detailState) {
-                  if (detailState is ServiceCallDetailLoaded) {
-                    return BlocBuilder<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
-                        builder: (context, submittedState){
-                          final bool shouldShowButton = submittedState is! ValidationUploadPartial ||
-                              (submittedState.transNo != widget.transNo);
-
-                          if (shouldShowButton){
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 16.0),
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.warning_amber_rounded,
-                                    size: 16),
-                                label: const Text("Laporkan Masalah Kunjungan"),
-                                style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.orange.shade900,
-                                  backgroundColor: Colors.white.withOpacity(0.9),
-                                  shape: const StadiumBorder(),
-                                  elevation: 2,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                onPressed: () {
-                                  final List<String> reasons = detailState.data.unserviceableReasons ?? [];
-                                  final String transNo = widget.transNo;
-                                  final String pathAttachment = detailState.data.header.pathAttachment;
-
-                                  // final List<String> reasons =
-                                  //     detailState.data.unserviceableReasons ?? [];
-                                  // final String transNo =
-                                  //     detailState.data.header.transNo;
-
-                                  final scUnserviceableBloc =
-                                  context.read<SCUnserviceableBloc>();
-                                  final uploadProgressCubit =
-                                  context.read<UploadProgressCubit>();
-
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => MultiBlocProvider(
-                                        providers: [
-                                          BlocProvider.value(
-                                              value: scUnserviceableBloc),
-                                          BlocProvider.value(
-                                              value: uploadProgressCubit),
-                                        ],
-                                        child: SCReportIssueScreen(
-                                          transNo: transNo,
-                                          pathAttachment: pathAttachment,
-                                          reasons: reasons,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          } else {
-                            return const SizedBox.shrink();
-                          }
-                        }
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-            ],
+            // actions: [
+            //   // Tombol Laporkan Masalah (tidak berubah)
+            //   BlocBuilder<ServiceCallDetailBloc, ServiceCallDetailState>(
+            //     builder: (context, detailState) {
+            //       if (detailState is ServiceCallDetailLoaded) {
+            //         return BlocBuilder<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
+            //             builder: (context, submittedState){
+            //               final bool shouldShowButton = submittedState is! ValidationUploadPartial ||
+            //                   (submittedState.transNo != widget.transNo);
+            //
+            //               if (shouldShowButton){
+            //                 return Padding(
+            //                   padding: const EdgeInsets.only(right: 16.0),
+            //                   child: ElevatedButton.icon(
+            //                     icon: const Icon(Icons.warning_amber_rounded,
+            //                         size: 16),
+            //                     label: const Text("Laporkan Masalah Kunjungan"),
+            //                     style: ElevatedButton.styleFrom(
+            //                       foregroundColor: Colors.orange.shade900,
+            //                       backgroundColor: Colors.white.withOpacity(0.9),
+            //                       shape: const StadiumBorder(),
+            //                       elevation: 2,
+            //                       visualDensity: VisualDensity.compact,
+            //                     ),
+            //                     onPressed: () {
+            //                       final List<String> reasons = detailState.data.unserviceableReasons ?? [];
+            //                       final String transNo = widget.transNo;
+            //                       final String pathAttachment = detailState.data.header.pathAttachment;
+            //
+            //                       // final List<String> reasons =
+            //                       //     detailState.data.unserviceableReasons ?? [];
+            //                       // final String transNo =
+            //                       //     detailState.data.header.transNo;
+            //
+            //                       final scUnserviceableBloc =
+            //                       context.read<SCUnserviceableBloc>();
+            //                       final uploadProgressCubit =
+            //                       context.read<UploadProgressCubit>();
+            //
+            //                       Navigator.push(
+            //                         context,
+            //                         MaterialPageRoute(
+            //                           builder: (_) => MultiBlocProvider(
+            //                             providers: [
+            //                               BlocProvider.value(
+            //                                   value: scUnserviceableBloc),
+            //                               BlocProvider.value(
+            //                                   value: uploadProgressCubit),
+            //                             ],
+            //                             child: SCReportIssueScreen(
+            //                               transNo: transNo,
+            //                               pathAttachment: pathAttachment,
+            //                               reasons: reasons,
+            //                             ),
+            //                           ),
+            //                         ),
+            //                       );
+            //                     },
+            //                   ),
+            //                 );
+            //               } else {
+            //                 return const SizedBox.shrink();
+            //               }
+            //             }
+            //         );
+            //       }
+            //       return const SizedBox.shrink();
+            //     },
+            //   ),
+            // ],
           ),
           // Body sekarang dibungkus oleh Listener-listener
           body: BlocListener<ServiceCallDetailBloc, ServiceCallDetailState>(
@@ -221,6 +220,8 @@ class _ServiceCallDetailScreenState extends State<ServiceCallDetailScreen> {
                 return true;
               },
               listener: (context, state) async {
+                print("==============debug============");
+                print(state);
                 if (state is ValidationUploadInProgress) {
                   final uploadCubit = context.read<UploadProgressCubit>();
                   uploadCubit.reset();

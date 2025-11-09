@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../models/service_call/problem_source_model.dart';
 import '../../upload_progress/upload_progress_cubit.dart';
 import '../sc_form/sc_form_state.dart';
 
@@ -19,6 +20,7 @@ class SubmitValidation extends ServiceCallSubmittedEvent {
   final UploadProgressCubit progressCubit;
   final ScFormState formState;
   final String storeName;
+  final String? ahoNumber;
 
   const SubmitValidation({
     required this.transNo,
@@ -29,18 +31,39 @@ class SubmitValidation extends ServiceCallSubmittedEvent {
     required this.progressCubit,
     required this.formState,
     required this.storeName,
+    this.ahoNumber,
   });
 
   @override
-  List<Object?> get props => [transNo, progressCubit];
+  List<Object?> get props => [transNo, progressCubit, ahoNumber];
 }
 
 class ScFinalValidationRequested extends ServiceCallSubmittedEvent {
+  final String transNo;
   final ScFormState formState;
-  const ScFinalValidationRequested({required this.formState});
+  final List<ProblemSourceModel> problemSources;
+
+  const ScFinalValidationRequested({
+    required this.transNo,
+    required this.formState,
+    required this.problemSources,
+  });
 
   @override
-  List<Object?> get props => [formState];
+  List<Object?> get props => [transNo, formState, problemSources];
+}
+
+class AhoInputCompleted extends ServiceCallSubmittedEvent {
+  final ScFormState formState;
+  final String ahoNumber;
+
+  const AhoInputCompleted({
+    required this.formState,
+    required this.ahoNumber,
+  });
+
+  @override
+  List<Object?> get props => [formState, ahoNumber];
 }
 
 class RetryUpload extends ServiceCallSubmittedEvent {

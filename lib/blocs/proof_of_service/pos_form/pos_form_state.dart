@@ -34,6 +34,14 @@ class PosFormState extends Equatable {
   final bool isFormReadyToSubmit;
   final FormSubmissionStatus submissionStatus;
 
+  // --- Note Pengukuran Suhu Ruang ---
+  final String tempInNote;
+  final String tempOutNote;
+  final String finalTempInNote;
+  final bool isTempInSkipped;
+  final bool isTempOutSkipped;
+  final bool isFinalTempInSkipped;
+
   const PosFormState({
     this.picNik = '',
     this.picPosition = '',
@@ -56,6 +64,12 @@ class PosFormState extends Equatable {
     this.allUnitsValidated = false,
     this.isFormReadyToSubmit = false,
     this.submissionStatus = FormSubmissionStatus.initial,
+    this.tempInNote = '',
+    this.tempOutNote = '',
+    this.finalTempInNote = '',
+    this.isTempInSkipped = false,
+    this.isTempOutSkipped = false,
+    this.isFinalTempInSkipped = false,
   });
 
   // Method `copyWith` sangat penting untuk memperbarui state secara immutable
@@ -81,6 +95,12 @@ class PosFormState extends Equatable {
     bool? allUnitsValidated,
     bool? isFormReadyToSubmit,
     FormSubmissionStatus? submissionStatus,
+    String? tempInNote,
+    String? tempOutNote,
+    String? finalTempInNote,
+    bool? isTempInSkipped,
+    bool? isTempOutSkipped,
+    bool? isFinalTempInSkipped,
   }) {
     return PosFormState(
       picNik: picNik ?? this.picNik,
@@ -104,6 +124,12 @@ class PosFormState extends Equatable {
       allUnitsValidated: allUnitsValidated ?? this.allUnitsValidated,
       isFormReadyToSubmit: isFormReadyToSubmit ?? this.isFormReadyToSubmit,
       submissionStatus: submissionStatus ?? this.submissionStatus,
+      tempInNote: tempInNote ?? this.tempInNote,
+      tempOutNote: tempOutNote ?? this.tempOutNote,
+      finalTempInNote: finalTempInNote ?? this.finalTempInNote,
+      isTempInSkipped: isTempInSkipped ?? this.isTempInSkipped,
+      isTempOutSkipped: isTempOutSkipped ?? this.isTempOutSkipped,
+      isFinalTempInSkipped: isFinalTempInSkipped ?? this.isFinalTempInSkipped,
     );
   }
 
@@ -130,5 +156,11 @@ class PosFormState extends Equatable {
     allUnitsValidated,
     isFormReadyToSubmit,
     submissionStatus,
+    tempInNote,
+    tempOutNote,
+    finalTempInNote,
+    isTempInSkipped,
+    isTempOutSkipped,
+    isFinalTempInSkipped,
   ];
 }

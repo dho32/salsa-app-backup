@@ -7,7 +7,6 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_storage.dart';
 import '../../blocs/failed_uploads/failed_uploads_bloc.dart';
-import '../../blocs/failed_uploads/failed_uploads_event.dart';
 import '../../blocs/proof_of_service/proof_of_service_submitted/pos_submitted_bloc.dart';
 import '../../blocs/proof_of_service/proof_of_service_submitted/pos_submitted_repository.dart';
 import '../../blocs/task_maintenance/task_maintenance_bloc.dart';
@@ -77,98 +76,98 @@ class _TaskMaintenanceScreenState extends State<TaskMaintenanceScreen> {
             repository: PosSubmittedRepository(),
           ),
         ),
+        BlocProvider(
+          create: (context) => FailedUploadsBloc(
+            progressCubit: context.read<UploadProgressCubit>(),
+          )..add(LoadFailedUploads()), // <-- Load langsung saat di-provide
+        ),
       ],
-      child: BlocProvider(
-        create: (context) => FailedUploadsBloc(
-          progressCubit: context.read<UploadProgressCubit>(),
-        )..add(LoadFailedUploads()),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                "assets/images/bg_app.png",
-                fit: BoxFit.cover,
-              ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              "assets/images/bg_app.png",
+              fit: BoxFit.cover,
             ),
-            Scaffold(
+          ),
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            resizeToAvoidBottomInset: false,
+            appBar: AppBar(
+              title: _appVersion.isNotEmpty
+                  ? Text(_appVersion,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.black54))
+                  : null,
               backgroundColor: Colors.transparent,
-              resizeToAvoidBottomInset: false,
-              appBar: AppBar(
-                title: _appVersion.isNotEmpty
-                    ? Text(_appVersion,
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.black54))
-                    : null,
-                backgroundColor: Colors.transparent,
-                // Samakan dengan latar belakang
-                elevation: 0,
-                // Hilangkan bayangan
-                automaticallyImplyLeading: false,
-                // Hilangkan tombol kembali
-                actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16.0),
-                    child: InkWell(
-                      onTap: () async {
-                        final bool? shouldLogout = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Konfirmasi Log Out'),
-                            content: const Text(
-                                'Apakah Anda yakin ingin keluar dari aplikasi?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Batal'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: FilledButton.styleFrom(
-                                    backgroundColor: Colors.red),
-                                child: const Text('Ya, Keluar'),
-                              ),
-                            ],
-                          ),
-                        );
-        
-                        // Jika pengguna menekan "Ya, Keluar"
-                        if (shouldLogout == true && context.mounted) {
-                          context.read<AuthBloc>().add(LoggedOut());
-                        }
-                      },
-                      child: Card(
-                        margin: EdgeInsets.zero,
-                        shape: RoundedSuperellipseBorder(
-                            borderRadius:
-                                BorderRadiusGeometry.all(Radius.circular(50))),
-                        elevation: 3,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10.0, vertical: 4),
-                          child: Row(
-                            children: [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text(
-                                "Keluar",
-                                style: TextStyle(
-                                    color: Colors.black87,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
+              // Samakan dengan latar belakang
+              elevation: 0,
+              // Hilangkan bayangan
+              automaticallyImplyLeading: false,
+              // Hilangkan tombol kembali
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: InkWell(
+                    onTap: () async {
+                      final bool? shouldLogout = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Konfirmasi Log Out'),
+                          content: const Text(
+                              'Apakah Anda yakin ingin keluar dari aplikasi?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Batal'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.red),
+                              child: const Text('Ya, Keluar'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      // Jika pengguna menekan "Ya, Keluar"
+                      if (shouldLogout == true && context.mounted) {
+                        context.read<AuthBloc>().add(LoggedOut());
+                      }
+                    },
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      shape: RoundedSuperellipseBorder(
+                          borderRadius:
+                              BorderRadiusGeometry.all(Radius.circular(50))),
+                      elevation: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10.0, vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, color: Colors.redAccent),
+                            SizedBox(width: 8),
+                            Text(
+                              "Keluar",
+                              style: TextStyle(
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
-              body: SafeArea(
-                child: TaskMaintenanceBodyMobile(userData: _userData),
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+            body: SafeArea(
+              child: TaskMaintenanceBodyMobile(userData: _userData),
+            ),
+          ),
+        ],
       ),
     );
   }

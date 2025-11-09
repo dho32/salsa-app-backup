@@ -1,20 +1,22 @@
-import 'package:equatable/equatable.dart';
+part of 'failed_uploads_bloc.dart';
 
 abstract class FailedUploadsEvent extends Equatable {
   const FailedUploadsEvent();
   @override
-  List<Object> get props => [];
+  List<Object?> get props => [];
 }
 
-// Event untuk memuat daftar dari Hive
 class LoadFailedUploads extends FailedUploadsEvent {}
 
-// Event untuk mencoba upload ulang satu transaksi
 class RetrySingleFailedUpload extends FailedUploadsEvent {
   final Map<String, dynamic> transactionData;
 
   const RetrySingleFailedUpload(this.transactionData);
 
   @override
-  List<Object> get props => [transactionData];
+  List<Object?> get props => [transactionData];
 }
+
+class ClearSnackbarMessage extends FailedUploadsEvent {}
+
+class ClearSuccessMessage extends FailedUploadsEvent {}

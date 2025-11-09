@@ -12,6 +12,7 @@ import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../components/services/hive_clear_service.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 
 class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
   final PosSubmittedRepository repository;
@@ -47,6 +48,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
       if (hasBrokenUnit) {
         final bool hasActiveSC = await repository.checkActiveServiceCall(event.transNo);
+        print(hasActiveSC);
         if (!hasActiveSC) {
           emit(ShowCreateServiceCallDialog());
           return;
@@ -98,7 +100,6 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           final outdoorPairSerialNo = pairingMap[entry.serialNo];
           if (outdoorPairSerialNo != null) {
             // Jika ada, isi field 'paired_serial_no' dengan SN outdoor pasangannya.
-            // Nama field di API kita asumsikan tetap sama untuk indoor dan outdoor.
             json['paired_serial_no'] = outdoorPairSerialNo;
           }
         }
@@ -144,6 +145,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           final task = ConfirmationTaskModel(
               transNo: event.transNo.trim().toUpperCase());
           await queueBox.put(event.transNo.trim().toUpperCase(), task);
+          await ConfirmationService().processQueue();
 
           emit(PosValidationSuccess());
         } else {
@@ -155,12 +157,13 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           final detailData = detailCacheBox.get(event.transNo);
           final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
 
-          final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
             'failedFiles': cleanFailedFiles,
             'presignedDetail': presignedDetail,
             'storeName': storeName,
+            'module': 'POS',
           });
 
           // Pancarkan state gagal sebagian
@@ -215,11 +218,12 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         final task =
             ConfirmationTaskModel(transNo: event.transNo.trim().toUpperCase());
         await queueBox.put(event.transNo.trim().toUpperCase(), task);
+        await ConfirmationService().processQueue();
 
         emit(PosValidationSuccess());
       } else {
         // Jika masih gagal, update cache dengan sisa file yang masih gagal
-        final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+        final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
         final cleanFailedFiles = result.failedFiles.map((e) => e.split(' (').first).toList();
 
         await cacheBox.put(event.transNo, {
@@ -245,7 +249,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
     LoadPosValidationPartial event,
     Emitter<PosSubmittedState> emit,
   ) async {
-    final cacheBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
     final cached = cacheBox.get(event.transNo);
 
     if (cached != null) {
@@ -262,6 +266,6 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
 
   // Helper untuk normalisasi kunci, pastikan sama dengan yang di UI
   String getHiveKeyForTransaction(String transNo) {
-    return transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    return transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
   }
 }

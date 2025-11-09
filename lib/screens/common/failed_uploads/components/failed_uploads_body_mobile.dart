@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/blocs/failed_uploads/failed_uploads_bloc.dart';
-import 'package:salsa/blocs/failed_uploads/failed_uploads_event.dart';
-import 'package:salsa/blocs/failed_uploads/failed_uploads_state.dart';
 
 class FailedUploadsBodyMobile extends StatelessWidget {
   const FailedUploadsBodyMobile({super.key});

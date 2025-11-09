@@ -1,5 +1,8 @@
 // ignore_for_file: unused_element
 
+import 'dart:math';
+
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -32,7 +35,6 @@ import '../../../../models/schedule/proof_of_service/proof_of_service_detail_dat
 import '../../../../models/service_call/validation_status.dart';
 import '../../proof_of_service_validation/pos_validation_screen.dart';
 
-// LANGKAH 1: UBAH MENJADI STATEFULWIDGET
 class ProofOfServiceDetailBodyMobile extends StatefulWidget {
   final String transNo;
   final String technician1Name;
@@ -50,10 +52,13 @@ class ProofOfServiceDetailBodyMobile extends StatefulWidget {
 
 class _ProofOfServiceDetailBodyMobileState
     extends State<ProofOfServiceDetailBodyMobile> {
-  // LANGKAH 2: DEKLARASI CONTROLLER DI SINI
   late final TextEditingController _tempInController;
   late final TextEditingController _tempOutController;
   late final TextEditingController _finalTempController;
+  late final TextEditingController _tempInNoteController;
+  late final TextEditingController _tempOutNoteController;
+  late final TextEditingController _finalTempInNoteController;
+  final TextEditingController _noteSearchController = TextEditingController();
 
   final kIndoorLimits = MeasurementLimits(
       id: 'temp_in',
@@ -82,6 +87,12 @@ class _ProofOfServiceDetailBodyMobileState
     _tempOutController = TextEditingController(text: initialFormState.tempOut);
     _finalTempController =
         TextEditingController(text: initialFormState.finalTempIn);
+    _tempInNoteController =
+        TextEditingController(text: initialFormState.tempInNote);
+    _tempOutNoteController =
+        TextEditingController(text: initialFormState.tempOutNote);
+    _finalTempInNoteController =
+        TextEditingController(text: initialFormState.finalTempInNote);
   }
 
   @override
@@ -90,6 +101,10 @@ class _ProofOfServiceDetailBodyMobileState
     _tempInController.dispose();
     _tempOutController.dispose();
     _finalTempController.dispose();
+    _tempInNoteController.dispose();
+    _tempOutNoteController.dispose();
+    _finalTempInNoteController.dispose();
+    _noteSearchController.dispose();
     super.dispose();
   }
 
@@ -136,6 +151,23 @@ class _ProofOfServiceDetailBodyMobileState
             }
           },
         ),
+        BlocListener<PosFormCubit, PosFormState>(
+          listenWhen: (p, c) =>
+              p.tempInNote != c.tempInNote ||
+              p.tempOutNote != c.tempOutNote ||
+              p.finalTempInNote != c.finalTempInNote,
+          listener: (context, state) {
+            if (_tempInNoteController.text != state.tempInNote) {
+              _tempInNoteController.text = state.tempInNote;
+            }
+            if (_tempOutNoteController.text != state.tempOutNote) {
+              _tempOutNoteController.text = state.tempOutNote;
+            }
+            if (_finalTempInNoteController.text != state.finalTempInNote) {
+              _finalTempInNoteController.text = state.finalTempInNote;
+            }
+          },
+        ),
       ],
       child: BlocBuilder<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
         builder: (context, detailState) {
@@ -148,6 +180,8 @@ class _ProofOfServiceDetailBodyMobileState
           if (detailState is ProofOfServiceDetailLoaded) {
             final header = detailState.data.header;
             final detailList = detailState.data.detail;
+            final List<String> noteOptions =
+                detailState.data.noteIndoorOptions ?? [];
 
             return BlocBuilder<PosFormCubit, PosFormState>(
               builder: (context, formState) {
@@ -184,7 +218,8 @@ class _ProofOfServiceDetailBodyMobileState
                               child: _buildTechnicianPanel(context, formState),
                             ),
                             const SizedBox(height: 16),
-                            _buildServiceInfoPanel(context, formState),
+                            _buildServiceInfoPanel(
+                                context, formState, noteOptions),
                             const SizedBox(height: 16),
                             _buildSection(
                               title: 'Validasi Unit',
@@ -203,14 +238,19 @@ class _ProofOfServiceDetailBodyMobileState
                                       header: header,
                                       validationStatuses:
                                           detailState.validationStatuses,
-                                      isEnabled: formState.tempIn.isNotEmpty &&
-                                          ((double.tryParse(formState.tempIn) ??
-                                                      0) >=
-                                                  kIndoorLimits.min &&
-                                              (double.tryParse(
-                                                          formState.tempIn) ??
-                                                      0) <=
-                                                  kIndoorLimits.max),
+                                      isEnabled: (
+                                          // Kondisi 1: Diisi dan valid
+                                          (formState.tempIn.isNotEmpty &&
+                                                  ((double.tryParse(formState
+                                                                  .tempIn) ??
+                                                              0) >=
+                                                          kIndoorLimits.min &&
+                                                      (double.tryParse(formState
+                                                                  .tempIn) ??
+                                                              0) <=
+                                                          kIndoorLimits.max)) ||
+                                              // Kondisi 2: Atau di-skip
+                                              formState.isTempInSkipped),
                                     ),
                                   if (outdoorUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -222,15 +262,20 @@ class _ProofOfServiceDetailBodyMobileState
                                       header: header,
                                       validationStatuses:
                                           detailState.validationStatuses,
-                                      isEnabled: formState.tempOut.isNotEmpty &&
-                                          ((double.tryParse(
-                                                          formState.tempOut) ??
-                                                      0) >=
-                                                  kOutdoorLimits.min &&
-                                              (double.tryParse(
-                                                          formState.tempOut) ??
-                                                      0) <=
-                                                  kOutdoorLimits.max),
+                                      isEnabled: (
+                                          // Kondisi 1: Diisi dan valid
+                                          (formState.tempOut.isNotEmpty &&
+                                                  ((double.tryParse(formState
+                                                                  .tempOut) ??
+                                                              0) >=
+                                                          kOutdoorLimits.min &&
+                                                      (double.tryParse(formState
+                                                                  .tempOut) ??
+                                                              0) <=
+                                                          kOutdoorLimits
+                                                              .max)) ||
+                                              // Kondisi 2: Atau di-skip
+                                              formState.isTempOutSkipped),
                                     ),
                                   if (setUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -251,7 +296,11 @@ class _ProofOfServiceDetailBodyMobileState
                             BlocBuilder<PosFormCubit, PosFormState>(
                               buildWhen: (prev, current) =>
                                   prev.allUnitsValidated !=
-                                  current.allUnitsValidated,
+                                      current.allUnitsValidated ||
+                                  prev.isFinalTempInSkipped !=
+                                      current.isFinalTempInSkipped ||
+                                  prev.minFinalTempInLimit !=
+                                      current.minFinalTempInLimit,
                               builder: (context, formState) {
                                 final bool isEnabled =
                                     formState.allUnitsValidated;
@@ -266,7 +315,7 @@ class _ProofOfServiceDetailBodyMobileState
                                         child: AbsorbPointer(
                                           absorbing: !isEnabled,
                                           child: _buildServiceInfoAfterPanel(
-                                              context, formState),
+                                              context, formState, noteOptions),
                                         ),
                                       ),
 
@@ -314,7 +363,8 @@ class _ProofOfServiceDetailBodyMobileState
 
   // --- WIDGET BUILDER METHODS ---
 
-  Widget _buildServiceInfoPanel(BuildContext context, PosFormState formState) {
+  Widget _buildServiceInfoPanel(
+      BuildContext context, PosFormState formState, List<String> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
     return _buildSection(
       title: 'Informasi Servis Sebelum Cleaning',
@@ -336,7 +386,24 @@ class _ProofOfServiceDetailBodyMobileState
               formCubit.tempInImageChanged(newImage);
               formCubit.onFieldChanged();
             },
+            isSkipEnabled: true,
+            isSkipped: formState.isTempInSkipped,
+            onSkipChanged: (isSkipped) {
+              formCubit.tempInSkipped(isSkipped);
+              if (isSkipped) _tempInController.clear();
+            },
           ),
+          if (formState.isTempInSkipped)
+            _buildNoteDropdown(
+              context: context,
+              label: 'Catatan Suhu Dalam (Wajib)',
+              controller: _tempInNoteController,
+              noteOptions: noteOptions,
+              onChanged: (value) {
+                _tempInNoteController.text = value ?? '';
+                formCubit.tempInNoteChanged(value ?? '');
+              },
+            ),
           const SizedBox(height: 12),
           MeasurementInputWidget(
             // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
@@ -354,14 +421,31 @@ class _ProofOfServiceDetailBodyMobileState
               formCubit.tempOutImageChanged(newImage);
               formCubit.onFieldChanged();
             },
+            isSkipEnabled: true,
+            isSkipped: formState.isTempOutSkipped,
+            onSkipChanged: (isSkipped) {
+              formCubit.tempOutSkipped(isSkipped);
+              if (isSkipped) _tempOutController.clear();
+            },
           ),
+          if (formState.isTempOutSkipped)
+            _buildNoteDropdown(
+              context: context,
+              label: 'Catatan Suhu Luar (Wajib)',
+              controller: _tempOutNoteController,
+              noteOptions: noteOptions,
+              onChanged: (value) {
+                _tempOutNoteController.text = value ?? '';
+                formCubit.tempOutNoteChanged(value ?? '');
+              },
+            ),
         ],
       ),
     );
   }
 
   Widget _buildServiceInfoAfterPanel(
-      BuildContext context, PosFormState formState) {
+      BuildContext context, PosFormState formState, List<String> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
 
     // Batasan untuk suhu akhir, bisa sama atau beda dari suhu awal
@@ -384,20 +468,152 @@ class _ProofOfServiceDetailBodyMobileState
 
     return _buildSection(
       title: 'Informasi Servis Sesudah Cleaning',
-      child: MeasurementInputWidget(
-        controller: _finalTempController,
-        label: 'Suhu Dalam Ruangan (°C)',
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        limits: finalTempLimits,
-        transNo: widget.transNo,
-        initialImage: formState.finalTempInImage,
-        onEditingComplete: (finalValue) {
-          formCubit.finalTempInChanged(finalValue);
-          formCubit.onFieldChanged();
+      child: Column(
+        children: [
+          MeasurementInputWidget(
+            controller: _finalTempController,
+            label: 'Suhu Dalam Ruangan (°C)',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            limits: finalTempLimits,
+            transNo: widget.transNo,
+            initialImage: formState.finalTempInImage,
+            onEditingComplete: (finalValue) {
+              formCubit.finalTempInChanged(finalValue);
+              formCubit.onFieldChanged();
+            },
+            onImageChanged: (newImage) {
+              formCubit.finalTempInImageChanged(newImage);
+              formCubit.onFieldChanged();
+            },
+            isSkipEnabled: true,
+            isSkipped: formState.isFinalTempInSkipped,
+            onSkipChanged: (isSkipped) {
+              formCubit.finalTempInSkipped(isSkipped);
+              if (isSkipped) _finalTempController.clear();
+            },
+          ),
+          if (formState.isFinalTempInSkipped)
+            _buildNoteDropdown(
+              context: context,
+              label: 'Catatan Suhu Dalam (Wajib)',
+              controller: _finalTempInNoteController,
+              noteOptions: noteOptions,
+              onChanged: (value) {
+                _finalTempInNoteController.text = value ?? '';
+                formCubit.finalTempInNoteChanged(value ?? '');
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteDropdown({
+    required BuildContext context,
+    required String label,
+    required TextEditingController controller,
+    required List<String> noteOptions,
+    required ValueChanged<String?> onChanged,
+  }) {
+    // Salin logika perhitungan tinggi dropdown
+    const double itemHeight = 40.0;
+    const double searchBarHeight = 50.0;
+    const double verticalPadding = 20.0;
+    final double maxAllowedHeight = MediaQuery.of(context).size.height * 0.8;
+    final double calculatedContentHeight =
+        (noteOptions.length * itemHeight) + searchBarHeight + verticalPadding;
+    final double dynamicMaxHeight =
+        min(calculatedContentHeight, maxAllowedHeight);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12.0),
+      child: DropdownButtonFormField2<String>(
+        value: controller.text.isNotEmpty ? controller.text : null,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        ),
+        hint: const Text(
+          'Pilih Catatan',
+          style: TextStyle(fontSize: 14),
+        ),
+        items: noteOptions
+            .map((item) => DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(
+                    item,
+                    style: const TextStyle(fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ))
+            .toList(),
+        onChanged: (value) {
+          onChanged(value); // Panggil callback
+          FocusScope.of(context).unfocus();
         },
-        onImageChanged: (newImage) {
-          formCubit.finalTempInImageChanged(newImage);
-          formCubit.onFieldChanged();
+        dropdownStyleData: DropdownStyleData(
+          maxHeight: dynamicMaxHeight,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+          ),
+        ),
+        menuItemStyleData: const MenuItemStyleData(
+          height: itemHeight,
+          padding: EdgeInsets.only(left: 14, right: 14),
+        ),
+        dropdownSearchData: DropdownSearchData(
+          searchController: _noteSearchController,
+          searchInnerWidgetHeight: searchBarHeight,
+          searchInnerWidget: Container(
+            height: searchBarHeight,
+            padding: const EdgeInsets.all(8),
+            child: TextFormField(
+              expands: true,
+              maxLines: null,
+              controller: _noteSearchController,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                hintText: 'Cari catatan...',
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+          searchMatchFn: (item, searchValue) {
+            return item.value
+                .toString()
+                .toLowerCase()
+                .contains(searchValue.toLowerCase());
+          },
+        ),
+        onMenuStateChange: (isOpen) {
+          if (!isOpen) {
+            _noteSearchController.clear();
+          }
+        },
+        selectedItemBuilder: (context) {
+          return noteOptions.map((item) {
+            return Text(
+              item,
+              style: const TextStyle(
+                fontSize: 14,
+                overflow: TextOverflow.ellipsis,
+                color: Colors.black,
+              ),
+              maxLines: 1,
+            );
+          }).toList();
         },
       ),
     );
@@ -803,6 +1019,18 @@ class _ProofOfServiceDetailBodyMobileState
                 formCubit
                     .onFieldChanged(); // Ini juga akan memicu validasi ulang di Cubit
               }
+              if (formCubit.state.tempInNote != _tempInNoteController.text) {
+                formCubit.tempInNoteChanged(_tempInNoteController.text);
+              }
+              if (formCubit.state.tempOutNote != _tempOutNoteController.text) {
+                formCubit.tempOutNoteChanged(_tempOutNoteController.text);
+              }
+              if (formCubit.state.finalTempInNote !=
+                  _finalTempInNoteController.text) {
+                formCubit
+                    .finalTempInNoteChanged(_finalTempInNoteController.text);
+              }
+              formCubit.onFieldChanged();
 
               // 2. Baca state form terakhir untuk validasi dasar
               final latestFormState = formCubit.state;
@@ -858,6 +1086,19 @@ class _ProofOfServiceDetailBodyMobileState
                 } else if (!latestFormState.allUnitsValidated) {
                   _showValidationSnackbar(context,
                       'Harap lengkapi semua validasi unit terlebih dahulu.');
+                } else if (latestFormState.isTempInSkipped &&
+                    latestFormState.tempInNote.isEmpty) {
+                  _showValidationSnackbar(
+                      context, 'Catatan Suhu Dalam Ruangan wajib diisi.');
+                } else if (latestFormState.isTempOutSkipped &&
+                    latestFormState.tempOutNote.isEmpty) {
+                  _showValidationSnackbar(
+                      context, 'Catatan Suhu Luar Ruangan wajib diisi.');
+                } else if (latestFormState.allUnitsValidated &&
+                    latestFormState.isFinalTempInSkipped &&
+                    latestFormState.finalTempInNote.isEmpty) {
+                  _showValidationSnackbar(
+                      context, 'Catatan Suhu Final wajib diisi.');
                 } else {
                   _showValidationSnackbar(context,
                       'Pastikan semua data sudah terisi dengan benar.');

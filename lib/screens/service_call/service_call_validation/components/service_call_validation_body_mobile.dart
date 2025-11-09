@@ -1,4 +1,6 @@
 // lib/screens/service_call/service_call_validation/components/service_call_validation_body_mobile.dart
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -88,9 +90,13 @@ class _ServiceCallValidationBodyMobileState
 
       if (image != null) {
         // Proses kompresi gambar
-        final tempDir = await getTemporaryDirectory();
+        final appDir = await getApplicationDocumentsDirectory();
+        final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+        if (!await imagesDir.exists()) {
+          await imagesDir.create();
+        }
         final targetPath = p.join(
-            tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+            imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
         final XFile? compressedImage =
             await FlutterImageCompress.compressAndGetFile(
           image.path, targetPath,
@@ -282,6 +288,7 @@ class _ServiceCallValidationBodyMobileState
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsBefore,
                 isBefore: true,
+                limitsMap: kSCMeasurementLimitsBefore,
               ),
               SizedBox(
                 height: 20,
@@ -325,6 +332,7 @@ class _ServiceCallValidationBodyMobileState
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsAfter,
                 isBefore: false,
+                limitsMap: kMeasurementLimits,
               ),
               const SizedBox(height: 16),
               buildUnitTypeSelector(
@@ -342,8 +350,8 @@ class _ServiceCallValidationBodyMobileState
               Builder(builder: (context) {
                 final problemsForType = state.data
                     .firstWhere((e) => e.unitType == state.selectedUnitType,
-                    orElse: () =>
-                        ProblemSourceModel(unitType: '', problems: []))
+                        orElse: () =>
+                            ProblemSourceModel(unitType: '', problems: []))
                     .problems;
                 return buildProblemCards(
                     context: context,

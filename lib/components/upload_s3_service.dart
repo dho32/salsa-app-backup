@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
@@ -6,6 +7,7 @@ import 'package:salsa/models/service_call/service_call_validation_entry_model.da
 import '../blocs/upload_progress/upload_progress_cubit.dart';
 import '../components/constants.dart';
 import 'package:hive/hive.dart';
+import 'dart:math';
 
 import '../models/common/captured_image_detail.dart';
 import '../models/proof_of_service/pos_transaction_info_model.dart';
@@ -13,8 +15,6 @@ import '../models/proof_of_service/pos_unserviceable_model.dart';
 import '../models/proof_of_service/pos_validation_entry_model.dart';
 import '../models/service_call/sc_unserviceable_model.dart';
 import '../models/service_call/transaction_info_model.dart';
-
-
 
 class UploadResult {
   final int successCount;
@@ -30,7 +30,6 @@ class UploadResult {
   bool get allSuccess => failureCount == 0;
 }
 
-// Helper class (pastikan ini ada di atas fungsi Anda)
 class _UploadTask {
   final String url;
   final String filePath;
@@ -41,35 +40,23 @@ class _UploadTask {
 }
 
 Future<UploadResult> uploadAllImagesToS3(
-  String transNo,
-  List<dynamic> presignedDetail, {
-  UploadProgressCubit? progressCubit,
-  List<String>? filter,
-}) async {
-  // ==================== MULAI AREA DEBUG ====================
+    String transNo,
+    List<dynamic> presignedDetail, {
+      UploadProgressCubit? progressCubit,
+      List<String>? filter,
+    }) async {
   final validationBox = await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
   final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
-
   final Map<String, String> localFileMap = {};
-
-  // Gunakan fungsi helper yang sudah kita tambahkan
   final transactionInfo = infoBox.get(getHiveKeyForTransaction(transNo));
 
-  // 1. Ambil Foto PIC (jika ada)
   if (transactionInfo?.picImageDetail != null) {
-    final imageDetail = transactionInfo!.picImageDetail!;
-    final filename = imageDetail.imagePath.split('/').last;
-    localFileMap[filename] = imageDetail.imagePath;
+    localFileMap[transactionInfo!.picImageDetail!.imagePath.split('/').last] = transactionInfo.picImageDetail!.imagePath;
   }
-
-  // 2. Ambil Foto Final Temp In (INI YANG HILANG)
   if (transactionInfo?.finalTemperatureInImage != null) {
-    final imageDetail = transactionInfo!.finalTemperatureInImage!;
-    final filename = imageDetail.imagePath.split('/').last;
-    localFileMap[filename] = imageDetail.imagePath;
+    localFileMap[transactionInfo!.finalTemperatureInImage!.imagePath.split('/').last] = transactionInfo.finalTemperatureInImage!.imagePath;
   }
 
-  // 3. Ambil semua foto dari validasi unit
   final validationEntries = validationBox.values.where((e) => e.transNo == transNo);
   for (final entry in validationEntries) {
     List<CapturedImageDetail> allUnitImages = [
@@ -78,89 +65,30 @@ Future<UploadResult> uploadAllImagesToS3(
       ...entry.measurementsAfter.map((m) => m.capturedImage).whereType<CapturedImageDetail>(),
     ];
     for (final imageDetail in allUnitImages) {
-      final filename = imageDetail.imagePath.split('/').last;
-      localFileMap[filename] = imageDetail.imagePath;
+      localFileMap[imageDetail.imagePath.split('/').last] = imageDetail.imagePath;
     }
   }
 
   List<_UploadTask> allPossibleTasks = [];
   for (var detailItem in presignedDetail) {
-    final serialNo = detailItem['serial_no'] ?? 'PIC_PHOTO'; // Beri ID default jika serial_no null
-    final uploads = detailItem['uploads'] as List<dynamic>;
-
+    final serialNo = detailItem['serial_no']?.toString() ?? 'HEADER';
+    final uploads = detailItem['uploads'] as List<dynamic>? ?? [];
     for (var uploadInfo in uploads) {
-      final filename = uploadInfo['filename'];
-      if (localFileMap.containsKey(filename)) {
+      final filename = uploadInfo['filename']?.toString();
+      if (filename != null && filename.isNotEmpty && localFileMap.containsKey(filename)) {
         final filePath = localFileMap[filename]!;
         final fileKey = '$serialNo - $filename';
         allPossibleTasks.add(_UploadTask(url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
-      } else {
-        print('Warning: No matching local image found for $filename. Skipping.');
+      } else if (filename != null && filename.isNotEmpty) {
+        print('⚠️ SC: No matching local image found for $filename. Skipping.');
       }
     }
   }
 
-  final List<_UploadTask> tasksToExecute;
-  if (filter != null && filter.isNotEmpty) {
-    tasksToExecute = allPossibleTasks.where((task) {
-      // Cek apakah ada salah satu item di filter yang persis sama dengan fileKey tugas ini
-      // atau dimulai dengan fileKey (tergantung format failedFiles Anda)
-      return filter.contains(task.fileKey);
-      // Jika failedFiles formatnya "serialNo - filename (ErrorType)", maka gunakan startsWith:
-      // return filter.any((filterItem) => filterItem.startsWith(task.fileKey));
-    }).toList();
-  } else {
-    tasksToExecute = allPossibleTasks;
-  }
-
-  int totalToUpload = tasksToExecute.length;
-  int currentCount = 0;
-  progressCubit?.reset();
-  progressCubit?.updateProgress(currentCount, totalToUpload);
-
-  if (tasksToExecute.isEmpty) {
-    return UploadResult(successCount: 0, failureCount: 0, failedFiles: []);
-  }
-
-  int successCount = 0;
-  int failureCount = 0;
-  List<String> failedFiles = [];
-
-  for (final task in tasksToExecute) {
-    if (!File(task.filePath).existsSync()) {
-      failureCount++;
-      failedFiles.add("${task.fileKey} (file tidak ditemukan)");
-    } else {
-      final file = File(task.filePath);
-      final mimeType =
-          lookupMimeType(task.filePath) ?? 'application/octet-stream';
-      try {
-        final response = await http.put(
-          Uri.parse(task.url),
-          headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
-          body: file.readAsBytesSync(),
-        );
-        if (response.statusCode == 200) {
-          successCount++;
-        } else {
-          failureCount++;
-          failedFiles.add("${task.fileKey} (HTTP ${response.statusCode})");
-        }
-      } catch (e) {
-        failureCount++;
-        failedFiles.add("${task.fileKey} (Exception)");
-      }
-    }
-    currentCount++;
-    progressCubit?.updateProgress(currentCount, totalToUpload);
-  }
-
-  return UploadResult(
-    successCount: successCount,
-    failureCount: failureCount,
-    failedFiles: failedFiles,
-  );
+  final List<_UploadTask> tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
 }
+
 
 Future<UploadResult> uploadPosImagesToS3(
     String transNo,
@@ -168,292 +96,243 @@ Future<UploadResult> uploadPosImagesToS3(
       UploadProgressCubit? progressCubit,
       List<String>? filter,
     }) async {
-
-  // Buka kedua box yang relevan
   final validationBox = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
   final infoBox = await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-
-  // --- LANGKAH 1: Kumpulkan SEMUA gambar lokal ke dalam satu peta ---
   final Map<String, String> localFileMap = {};
-
-  // a. Ambil foto PIC dari info transaksi
   final transactionInfo = infoBox.get(getHiveKeyForTransaction(transNo));
+
   if (transactionInfo?.picImageDetail != null) {
-    final imageDetail = transactionInfo!.picImageDetail!;
-    final filename = imageDetail.imagePath.split('/').last;
-    localFileMap[filename] = imageDetail.imagePath;
+    localFileMap[transactionInfo!.picImageDetail!.imagePath.split('/').last] = transactionInfo.picImageDetail!.imagePath;
+  }
+  if (transactionInfo?.temperatureInImage != null) {
+    localFileMap[transactionInfo!.temperatureInImage!.imagePath.split('/').last] = transactionInfo.temperatureInImage!.imagePath;
+  }
+  if (transactionInfo?.finalTemperatureInImage != null) {
+    localFileMap[transactionInfo!.finalTemperatureInImage!.imagePath.split('/').last] = transactionInfo.finalTemperatureInImage!.imagePath;
+  }
+  if (transactionInfo?.temperatureOutImage != null) {
+    localFileMap[transactionInfo!.temperatureOutImage!.imagePath.split('/').last] = transactionInfo.temperatureOutImage!.imagePath;
   }
 
-  if (transactionInfo?.temperatureIn != null) {
-    final imageDetail = transactionInfo!.temperatureInImage!;
-    final filename = imageDetail.imagePath.split('/').last;
-    localFileMap[filename] = imageDetail.imagePath;
-  }
-
-  if (transactionInfo?.finalTemperatureIn != null) {
-    final imageDetail = transactionInfo!.finalTemperatureInImage!;
-    final filename = imageDetail.imagePath.split('/').last;
-    localFileMap[filename] = imageDetail.imagePath;
-  }
-
-  if (transactionInfo?.temperatureOut != null) {
-    final imageDetail = transactionInfo!.temperatureOutImage!;
-    final filename = imageDetail.imagePath.split('/').last;
-    localFileMap[filename] = imageDetail.imagePath;
-  }
-
-  // b. Ambil semua foto dari setiap validasi unit
   final validationEntries = validationBox.values.where((e) => e.transNo == transNo);
   for (final entry in validationEntries) {
-    // Gabungkan semua list foto dari satu entre
     List<CapturedImageDetail> allUnitImages = [
       ...entry.photosBefore,
       ...entry.photosAfter,
       ...entry.measurementsAfter.map((m) => m.capturedImage).whereType<CapturedImageDetail>(),
     ];
-    // Masukkan ke dalam peta
     for (final imageDetail in allUnitImages) {
-      final filename = imageDetail.imagePath.split('/').last;
-      localFileMap[filename] = imageDetail.imagePath;
+      localFileMap[imageDetail.imagePath.split('/').last] = imageDetail.imagePath;
     }
   }
 
-  // --- LANGKAH 2: Bangun daftar tugas upload berdasarkan data dari server ---
   List<_UploadTask> allPossibleTasks = [];
   for (var serialData in presignedDetail) {
-    final serialNo = serialData['serial_no'];
-    final uploads = serialData['uploads'] as List<dynamic>;
-
+    final serialNo = serialData['serial_no']?.toString() ?? 'HEADER';
+    final uploads = serialData['uploads'] as List<dynamic>? ?? [];
     for (var uploadInfo in uploads) {
-      final filename = uploadInfo['filename'];
-      // Cari filename di dalam peta gambar lokal kita
-      if (localFileMap.containsKey(filename)) {
+      final filename = uploadInfo['filename']?.toString();
+      if (filename != null && filename.isNotEmpty && localFileMap.containsKey(filename)) {
         final filePath = localFileMap[filename]!;
         final fileKey = '$serialNo - $filename';
         allPossibleTasks.add(_UploadTask(url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
-      } else {
-        print('Warning: No matching local image found for $filename. Skipping upload for this file.');
+      } else if (filename != null && filename.isNotEmpty) {
+        print('⚠️ POS: No matching local image found for $filename. Skipping.');
       }
     }
   }
 
-  final List<_UploadTask> tasksToExecute;
-  if (filter != null && filter.isNotEmpty) {
-    // MODIFIKASI START: Perbarui logika filter
-    tasksToExecute = allPossibleTasks.where((task) {
-      // Cek apakah ada salah satu item di filter yang persis sama dengan fileKey tugas ini
-      // atau dimulai dengan fileKey (tergantung format failedFiles Anda)
-      return filter.contains(task.fileKey);
-      // Jika failedFiles formatnya "serialNo - filename (ErrorType)", maka gunakan startsWith:
-      // return filter.any((filterItem) => filterItem.startsWith(task.fileKey));
-    }).toList();
-    // MODIFIKASI END
-  } else {
-    tasksToExecute = allPossibleTasks;
-  }
-
-  // Sisa kode tidak diubah
-  int totalToUpload = tasksToExecute.length;
-  int currentCount = 0;
-  progressCubit?.reset();
-  progressCubit?.updateProgress(currentCount, totalToUpload);
-
-  if (tasksToExecute.isEmpty) {
-    return UploadResult(successCount: 0, failureCount: 0, failedFiles: []);
-  }
-
-  int successCount = 0;
-  int failureCount = 0;
-  List<String> failedFiles = [];
-
-  for (final task in tasksToExecute) {
-    if (!File(task.filePath).existsSync()) {
-      failureCount++;
-      failedFiles.add("${task.fileKey} (file tidak ditemukan)");
-    } else {
-      final file = File(task.filePath);
-      final mimeType =
-          lookupMimeType(task.filePath) ?? 'application/octet-stream';
-      try {
-        final response = await http.put(
-          Uri.parse(task.url),
-          headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
-          body: file.readAsBytesSync(),
-        );
-        if (response.statusCode == 200) {
-          successCount++;
-        } else {
-          failureCount++;
-          failedFiles.add("${task.fileKey} (HTTP ${response.statusCode})");
-        }
-      } catch (e) {
-        failureCount++;
-        failedFiles.add("${task.fileKey} (Exception)");
-      }
-    }
-    currentCount++;
-    progressCubit?.updateProgress(currentCount, totalToUpload);
-  }
-
-  return UploadResult(
-    successCount: successCount,
-    failureCount: failureCount,
-    failedFiles: failedFiles,
-  );
+  final List<_UploadTask> tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
 }
+
 
 Future<UploadResult> uploadPOSUnserviceableImagesToS3(
     PosUnserviceableModel report,
     List<dynamic> presignedDetails, {
       required UploadProgressCubit progressCubit,
-      List<String>? filter, // Untuk retry
+      List<String>? filter,
     }) async {
-  // 1. Kumpulkan semua gambar lokal dari laporan.
   final Map<String, String> localFileMap = {
     for (var img in report.proofImages)
       img.imagePath.split('/').last: img.imagePath,
   };
 
-  // 2. Bangun daftar tugas upload.
   List<_UploadTask> allPossibleTasks = [];
   for (var uploadInfo in presignedDetails) {
-    final filename = uploadInfo['filename'];
-    if (localFileMap.containsKey(filename)) {
+    final filename = uploadInfo['filename']?.toString();
+    final fileKey = filename;
+    if (filename != null && fileKey != null && filename.isNotEmpty && localFileMap.containsKey(filename)) {
       final filePath = localFileMap[filename]!;
-
       allPossibleTasks.add(_UploadTask(
-          url: uploadInfo['url'], filePath: filePath, fileKey: filename));
-    } else {
-      print('Warning: No matching local image for $filename. Skipping.');
+          url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
+    } else if (filename != null && filename.isNotEmpty){
+      print('⚠️ POS Unserviceable: No matching local image for $filename. Skipping.');
     }
   }
 
-  // 3. Logika filter, eksekusi, dan return (sama persis dengan fungsi lain)
-  final List<_UploadTask> tasksToExecute = filter != null && filter.isNotEmpty
-      ? allPossibleTasks.where((task) => filter.contains(task.fileKey)).toList()
-      : allPossibleTasks;
-
-  int totalToUpload = tasksToExecute.length;
-  progressCubit.updateProgress(0, totalToUpload);
-
-  if (tasksToExecute.isEmpty) {
-    return UploadResult(
-        successCount: 0, failureCount: 0, failedFiles: []);
-  }
-
-  int successCount = 0;
-  List<String> failedFiles = [];
-
-  for (int i = 0; i < tasksToExecute.length; i++) {
-    final task = tasksToExecute[i];
-    final file = File(task.filePath);
-
-    try {
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        final mimeType =
-            lookupMimeType(task.filePath) ?? 'application/octet-stream';
-
-        final response = await http.put(
-          Uri.parse(task.url),
-          headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
-          body: bytes,
-        );
-        if (response.statusCode == 200) {
-          successCount++;
-        } else {
-          failedFiles.add(task.fileKey);
-        }
-      } else {
-        failedFiles.add(task.fileKey);
-      }
-    } catch (e) {
-      failedFiles.add(task.fileKey);
-    }
-    progressCubit.updateProgress(i + 1, totalToUpload);
-  }
-
-  return UploadResult(
-    successCount: successCount,
-    failureCount: failedFiles.length,
-    failedFiles: failedFiles,
-  );
+  final List<_UploadTask> tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
 }
+
 
 Future<UploadResult> uploadSCUnserviceableImagesToS3(
     SCUnserviceableModel report,
     List<dynamic> presignedDetails, {
       required UploadProgressCubit progressCubit,
-      List<String>? filter, // Untuk retry
+      List<String>? filter,
     }) async {
-  // 1. Kumpulkan semua gambar lokal dari laporan.
   final Map<String, String> localFileMap = {
     for (var img in report.proofImages)
       img.imagePath.split('/').last: img.imagePath,
   };
 
-  // 2. Bangun daftar tugas upload.
   List<_UploadTask> allPossibleTasks = [];
   for (var uploadInfo in presignedDetails) {
-    final filename = uploadInfo['filename'];
-    if (localFileMap.containsKey(filename)) {
+    final filename = uploadInfo['filename']?.toString();
+    final fileKey = filename;
+    if (filename != null && fileKey != null && filename.isNotEmpty && localFileMap.containsKey(filename)) {
       final filePath = localFileMap[filename]!;
-
       allPossibleTasks.add(_UploadTask(
-          url: uploadInfo['url'], filePath: filePath, fileKey: filename));
-    } else {
-      print('Warning: No matching local image for $filename. Skipping.');
+          url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
+    } else if (filename != null && filename.isNotEmpty) {
+      print('⚠️ SC Unserviceable: No matching local image for $filename. Skipping.');
     }
   }
 
-  // 3. Logika filter, eksekusi, dan return (sama persis dengan fungsi lain)
-  final List<_UploadTask> tasksToExecute = filter != null && filter.isNotEmpty
-      ? allPossibleTasks.where((task) => filter.contains(task.fileKey)).toList()
-      : allPossibleTasks;
+  final List<_UploadTask> tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
+}
 
+List<_UploadTask> _filterTasks(List<_UploadTask> allTasks, List<String>? filter) {
+  if (filter == null || filter.isEmpty) {
+    return allTasks;
+  }
+
+  print("🚦 Menerapkan filter untuk retry: $filter");
+
+  final Set<String> filterKeys = filter.map((failedFileString) {
+    String keyPart = failedFileString.replaceFirst("[MISSING] ", "");
+    if (keyPart.contains(" (")) {
+      keyPart = keyPart.substring(0, keyPart.indexOf(" ("));
+    }
+    return keyPart.trim();
+  }).toSet();
+
+  print("🔑 Kunci filter yang diekstrak: $filterKeys");
+
+  final tasksToExecute = allTasks.where((task) {
+    final bool shouldUpload = filterKeys.contains(task.fileKey);
+    print("  - Mengecek task key: ${task.fileKey} -> Upload? $shouldUpload");
+    return shouldUpload;
+  }).toList();
+
+  print("📊 Jumlah task setelah filter: ${tasksToExecute.length}");
+  return tasksToExecute;
+}
+
+Future<UploadResult> _executeUploadTasks(
+    List<_UploadTask> tasksToExecute,
+    UploadProgressCubit? progressCubit,
+    ) async {
   int totalToUpload = tasksToExecute.length;
-  progressCubit.updateProgress(0, totalToUpload);
+  // progressCubit?.reset();
+  progressCubit?.setTotal(totalToUpload);
+
 
   if (tasksToExecute.isEmpty) {
-    return UploadResult(
-        successCount: 0, failureCount: 0, failedFiles: []);
+    print("ℹ️ Tidak ada task yang perlu dieksekusi.");
+    progressCubit?.updateProgress(0, 0, 'Selesai (tidak ada file)');
+    return UploadResult(successCount: 0, failureCount: 0, failedFiles: []);
   }
 
   int successCount = 0;
-  List<String> failedFiles = [];
+  int failureCount = 0;
+  List<String> failedFileDetails = [];
+  List<String> missingKeys = [];
 
   for (int i = 0; i < tasksToExecute.length; i++) {
     final task = tasksToExecute[i];
-    final file = File(task.filePath);
+    final currentCount = i + 1;
 
+    // Update progress SEBELUM mencoba upload file ini
+    progressCubit?.updateProgress(currentCount, totalToUpload, 'Mengupload ${task.fileKey}...');
+
+    // --- MULAI TRY...CATCH PER FILE ---
     try {
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        final mimeType =
-            lookupMimeType(task.filePath) ?? 'application/octet-stream';
-
-        final response = await http.put(
-          Uri.parse(task.url),
-          headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
-          body: bytes,
-        );
-        if (response.statusCode == 200) {
-          successCount++;
-        } else {
-          failedFiles.add(task.fileKey);
-        }
-      } else {
-        failedFiles.add(task.fileKey);
+      final file = File(task.filePath);
+      // Cek file hilang SEBELUM mencoba baca
+      if (!await file.exists()) {
+        print("🔴 File not found for task: ${task.fileKey}");
+        // Lempar error spesifik agar ditangkap di catch bawah
+        throw Exception("file tidak ditemukan");
       }
+
+      final bytes = await file.readAsBytes();
+      final mimeType = lookupMimeType(task.filePath) ?? 'application/octet-stream';
+
+      // Lakukan upload
+      final response = await http.put(
+        Uri.parse(task.url),
+        headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
+        body: bytes,
+      ).timeout(const Duration(minutes: 2)); // Timeout tetap bagus
+
+      // Cek status code
+      if (response.statusCode == 200) {
+        successCount++;
+        print("✅ Upload success: ${task.fileKey}");
+      } else {
+        // Gagal karena respons server non-200
+        throw Exception("HTTP ${response.statusCode}");
+      }
+    } on TimeoutException {
+      // Gagal karena timeout
+      print("❌ Upload failed (Timeout): ${task.fileKey}");
+      failureCount++;
+      failedFileDetails.add("${task.fileKey} (Timeout)");
+      // Tidak perlu melempar error, cukup catat kegagalan
+    } on SocketException catch (e) {
+      // Gagal karena masalah jaringan (DNS lookup, koneksi ditolak, internet mati, dll.)
+      print("❌ Upload failed (SocketException): ${task.fileKey} -> $e");
+      failureCount++;
+      failedFileDetails.add("${task.fileKey} (Network Error)"); // Pesan generik
+    } on http.ClientException catch (e) {
+      // Gagal karena masalah HTTP client lain
+      print("❌ Upload failed (ClientException): ${task.fileKey} -> $e");
+      failureCount++;
+      failedFileDetails.add("${task.fileKey} (Connection Error)"); // Pesan generik
     } catch (e) {
-      failedFiles.add(task.fileKey);
+      // Gagal karena alasan lain (file hilang, error tak terduga)
+      print("❌ Upload failed (Exception): ${task.fileKey} -> $e");
+      failureCount++;
+      // Cek apakah error karena file hilang
+      if (e.toString().contains("file tidak ditemukan")) {
+        failedFileDetails.add("${task.fileKey} (file tidak ditemukan)");
+        missingKeys.add(task.fileKey); // Tetap tandai missing
+      } else {
+        // Batasi panjang pesan error agar tidak terlalu panjang
+        failedFileDetails.add("${task.fileKey} (Error: ${e.toString().substring(0, min(e.toString().length, 30))}...)");
+      }
     }
-    progressCubit.updateProgress(i + 1, totalToUpload);
+    // --- AKHIR TRY...CATCH PER FILE ---
+    // Loop akan lanjut ke file berikutnya meskipun ada error
   }
+
+  List<String> finalFailedFiles = failedFileDetails.map((f) {
+    final key = f.contains(" (") ? f.substring(0, f.indexOf(" (")) : f;
+    return missingKeys.contains(key) ? "[MISSING] $f" : f;
+  }).toList();
+
+  progressCubit?.updateProgress(totalToUpload, totalToUpload, 'Selesai');
 
   return UploadResult(
     successCount: successCount,
-    failureCount: failedFiles.length,
-    failedFiles: failedFiles,
+    failureCount: failureCount,
+    failedFiles: finalFailedFiles,
   );
+}
+
+String getHiveKeyForTransaction(String transNo) {
+  return transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 }

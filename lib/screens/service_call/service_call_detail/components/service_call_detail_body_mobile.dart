@@ -1,6 +1,9 @@
 // lib/screens/service_call/service_call_detail/components/service_call_detail_body_mobile.dart
 
+import 'dart:developer';
+
 import 'package:collection/collection.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,11 +28,13 @@ import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/shared_function.dart';
 import '../../../../components/shared_widgets.dart';
+import '../../../../components/widgets/aho_dialog.dart';
 import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
+import '../../../../models/service_call/problem_source_model.dart';
 import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
 import '../../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../../models/service_call/transaction_info_model.dart';
@@ -71,6 +76,7 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _technician2Controller;
   late final TextEditingController _technician3Controller;
   late final TextEditingController _finalTempController;
+  final TextEditingController _finalTempNoteSearchController = TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
@@ -148,6 +154,7 @@ class _ServiceCallDetailBodyMobileState
     _technician2Controller.dispose();
     _technician3Controller.dispose();
     _finalTempController.dispose();
+    _finalTempNoteSearchController.dispose();
     super.dispose();
   }
 
@@ -269,6 +276,7 @@ class _ServiceCallDetailBodyMobileState
       child: BlocConsumer<ServiceCallDetailBloc, ServiceCallDetailState>(
         listener: (context, detailState) {
           // Panggil _refreshSerials SETELAH data detail berhasil dimuat
+          log("### UI LISTENER MENERIMA STATE: ${detailState.runtimeType} ###");
           if (detailState is ServiceCallDetailLoaded) {
             print(
                 "🚀 ServiceCallDetailBloc Loaded. Memanggil _refreshSerials...");
@@ -290,6 +298,29 @@ class _ServiceCallDetailBodyMobileState
             return Center(child: Text("Error: ${detailState.message}"));
           } else if (detailState is ServiceCallDetailLoaded) {
             final detailList = detailState.data.detail;
+
+            final sortedDetailList =
+                List<ServiceCallUnitDetail>.from(detailList); // Salin list
+            sortedDetailList.sort((a, b) {
+              // Cek apakah item adalah 'REMOTE'
+              bool isARemote =
+                  a.articleNameUnit.toUpperCase().contains('REMOTE');
+              bool isBRemote =
+                  b.articleNameUnit.toUpperCase().contains('REMOTE');
+
+              // Jika a REMOTE dan b BUKAN, a ditaruh di bawah (return 1)
+              if (isARemote && !isBRemote) {
+                return 1;
+              }
+              // Jika a BUKAN dan b REMOTE, a ditaruh di atas (return -1)
+              else if (!isARemote && isBRemote) {
+                return -1;
+              }
+              // Jika keduanya REMOTE atau keduanya BUKAN REMOTE, sort by serialNo
+              else {
+                return a.serialNo.compareTo(b.serialNo);
+              }
+            });
 
             return BlocBuilder<ScFormCubit, ScFormState>(
               builder: (context, formState) {
@@ -319,51 +350,110 @@ class _ServiceCallDetailBodyMobileState
                     }
                     final validationStatuses = snapshot.data ?? {};
                     final header = detailState.data.header;
+                    final problems = detailState.data.problems;
 
-                    return BlocListener<ServiceCallSubmittedBloc, ServiceCallSubmittedState>(
-                      listener: (context, state) {
-                        if (state is ScProceedToOtpDialog) {
+                    return BlocListener<ServiceCallSubmittedBloc,
+                        ServiceCallSubmittedState>(
+                      listener: (context, state) async {
+                        if (state is ScProceedToAhoDialog) {
+                          log(">>> LISTENER: Masuk ke blok 'if (state is ScProceedToAhoDialog)' <<<");
+                          try {
+                            // Tampilkan dialog AHO baru Anda
+                            await showDialog<void>(
+                              // Gunakan await
+                              context: context,
+                              barrierDismissible: false,
+                              // Disarankan false agar tidak mudah tertutup
+                              builder: (_) {
+                                log(">>> LISTENER: Membangun AhoDialog... <<<");
+                                // Pastikan AhoDialog sudah di-import di atas file ini
+                                return AhoDialog(
+                                  formState: state.formState,
+                                  initialAho: state.initialAho,
+                                  onSubmit: (String ahoNumber) {
+                                    log(">>> AhoDialog onSubmit: Mengirim AhoInputCompleted <<<");
+                                    // Kirim event AhoInputCompleted
+                                    context
+                                        .read<ServiceCallSubmittedBloc>()
+                                        .add(
+                                          AhoInputCompleted(
+                                            formState: state.formState,
+                                            ahoNumber: ahoNumber,
+                                          ),
+                                        );
+                                  },
+                                );
+                              },
+                            );
+                            log(">>> LISTENER: showDialog AHO selesai. <<<");
+                          } catch (e, stacktrace) {
+                            log("🔴 ERROR saat menampilkan AhoDialog: $e",
+                                error: e, stackTrace: stacktrace);
+                          }
+                        } else if (state is ScProceedToOtpDialog) {
                           // Ambil formState yang sudah divalidasi dari BLoC state
                           final formState = state.formState;
-                          final double storeLat = double.tryParse(header.storeLat) ?? 0.0;
-                          final double storeLong = double.tryParse(header.storeLong) ?? 0.0;
+                          final double storeLat =
+                              double.tryParse(header.storeLat) ?? 0.0;
+                          final double storeLong =
+                              double.tryParse(header.storeLong) ?? 0.0;
 
                           showDialog<void>(
                             context: context,
                             builder: (_) {
                               return MultiBlocProvider(
                                 providers: [
-                                  BlocProvider(create: (_) => OtpBloc(repository: OtpRepository())),
-                                  BlocProvider(create: (_) => LocationValidationBloc()),
-                                  BlocProvider.value(value: context.read<UploadProgressCubit>()),
+                                  BlocProvider(
+                                      create: (_) =>
+                                          OtpBloc(repository: OtpRepository())),
+                                  BlocProvider(
+                                    create: (context) {
+                                      // 1. Ambil box yang SUDAH DIBUKA oleh ScFormCubit
+                                      final Box scBox = Hive.box<TransactionInfoModel>(
+                                          kTransactionInfoHiveBox);
+
+                                      // 2. Inject box tersebut ke dalam BLoC
+                                      return LocationValidationBloc(transactionBox: scBox);
+                                    },
+                                  ),
+                                  BlocProvider.value(
+                                      value:
+                                          context.read<UploadProgressCubit>()),
                                 ],
                                 child: OtpDialog(
                                   transNo: header.transNo,
-                                  shipTo: header.storeId, // Sesuaikan field
-                                  email: header.storeEmail, // Sesuaikan field
+                                  shipTo: header.storeId,
+                                  // Sesuaikan field
+                                  email: header.storeEmail,
+                                  // Sesuaikan field
                                   storeLat: storeLat,
                                   storeLong: storeLong,
                                   onVerified: () {
                                     // SAAT OTP BERHASIL, BARU KIRIM EVENT SUBMIT SEBENARNYA
-                                    final progressCubit = context.read<UploadProgressCubit>();
-                                    context.read<ServiceCallSubmittedBloc>().add(
-                                      SubmitValidation(
-                                        transNo: header.transNo,
-                                        createdBy: maintenanceBy,
-                                        createdByName: technicianName,
-                                        createdByIP: maintenanceByIP,
-                                        pathAttachment: header.pathAttachment,
-                                        progressCubit: progressCubit,
-                                        formState: formState,
-                                        storeName: header.storeName
-                                      ),
-                                    );
+                                    final progressCubit =
+                                        context.read<UploadProgressCubit>();
+                                    context
+                                        .read<ServiceCallSubmittedBloc>()
+                                        .add(
+                                          SubmitValidation(
+                                            transNo: header.transNo,
+                                            createdBy: maintenanceBy,
+                                            createdByName: technicianName,
+                                            createdByIP: maintenanceByIP,
+                                            pathAttachment:
+                                                header.pathAttachment,
+                                            progressCubit: progressCubit,
+                                            formState: formState,
+                                            storeName: header.storeName,
+                                            ahoNumber: state.ahoNumber,
+                                          ),
+                                        );
                                   },
                                 ),
                               );
                             },
                           );
-                        }else if (state is ValidationUploadPartial) {
+                        } else if (state is ValidationUploadPartial) {
                           // Tampilkan dialog HANYA JIKA GAGAL
                           if (state.failureCount > 0) {
                             showPartialUploadDialog(
@@ -373,15 +463,15 @@ class _ServiceCallDetailBodyMobileState
                               state.failedFiles,
                             );
                           }
-                        }
-                        else if (state is ValidationSuccess) {
+                        } else if (state is ValidationSuccess) {
                           // Jika 100% sukses, langsung tutup halaman detail
                           ConfirmationService().processQueue();
                           showSuccessDialog(
                             context,
                             "Data berhasil dikirim.",
                             onOk: () {
-                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
                             },
                           );
                         }
@@ -391,7 +481,8 @@ class _ServiceCallDetailBodyMobileState
                           Padding(
                             padding: const EdgeInsets.only(bottom: 65.0),
                             child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 35),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 35),
                               child: Column(
                                 children: [
                                   _buildCustomerSection(header),
@@ -407,9 +498,10 @@ class _ServiceCallDetailBodyMobileState
                                     title: 'Validasi Unit',
                                     child: Column(
                                       children: [
-                                        _buildScanQRButton(context, detailState),
+                                        _buildScanQRButton(
+                                            context, detailState),
                                         const SizedBox(height: 8),
-                                        ...detailList.map((item) =>
+                                        ...sortedDetailList.map((item) =>
                                             _buildDetailCard(header, item,
                                                 validationStatuses)),
                                       ],
@@ -417,14 +509,17 @@ class _ServiceCallDetailBodyMobileState
                                   ),
                                   // Widget Suhu Akhir (Kondisional)
                                   BlocBuilder<ScFormCubit, ScFormState>(
-                                    buildWhen: (prev, current) =>
-                                        prev.allUnitsValidated !=
-                                        current.allUnitsValidated,
+                                    buildWhen: (prev, current) {
+                                      return prev.allUnitsValidated != current.allUnitsValidated || // (status aktif/nonaktif berubah)
+                                          prev.isFinalTempSkipped != current.isFinalTempSkipped || // (status skip berubah)
+                                          prev.finalTempNote != current.finalTempNote; // (note berubah)
+                                    },
                                     builder: (context, formStateForTemp) {
                                       final bool isEnabled =
                                           formStateForTemp.allUnitsValidated;
                                       return Padding(
-                                        padding: const EdgeInsets.only(top: 16.0),
+                                        padding:
+                                            const EdgeInsets.only(top: 16.0),
                                         child: Stack(
                                           children: [
                                             Opacity(
@@ -445,7 +540,8 @@ class _ServiceCallDetailBodyMobileState
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   child: Container(
-                                                      color: Colors.transparent),
+                                                      color:
+                                                          Colors.transparent),
                                                 ),
                                               ),
                                           ],
@@ -457,7 +553,8 @@ class _ServiceCallDetailBodyMobileState
                               ),
                             ),
                           ),
-                          _buildSubmitButton(context, header, formState),
+                          _buildSubmitButton(
+                              context, header, problems, formState),
                         ],
                       ),
                     );
@@ -655,9 +752,9 @@ class _ServiceCallDetailBodyMobileState
             if (scannedSerialNo == null || !mounted) return;
 
             final matchingItem = detailState.data.detail.firstWhereOrNull(
-              (e) =>
-                  e.serialNo.trim().toUpperCase() ==
-                  scannedSerialNo.trim().toUpperCase(),
+              (e) => e.serialNo.trim().toUpperCase().startsWith(
+                    scannedSerialNo.trim().toUpperCase(),
+                  ),
             );
 
             if (matchingItem != null) {
@@ -766,7 +863,7 @@ class _ServiceCallDetailBodyMobileState
           final problemSources = detailState.data.problems;
 
           if (isRemote) {
-            final result = await Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => RemoteValidationScreen(
@@ -783,24 +880,24 @@ class _ServiceCallDetailBodyMobileState
               ),
             );
 
-            if (result == true && mounted) {
+            if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Validasi berhasil disimpan!'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   const SnackBar(
+              //     content: Text('Validasi berhasil disimpan!'),
+              //     backgroundColor: Colors.green,
+              //     behavior: SnackBarBehavior.floating,
+              //   ),
+              // );
 
-              _refreshSerials(); // JALANKAN REFRESH DI SINI
+              _refreshSerials();
             }
           } else {
             final detailData = (context.read<ServiceCallDetailBloc>().state
                     as ServiceCallDetailLoaded)
                 .data;
 
-            final result = await Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ServiceCallValidationScreen(
@@ -820,17 +917,17 @@ class _ServiceCallDetailBodyMobileState
               ),
             );
 
-            if (result == true && mounted) {
+            if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Validasi berhasil disimpan!'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   const SnackBar(
+              //     content: Text('Validasi berhasil disimpan!'),
+              //     backgroundColor: Colors.green,
+              //     behavior: SnackBarBehavior.floating,
+              //   ),
+              // );
 
-              _refreshSerials(); // JALANKAN REFRESH DI SINI
+              _refreshSerials();
             }
           }
         },
@@ -842,9 +939,7 @@ class _ServiceCallDetailBodyMobileState
     final formCubit = context.read<ScFormCubit>();
     final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
-    final String label =
-        '${baseLimits.label} (Min: ${minLimit.toStringAsFixed(1)}${baseLimits.unit})';
-
+    final String label = baseLimits.label;
     final finalTempLimits = MeasurementLimits(
       id: baseLimits.id,
       label: label,
@@ -854,32 +949,59 @@ class _ServiceCallDetailBodyMobileState
       normalMin: baseLimits.normalMin,
       normalMax: baseLimits.normalMax,
     );
+    final detailState = context.read<ServiceCallDetailBloc>().state;
+    List<String> noteOptions = [];
+    if (detailState is ServiceCallDetailLoaded) {
+      noteOptions = detailState.data.noteIndoorAfterOptions;
+    }
 
     return _buildSection(
-      title: 'Pengukuran Akhir (*Wajib)',
-      child: MeasurementInputWidget(
-        controller: _finalTempController,
-        label: finalTempLimits.label,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        limits: finalTempLimits,
-        transNo: widget.transNo,
-        initialImage: formState.finalTempInImage,
-        onEditingComplete: (finalValue) {
-          if (formCubit.state.finalTempIn != finalValue) {
-            formCubit.finalTempInChanged(finalValue);
-            formCubit.onFieldChanged();
-          }
-        },
-        onImageChanged: (newImage) {
-          formCubit.finalTempInImageChanged(newImage);
-          formCubit.onFieldChanged();
-        },
+      title: 'Suhu Dalam Ruangan Setelah Service (*Wajib)',
+      child: Column(
+        children: [
+          MeasurementInputWidget(
+            controller: _finalTempController,
+            label: finalTempLimits.label,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            limits: finalTempLimits,
+            transNo: widget.transNo,
+            initialImage: formState.finalTempInImage,
+            onEditingComplete: (finalValue) {
+              if (formCubit.state.finalTempIn != finalValue) {
+                formCubit.finalTempInChanged(finalValue);
+                formCubit.onFieldChanged();
+              }
+            },
+            onImageChanged: (newImage) {
+              formCubit.finalTempInImageChanged(newImage);
+              formCubit.onFieldChanged();
+            },
+            isSkipEnabled: true,
+            isSkipped: formState.isFinalTempSkipped,
+            onSkipChanged: (isSkipped) {
+              // Panggil method baru di Cubit
+              formCubit.finalTempSkippedChanged(isSkipped);
+            },
+          ),
+          if (formState.isFinalTempSkipped)
+            _buildNoteDropdown(
+              context: context,
+              options: noteOptions,
+              selectedValue: formState.finalTempNote,
+              searchController: _finalTempNoteSearchController,
+              label: 'Alasan Skip Suhu Akhir',
+              onChanged: (value) {
+                formCubit.finalTempNoteChanged(value); // Panggil method baru
+                formCubit.onFieldChanged();
+              },
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildSubmitButton(
-      BuildContext context, ServiceCallHeader header, ScFormState formState) {
+  Widget _buildSubmitButton(BuildContext context, ServiceCallHeader header,
+      List<ProblemSourceModel> problems, ScFormState formState) {
     return Align(
       alignment: Alignment.bottomCenter,
       child: SafeArea(
@@ -905,7 +1027,11 @@ class _ServiceCallDetailBodyMobileState
 
               if (latestFormState.isFormReadyToSubmit) {
                 context.read<ServiceCallSubmittedBloc>().add(
-                      ScFinalValidationRequested(formState: latestFormState),
+                      ScFinalValidationRequested(
+                        transNo: widget.transNo,
+                        formState: latestFormState,
+                        problemSources: problems,
+                      ),
                     );
               } else {
                 // Tampilkan pesan error spesifik
@@ -916,7 +1042,7 @@ class _ServiceCallDetailBodyMobileState
                       context, 'Lengkapi validasi semua unit.');
                 } else if (!latestFormState.isFinalTempValid) {
                   _showValidationSnackbar(
-                      context, 'Lengkapi suhu akhir & fotonya.');
+                      context, 'Lengkapi suhu dalam ruangan & fotonya.');
                 } else {
                   _showValidationSnackbar(
                       context, 'Periksa kembali data Anda.');
@@ -966,6 +1092,85 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
+  Widget _buildNoteDropdown({
+    required BuildContext context,
+    required List<String> options,
+    required String? selectedValue,
+    required TextEditingController searchController,
+    required String label,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+    // ... (Sisa kode _buildNoteDropdown persis sama seperti
+    //      yang ada di ScMeasurementInputSection: Padding, DropdownButtonFormField2, dll.)
+
+    // Pastikan Anda menyalin seluruh method _buildNoteDropdown ke sini
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0), // Sesuaikan padding
+      child: DropdownButtonFormField2<String>(
+        value: selectedValue,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: '$label (*Wajib)',
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        ),
+        hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
+        items: options.map((item) => DropdownMenuItem<String>(
+          value: item,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(item, style: const TextStyle(fontSize: 14)),
+            ),
+          ),
+        )).toList(),
+        onChanged: onChanged,
+        selectedItemBuilder: (context) {
+          return options.map((item) {
+            return Text(
+              item,
+              style: const TextStyle(fontSize: 14, overflow: TextOverflow.ellipsis),
+              maxLines: 1,
+            );
+          }).toList();
+        },
+        dropdownStyleData: DropdownStyleData(
+          maxHeight: maxDropdownHeight,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+        ),
+        menuItemStyleData: const MenuItemStyleData(
+          padding: EdgeInsets.symmetric(horizontal: 14),
+        ),
+        dropdownSearchData: DropdownSearchData(
+          searchController: searchController,
+          searchInnerWidgetHeight: 50,
+          searchInnerWidget: Container(
+            height: 50,
+            padding: const EdgeInsets.all(8),
+            child: TextFormField(
+              expands: true,
+              maxLines: null,
+              controller: searchController,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                hintText: 'Cari alasan...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+          searchMatchFn: (item, searchValue) =>
+              item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+        ),
+        onMenuStateChange: (isOpen) {
+          if (!isOpen) searchController.clear();
+        },
+      ),
+    );
+  }
+
   void _showValidationSnackbar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).removeCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -976,5 +1181,4 @@ class _ServiceCallDetailBodyMobileState
       ),
     );
   }
-
 }

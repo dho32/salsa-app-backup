@@ -7,7 +7,6 @@ import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_cubit.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_repository.dart';
 import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
-import '../../../blocs/failed_uploads/failed_uploads_event.dart';
 import '../../../blocs/location_validation/location_validation_bloc.dart';
 import '../../../blocs/otp/otp_bloc.dart';
 import '../../../blocs/otp/otp_repository.dart';
@@ -91,7 +90,7 @@ class _ProofOfServiceDetailScreenState
         BlocProvider(
           create: (context) {
             final bloc = PosSubmittedBloc(repository: PosSubmittedRepository());
-            Hive.openBox(kPosValidationPartialHiveBox).then((box) {
+            Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox).then((box) {
               if (box.containsKey(widget.transNo)) {
                 bloc.add(LoadPosValidationPartial(widget.transNo));
               }
@@ -279,7 +278,16 @@ class _ProofOfServiceDetailScreenState
                       return MultiBlocProvider(
                         providers: [
                           BlocProvider(create: (_) => OtpBloc(repository: OtpRepository())),
-                          BlocProvider(create: (_) => LocationValidationBloc()),
+                          BlocProvider(
+                            create: (context) {
+                              // 1. Ambil box yang SUDAH DIBUKA oleh PosFormCubit
+                              final Box posBox = Hive.box<PosTransactionInfoModel>(
+                                  kPosTransactionInfoHiveBox);
+
+                              // 2. Inject box tersebut ke dalam BLoC
+                              return LocationValidationBloc(transactionBox: posBox);
+                            },
+                          ),
                           BlocProvider.value(value: context.read<UploadProgressCubit>()),
                         ],
                         child: OtpDialog(

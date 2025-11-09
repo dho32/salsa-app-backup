@@ -14,7 +14,8 @@ import '../../../models/service_call/validation_status.dart';
 class ScFormCubit extends Cubit<ScFormState> {
   final String transNo;
   late final Box<TransactionInfoModel> _transactionInfoBox; // Gunakan Box SC
-  String _normalizeHiveKey(String key) => key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+  String _normalizeHiveKey(String key) =>
+      key.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   ScFormCubit({required this.transNo}) : super(const ScFormState()) {
     _initAndLoadData();
@@ -29,12 +30,15 @@ class ScFormCubit extends Cubit<ScFormState> {
   }
 
   void _loadInitialData() {
-    final String normalizedKey = _normalizeHiveKey(transNo); // ✅ Normalisasi kunci
+    final String normalizedKey =
+        _normalizeHiveKey(transNo); // ✅ Normalisasi kunci
     try {
-      final info = _transactionInfoBox.get(normalizedKey); // ✅ Gunakan kunci baru
-      final String? validPosition = kJabatanOptions.contains(info?.picPosition ?? '')
-          ? info?.picPosition!
-          : '';
+      final info =
+          _transactionInfoBox.get(normalizedKey); // ✅ Gunakan kunci baru
+      final String? validPosition =
+          kJabatanOptions.contains(info?.picPosition ?? '')
+              ? info?.picPosition!
+              : '';
       if (info != null) {
         emit(state.copyWith(
           picName: info.picName ?? '',
@@ -47,6 +51,8 @@ class ScFormCubit extends Cubit<ScFormState> {
           picImageDetail: info.picImageDetail,
           finalTempIn: info.finalTemperatureIn ?? '',
           finalTempInImage: info.finalTemperatureInImage,
+          isFinalTempSkipped: info.isFinalTempSkipped ?? false,
+          finalTempNote: info.finalTempNote,
         ));
       }
     } catch (e) {
@@ -104,15 +110,35 @@ class ScFormCubit extends Cubit<ScFormState> {
     );
   }
 
+  void finalTempSkippedChanged(bool isSkipped) {
+    emit(state.copyWith(
+      isFinalTempSkipped: isSkipped,
+      // Reset nilai/foto/note jika status skip berubah
+      finalTempIn: '',
+      finalTempInImage: null,
+      finalTempNote: null,
+    ));
+    // Validasi ulang
+    onFieldChanged();
+  }
+
+  void finalTempNoteChanged(String? note) =>
+      emit(state.copyWith(finalTempNote: note));
+
   void _validateForm() {
     final picStoreValid = state.picName.isNotEmpty &&
         state.picNik.isNotEmpty &&
         state.picPosition.isNotEmpty &&
         state.picPhone.isNotEmpty;
-    // && state.picImageDetail != null; // Sesuaikan jika foto PIC wajib
+
+    final bool isSkipped = state.isFinalTempSkipped;
+    final bool isFilled =
+        state.finalTempIn.isNotEmpty && state.finalTempInImage != null;
+    final bool noteFilled =
+        state.finalTempNote != null && state.finalTempNote!.isNotEmpty;
 
     final finalTempValid =
-        state.finalTempIn.isNotEmpty && state.finalTempInImage != null;
+        (isFilled && !isSkipped) || (isSkipped && noteFilled);
 
     final isReady = picStoreValid && state.allUnitsValidated && finalTempValid;
 
@@ -126,7 +152,7 @@ class ScFormCubit extends Cubit<ScFormState> {
   Future<void> _saveStateToHive() async {
     if (!_transactionInfoBox.isOpen) {
       _transactionInfoBox =
-      await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
+          await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
     }
 
     final infoToSave = TransactionInfoModel(transNo: transNo)
@@ -138,7 +164,9 @@ class ScFormCubit extends Cubit<ScFormState> {
       ..technician3 = state.technician3
       ..picImageDetail = state.picImageDetail
       ..finalTemperatureIn = state.finalTempIn
-      ..finalTemperatureInImage = state.finalTempInImage;
+      ..finalTemperatureInImage = state.finalTempInImage
+      ..isFinalTempSkipped = state.isFinalTempSkipped
+      ..finalTempNote = state.finalTempNote;
 
     final String normalizedKey = _normalizeHiveKey(transNo);
     await _transactionInfoBox.put(normalizedKey, infoToSave);
@@ -175,7 +203,6 @@ class ScFormCubit extends Cubit<ScFormState> {
         // Berdasarkan kode Anda sebelumnya, 'temperature' adalah ID untuk suhu indoor
         bool isSkip = measurement.isSkipped ?? false;
         if (id.contains('temperature') && isSkip && measurement.value > 0.0) {
-
           if (maxIndoorTemp == null || measurement.value > maxIndoorTemp) {
             maxIndoorTemp = measurement.value; // Temukan nilai tertinggi
           }
@@ -183,7 +210,7 @@ class ScFormCubit extends Cubit<ScFormState> {
       }
     }
 
-    if(maxIndoorTemp != null) {
+    if (maxIndoorTemp != null) {
       print("❄️ Max Indoor Temp ditemukan: $maxIndoorTemp");
     }
 

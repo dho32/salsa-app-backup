@@ -1,4 +1,6 @@
 // lib/blocs/service_call/pos_unserviceable/sc_unserviceable_bloc.dart
+import 'dart:io';
+
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -21,8 +23,8 @@ import '../../../models/service_call/sc_unserviceable_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 import '../../auth/auth_storage.dart';
-
 
 class SCUnserviceableBloc
     extends Bloc<SCUnserviceableEvent, SCUnserviceableState> {
@@ -33,9 +35,9 @@ class SCUnserviceableBloc
 
   SCUnserviceableBloc({required this.transNo})
       : _draftBox = Hive.box<SCUnserviceableModel>(kScUnserviceableDraftsBox),
-  // Box baru
+        // Box baru
         _repository = SCUnserviceableRepository(),
-  // Repository baru
+        // Repository baru
         super(const SCUnserviceableState()) {
     on<LoadUnserviceableDraft>(_onLoadInitialData);
     on<TakeProofPhoto>(_onTakeProofPhoto);
@@ -54,13 +56,14 @@ class SCUnserviceableBloc
     add(LoadUnserviceableDraft());
   }
 
-  Future<void> _onLoadInitialData(LoadUnserviceableDraft event,
-      Emitter<SCUnserviceableState> emit) async {
-    final retryBox = await Hive.openBox(kServiceCallValidationPartialHiveBox);
+  Future<void> _onLoadInitialData(
+      LoadUnserviceableDraft event, Emitter<SCUnserviceableState> emit) async {
+    final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(
+        kServiceCallValidationPartialHiveBox);
     final retryData = retryBox.get(transNo);
 
     if (retryData != null) {
-      final dataMap = Map<String, dynamic>.from(retryData as Map);
+      final dataMap = Map<String, dynamic>.from(retryData);
       // Jika ada data retry, langsung emit state partialFailure
       if (dataMap['type'] == 'unserviceable') {
         emit(state.copyWith(
@@ -78,7 +81,7 @@ class SCUnserviceableBloc
         emit(SCUnserviceableState(
           proofImages: initialDraft.proofImages,
           selectedReason:
-          initialDraft.reason.isNotEmpty ? initialDraft.reason : null,
+              initialDraft.reason.isNotEmpty ? initialDraft.reason : null,
           notes: initialDraft.notes ?? '',
         ));
       }
@@ -93,7 +96,7 @@ class SCUnserviceableBloc
     EasyDebounce.debounce(
       'save-draft-debouncer-$transNo',
       const Duration(milliseconds: 500),
-          () {
+      () {
         if (state.proofImages.isEmpty &&
             state.selectedReason == null &&
             state.notes.isEmpty) {
@@ -130,12 +133,16 @@ class SCUnserviceableBloc
         return;
       }
 
-      final tempDir = await getTemporaryDirectory();
-      final targetPath =
-      p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final appDir = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+      if (!await imagesDir.exists()) {
+        await imagesDir.create();
+      }
+      final targetPath = p.join(
+          imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final XFile? compressedImage =
-      await FlutterImageCompress.compressAndGetFile(
+          await FlutterImageCompress.compressAndGetFile(
         pickedFile.path,
         targetPath,
         quality: 70,
@@ -192,8 +199,7 @@ class SCUnserviceableBloc
         selectedReason: event.reason, clearPartialUploadData: true));
   }
 
-  void _onNotesChanged(
-      NotesChanged event, Emitter<SCUnserviceableState> emit) {
+  void _onNotesChanged(NotesChanged event, Emitter<SCUnserviceableState> emit) {
     emit(state.copyWith(notes: event.notes, clearPartialUploadData: true));
   }
 
@@ -235,18 +241,21 @@ class SCUnserviceableBloc
           }
         }
 
-        final uploadResult = await uploadSCUnserviceableImagesToS3( // Coba reuse dulu
-            report, presignedDetails, progressCubit: event.progressCubit
-        );
+        final uploadResult = await uploadSCUnserviceableImagesToS3(
+            // Coba reuse dulu
+            report,
+            presignedDetails,
+            progressCubit: event.progressCubit);
 
         if (uploadResult.allSuccess) {
           await _clearAllTransactionData(); // Method ini perlu dibuat/disalin juga
           emit(state.copyWith(status: UnserviceableStatus.success));
         } else {
-
-          final detailCacheBox = await Hive.openBox<ServiceCallDetailModel>(kPosDetailCacheBox);
+          final detailCacheBox =
+              await Hive.openBox<ServiceCallDetailModel>(kSCDetailCacheBox);
           final detailData = detailCacheBox.get(transNo);
-          final storeName = detailData?.header.storeName ?? 'Nama Toko Tidak Ditemukan';
+          final storeName =
+              detailData?.header.storeName ?? 'Nama Toko Tidak Ditemukan';
 
           final partialData = {
             'transNo': transNo,
@@ -255,7 +264,8 @@ class SCUnserviceableBloc
             'type': 'unserviceable_sc',
             'storeName': storeName,
           };
-          final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(
+              kPosValidationPartialHiveBox);
           await retryBox.put(transNo, partialData);
 
           emit(state.copyWith(
@@ -296,7 +306,8 @@ class SCUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
-      final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(
+          kPosValidationPartialHiveBox);
       await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));
@@ -339,12 +350,11 @@ class SCUnserviceableBloc
       final queueBox = Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox);
       final task = ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
       await queueBox.put(transNo.trim().toUpperCase(), task);
-
-      print("🧹 Data Hive unserviceable SC untuk $transNo berhasil dibersihkan.");
-
+      await ConfirmationService().processQueue();
     } catch (e) {
       print("🔴 Error saat membersihkan data Hive untuk $transNo: $e");
-      throw Exception("Gagal membersihkan data lokal setelah upload: ${e.toString()}");
+      throw Exception(
+          "Gagal membersihkan data lokal setelah upload: ${e.toString()}");
     }
   }
 }

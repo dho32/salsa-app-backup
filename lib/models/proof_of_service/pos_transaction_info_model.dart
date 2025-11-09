@@ -1,11 +1,13 @@
 import 'package:hive/hive.dart';
 
 import '../common/captured_image_detail.dart';
+import '../common/i_pic_photo_storable.dart';
 
 part 'pos_transaction_info_model.g.dart';
 
 @HiveType(typeId: 7)
-class PosTransactionInfoModel extends HiveObject {
+class PosTransactionInfoModel extends HiveObject implements IPicPhotoStorable {
+  @override
   @HiveField(0)
   String transNo;
 
@@ -36,6 +38,7 @@ class PosTransactionInfoModel extends HiveObject {
   @HiveField(9)
   String? serviceTime;
 
+  @override
   @HiveField(10)
   CapturedImageDetail? picImageDetail;
 
@@ -50,6 +53,24 @@ class PosTransactionInfoModel extends HiveObject {
 
   @HiveField(14)
   CapturedImageDetail? finalTemperatureInImage;
+
+  @HiveField(15)
+  bool? isTempInSkipped;
+
+  @HiveField(16)
+  String? tempInNote;
+
+  @HiveField(17)
+  bool? isTempOutSkipped;
+
+  @HiveField(18)
+  String? tempOutNote;
+
+  @HiveField(19)
+  bool? isFinalTempInSkipped;
+
+  @HiveField(20)
+  String? finalTempInNote;
 
   PosTransactionInfoModel({
     required this.transNo,
@@ -67,5 +88,11 @@ class PosTransactionInfoModel extends HiveObject {
     this.temperatureOutImage,
     this.finalTemperatureIn,      // <-- Tambahkan di constructor
     this.finalTemperatureInImage,
+    this.isTempInSkipped,
+    this.tempInNote,
+    this.isTempOutSkipped,
+    this.tempOutNote,
+    this.isFinalTempInSkipped,
+    this.finalTempInNote,
   });
 }

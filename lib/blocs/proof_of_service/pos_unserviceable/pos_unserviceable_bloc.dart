@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -17,6 +19,7 @@ import '../../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../../screens/common/services/confirmation_service.dart';
 import 'pos_unserviceable_event.dart';
 import 'pos_unserviceable_repository.dart';
 import 'pos_unserviceable_state.dart';
@@ -50,11 +53,11 @@ class PosUnserviceableBloc
 
   Future<void> _onLoadInitialData(
       LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) async {
-    final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+    final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
     final retryData = retryBox.get(transNo);
 
     if (retryData != null) {
-      final dataMap = Map<String, dynamic>.from(retryData as Map);
+      final dataMap = Map<String, dynamic>.from(retryData);
       // Jika ada data retry, langsung emit state partialFailure
       if (dataMap['type'] == 'unserviceable') {
         emit(state.copyWith(
@@ -123,9 +126,13 @@ class PosUnserviceableBloc
         return;
       }
 
-      final tempDir = await getTemporaryDirectory();
+      final appDir = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+      if (!await imagesDir.exists()) {
+        await imagesDir.create();
+      }
       final targetPath =
-          p.join(tempDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+          p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final XFile? compressedImage =
           await FlutterImageCompress.compressAndGetFile(
@@ -251,7 +258,7 @@ class PosUnserviceableBloc
             'type': 'unserviceable',
             'storeName': storeName,
           };
-          final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
           await retryBox.put(transNo, partialData);
 
           emit(state.copyWith(
@@ -292,7 +299,7 @@ class PosUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
-      final retryBox = await Hive.openBox(kPosValidationPartialHiveBox);
+      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
       await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));
@@ -339,6 +346,8 @@ class PosUnserviceableBloc
     final task =
     ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
     await queueBox.put(transNo.trim().toUpperCase(), task);
+
+    await ConfirmationService().processQueue();
 
     print("🧹 Semua data Hive untuk transaksi $transNo telah dibersihkan.");
   }

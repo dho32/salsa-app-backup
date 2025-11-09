@@ -43,6 +43,7 @@ class _OtpDialogState extends State<OtpDialog> {
   final _pinController = TextEditingController();
   final _focusNode = FocusNode();
   bool _isLocationMode = false;
+  bool _isErrorDialogShowing = false;
 
   @override
   void initState() {
@@ -98,10 +99,25 @@ class _OtpDialogState extends State<OtpDialog> {
                   Navigator.pop(context);
                 }
                 if (state is OtpError) {
-                  if (_pinController.length == 6) {
-                    _pinController.clear();
+                  if (!_isErrorDialogShowing) {
+                    _isErrorDialogShowing = true; // Set flag sebelum tampilkan
+                    if (_pinController.length >= 6) { // Cek panjang >= 6 lebih aman
+                      _pinController.clear();
+                      // Minta fokus kembali setelah clear agar user bisa langsung ketik
+                      _focusNode.requestFocus();
+                    }
+                    showFailureDialog(context, "OTP salah, coba lagi.")
+                        .then((_) {
+                      // ✅ RESET FLAG SETELAH DIALOG DITUTUP
+                      if(mounted){ // Pastikan widget masih ada
+                        setState(() {
+                          _isErrorDialogShowing = false;
+                        });
+                      }
+                    });
+                  } else {
+                    print("ℹ️ OtpError received, but dialog already showing. Ignoring."); // Optional log
                   }
-                  showFailureDialog(context, "OTP salah, coba lagi.");
                 }
               },
               builder: (context, state) {

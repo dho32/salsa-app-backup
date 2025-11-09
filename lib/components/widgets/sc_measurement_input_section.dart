@@ -13,15 +13,16 @@ import '../../../../../models/schedule/proof_of_service/proof_of_service_detail_
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
-  final List<MeasurementEntry>
-      measurements; // Data pengukuran (Before ATAU After)
-  final bool isBefore; // Flag penanda
+  final List<MeasurementEntry> measurements;
+  final bool isBefore;
+  final Map<String, MeasurementLimits> limitsMap;
 
   const ScMeasurementInputSection({
     super.key,
     required this.transNo,
     required this.measurements,
     required this.isBefore,
+    required this.limitsMap,
   });
 
   @override
@@ -34,6 +35,8 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
   final TextEditingController _indoorNoteSearchController =
       TextEditingController();
   final TextEditingController _outdoorNoteSearchController =
+      TextEditingController();
+  final TextEditingController _outdoorPSINoteSearchController =
       TextEditingController();
 
   @override
@@ -71,7 +74,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           ? ''
           : (mEntry.value == mEntry.value.truncateToDouble()
               ? mEntry.value.truncate().toString()
-              : mEntry.value.toStringAsFixed(1)); // Sesuaikan format jika perlu
+              : mEntry.value.toStringAsFixed(2)); // Sesuaikan format jika perlu
 
       if (_controllers.containsKey(mEntry.measurementId)) {
         // Update jika teks berbeda & tidak di-skip
@@ -91,6 +94,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     _disposeControllers();
     _indoorNoteSearchController.dispose();
     _outdoorNoteSearchController.dispose();
+    _outdoorPSINoteSearchController.dispose();
     super.dispose();
   }
 
@@ -127,25 +131,37 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
       return const SizedBox.shrink(); // Jangan render jika state belum siap
     }
 
+    const indoorIds = {'temperature'};
+    const outdoorElecIds = {'volt', 'ampere'}; // Volt & Ampere
+    const outdoorPsiIds = {'psi'};
+
     // Pisahkan pengukuran indoor & outdoor
     final indoorMeasurements = widget.measurements
-        .where((m) => m.measurementId.toLowerCase().contains('temperature'))
+        .where((m) => indoorIds.contains(m.measurementId))
         .toList();
-    final outdoorMeasurements = widget.measurements
-        .where((m) => !m.measurementId.toLowerCase().contains('temperature'))
+    final outdoorElecMeasurements = widget.measurements
+        .where((m) => outdoorElecIds.contains(m.measurementId))
+        .toList();
+    final outdoorPsiMeasurements = widget.measurements
+        .where((m) => outdoorPsiIds.contains(m.measurementId))
         .toList();
 
-    final bool isIndoorSkipped = indoorMeasurements.any((m) => m.isSkipped ?? false);
-    final bool isOutdoorSkipped = outdoorMeasurements.any((m) => m.isSkipped ?? false);
+    final bool isIndoorSkipped =
+        indoorMeasurements.any((m) => m.isSkipped ?? false);
+    final bool isOutdoorElecSkipped =
+        outdoorElecMeasurements.any((m) => m.isSkipped ?? false);
+    final bool isOutdoorPsiSkipped =
+        outdoorPsiMeasurements.any((m) => m.isSkipped ?? false);
 
     // Ambil daftar Limits dari konstanta
-    final List<MeasurementLimits> availableLimits =
-        kMeasurementLimits.values.toList();
+    // final List<MeasurementLimits> availableLimits =
+    //     kMeasurementLimits.values.toList();
 
     // Fungsi helper untuk merender satu MeasurementInputWidget
     Widget buildMeasurementWidget(MeasurementEntry mEntry) {
-      final limits = availableLimits
-          .firstWhereOrNull((ml) => ml.id == mEntry.measurementId);
+      // final limits = availableLimits
+      //     .firstWhereOrNull((ml) => ml.id == mEntry.measurementId);
+      final limits = widget.limitsMap[mEntry.measurementId];
       if (limits == null) {
         return Text("Error: Config for ${mEntry.measurementId} missing");
       }
@@ -164,7 +180,6 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           limits: limits,
           initialImage: mEntry.capturedImage,
           onEditingComplete: (newValue) {
-            // Gunakan onEditingComplete
             final updatedValue = double.tryParse(newValue) ?? 0.0;
             final event = widget.isBefore
                 ? UpdateMeasurementBefore(mEntry.copyWith(value: updatedValue))
@@ -181,56 +196,92 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           },
           isSkipEnabled: true,
           isSkipped: mEntry.isSkipped ?? false,
+
+          // --- ✅ PERBAIKAN UTAMA DI SINI ✅ ---
           onSkipChanged: (isSkipped) {
             final bloc = context.read<ValidationDropdownBloc>();
-            // Dapatkan state saat ini untuk memeriksa measurement lain
-            final currentState = bloc.state;
-            if (currentState is! ValidationDropdownLoaded) return; // Guard clause
-
             final measurementId = mEntry.measurementId;
-            // Tentukan apakah measurement ini Indoor atau Outdoor
-            final bool isIndoor = measurementId.toLowerCase().contains('temperature');
 
-            if (isSkipped) {
-              // --- Logika saat MENJADI SKIPPED (Kode lama Anda sudah benar) ---
-              controller.clear();
-              final event = widget.isBefore
-                  ? UpdateMeasurementBefore(mEntry.copyWith(value: 0.0, capturedImage: null, isSkipped: true))
-                  : UpdateMeasurementAfter(mEntry.copyWith(value: 0.0, capturedImage: null, isSkipped: true));
-              bloc.add(event);
+            // 1. Tentukan NoteType yang benar
+            final NoteType noteType;
+            if (measurementId == 'temperature') {
+              noteType = NoteType.indoor;
+            } else if (measurementId == 'volt' || measurementId == 'ampere') {
+              noteType = NoteType.outdoor;
             } else {
-              // --- Logika saat MENJADI UNSKIPPED (Skip dibatalkan) ---
-              // 1. Update flag isSkipped di BLoC (seperti kode lama Anda)
-              final event = widget.isBefore
-                  ? UpdateMeasurementBefore(mEntry.copyWith(isSkipped: false))
-                  : UpdateMeasurementAfter(mEntry.copyWith(isSkipped: false));
-              bloc.add(event);
+              noteType = NoteType.outdoorPsi;
+            }
 
-              // 2. Periksa apakah ada measurement LAIN di grup yang SAMA
-              //    (Indoor/Outdoor dan Sebelum/Sesudah) yang MASIH di-skip.
-              final List<MeasurementEntry> relevantMeasurements = widget.isBefore
-                  ? currentState.capturedMeasurementsBefore
-                  : currentState.capturedMeasurementsAfter;
+            // 2. Kirim event update measurement (tidak berubah)
+            final updateEvent = widget.isBefore
+                ? UpdateMeasurementBefore(mEntry.copyWith(
+                    isSkipped: isSkipped,
+                    value: 0.0,
+                    capturedImage: null,
+                  ))
+                : UpdateMeasurementAfter(mEntry.copyWith(
+                    isSkipped: isSkipped,
+                    value: 0.0,
+                    capturedImage: null,
+                  ));
+            bloc.add(updateEvent);
 
-              final bool anyOtherSkippedInGroup = relevantMeasurements
-                  .where((m) => m.measurementId != measurementId) // Kecualikan diri sendiri
-                  .any((m) {
-                bool otherIsIndoor = m.measurementId.toLowerCase().contains('temperature');
-                // Cek: Apakah grupnya sama (Indoor==Indoor atau Outdoor==Outdoor)?
-                // DAN Apakah item lain itu di-skip?
-                return (isIndoor == otherIsIndoor) && (m.isSkipped ?? false);
+            // 3. Update controller LOKAL (tidak berubah)
+            if (isSkipped) {
+              controller.clear();
+            }
+
+            // 4. Logika reset note (unskip)
+            if (!isSkipped) {
+              Future.microtask(() {
+                if (!mounted) return;
+                final currentBlocState =
+                    context.read<ValidationDropdownBloc>().state;
+                if (currentBlocState is ValidationDropdownLoaded) {
+                  final List<MeasurementEntry> relevantMeasurements =
+                      widget.isBefore
+                          ? currentBlocState.capturedMeasurementsBefore
+                          : currentBlocState.capturedMeasurementsAfter;
+
+                  // Tentukan grup ID yang relevan
+                  const indoorIds = {'temperature'};
+                  const outdoorElecIds = {'volt', 'ampere'};
+                  const outdoorPsiIds = {'psi'};
+                  Set<String> currentGroupIds;
+                  if (noteType == NoteType.indoor) {
+                    currentGroupIds = indoorIds;
+                  } else if (noteType == NoteType.outdoor) {
+                    currentGroupIds = outdoorElecIds;
+                  } else {
+                    currentGroupIds = outdoorPsiIds;
+                  }
+
+                  // Cek apakah ada measurement LAIN di grup yg SAMA yg MASIH di-skip
+                  final bool anyOtherSkippedInGroup = relevantMeasurements
+                      .where((m) => m.measurementId != measurementId)
+                      .any((m) =>
+                          currentGroupIds.contains(m.measurementId) &&
+                          (m.isSkipped ?? false));
+
+                  // Jika TIDAK ADA yg lain di-skip, trigger reset note
+                  if (!anyOtherSkippedInGroup) {
+                    bloc.add(NoteChanged(null,
+                        noteType: noteType, // <-- Kirim noteType yang benar
+                        isBefore: widget.isBefore));
+                  }
+                }
               });
-
-              // 3. JIKA TIDAK ADA measurement lain yang di-skip di grup ini,
-              //    maka reset note untuk grup ini.
-              if (!anyOtherSkippedInGroup) {
-                bloc.add(NoteChanged(null, isIndoor: isIndoor, isBefore: widget.isBefore)); // Kirim null untuk reset
-              }
+            } else {
+              // 5. Reset note (skip)
+              bloc.add(NoteChanged(null,
+                  noteType: noteType, // <-- Kirim noteType yang benar
+                  isBefore: widget.isBefore));
             }
           },
+          // --- AKHIR PERBAIKAN ---
         ),
       );
-    } // Akhir buildMeasurementWidget
+    }
 
     // --- Struktur UI Section ---
     return Column(
@@ -251,7 +302,9 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           if (isIndoorSkipped)
             _buildNoteDropdown(
               context: context,
-              options: blocState.noteIndoorOptions,
+              options: widget.isBefore
+                  ? blocState.noteIndoorBeforeOptions
+                  : blocState.noteIndoorAfterOptions,
               selectedValue: widget.isBefore
                   ? blocState.selectedIndoorNoteBefore
                   : blocState.selectedIndoorNoteAfter,
@@ -260,12 +313,13 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
               onChanged: (value) {
                 context.read<ValidationDropdownBloc>().add(
                       NoteChanged(value,
-                          isIndoor: true, isBefore: widget.isBefore),
+                          noteType: NoteType.indoor, isBefore: widget.isBefore),
                     );
               },
             ),
         ],
-        if (outdoorMeasurements.isNotEmpty) ...[
+        if (outdoorElecMeasurements.isNotEmpty ||
+            outdoorPsiMeasurements.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
@@ -280,8 +334,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child:
-            BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
+            child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
               builder: (context, state) {
                 if (state is ValidationDropdownLoaded) {
                   final bool isEnabled = state.currentStep == 0;
@@ -295,18 +348,18 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                     hint: const Text('Pilih Serial No. Outdoor'),
                     items: state.outdoorSerialNumbers
                         .map((serial) => DropdownMenuItem(
-                      value: serial,
-                      child: Text(serial),
-                    ))
+                              value: serial,
+                              child: Text(serial),
+                            ))
                         .toList(),
                     onChanged: isEnabled
                         ? (value) {
-                      if (value != null) {
-                        context
-                            .read<ValidationDropdownBloc>()
-                            .add(SelectOutdoorSerial(value));
-                      }
-                    }
+                            if (value != null) {
+                              context
+                                  .read<ValidationDropdownBloc>()
+                                  .add(SelectOutdoorSerial(value));
+                            }
+                          }
                         : null,
                     validator: (value) => value == null
                         ? 'Serial No. Outdoor harus dipilih'
@@ -317,21 +370,52 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
               },
             ),
           ),
+        ],
+        if (outdoorElecMeasurements.isNotEmpty) ...[
           const SizedBox(height: 8),
-          ...outdoorMeasurements.map(buildMeasurementWidget),
-          if (isOutdoorSkipped)
+          ...outdoorElecMeasurements.map(buildMeasurementWidget),
+          if (isOutdoorElecSkipped)
             _buildNoteDropdown(
               context: context,
-              options: blocState.noteOutdoorOptions,
+              options: widget.isBefore
+                  ? blocState.noteOutdoorBeforeOptions
+                  : blocState.noteOutdoorAfterOptions,
               selectedValue: widget.isBefore
                   ? blocState.selectedOutdoorNoteBefore
                   : blocState.selectedOutdoorNoteAfter,
               searchController: _outdoorNoteSearchController,
-              label: 'Alasan Skip Pengukuran Outdoor',
+              label: 'Alasan Skip (Volt/Ampere)',
+              // Label baru
               onChanged: (value) {
                 context.read<ValidationDropdownBloc>().add(
                       NoteChanged(value,
-                          isIndoor: false, isBefore: widget.isBefore),
+                          noteType: NoteType.outdoor,
+                          isBefore: widget.isBefore),
+                    );
+              },
+            ),
+        ],
+        if (outdoorPsiMeasurements.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ...outdoorPsiMeasurements.map(buildMeasurementWidget),
+          if (isOutdoorPsiSkipped)
+            _buildNoteDropdown(
+              context: context,
+              options: widget.isBefore
+                  ? blocState.noteOutdoorPsiBeforeOptions
+                  : blocState.noteOutdoorPsiAfterOptions,
+              selectedValue: widget.isBefore
+                  ? blocState.selectedOutdoorPSINoteBefore
+                  : blocState.selectedOutdoorPSINoteAfter,
+              searchController: _outdoorPSINoteSearchController,
+              // Controller baru
+              label: 'Alasan Skip (Tekanan)',
+              // Label baru
+              onChanged: (value) {
+                context.read<ValidationDropdownBloc>().add(
+                      NoteChanged(value,
+                          noteType: NoteType.outdoorPsi,
+                          isBefore: widget.isBefore),
                     );
               },
             ),
@@ -349,10 +433,13 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     required ValueChanged<String?> onChanged,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+    final dropdownKey =
+        ValueKey('note_dropdown_${label}_${selectedValue ?? 'null'}');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16.0),
       child: DropdownButtonFormField2<String>(
+        key: dropdownKey,
         value: selectedValue,
         isExpanded: true,
         decoration: InputDecoration(

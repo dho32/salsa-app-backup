@@ -4,8 +4,28 @@ import '../common/captured_image_detail.dart';
 import '../common/measurement_entry.dart';
 import 'service_call_validation_entry_model.dart';
 
-extension ServiceCallValidationEntryModelJson on ServiceCallValidationEntryModel {
+extension ServiceCallValidationEntryModelJson
+    on ServiceCallValidationEntryModel {
   Map<String, dynamic> toJson() {
+    // Cek status skip untuk "SEBELUM"
+    final bool isIndoorBeforeSkipped = measurementsBefore.any((m) =>
+        m.measurementId.toLowerCase().contains('temperature') &&
+        (m.isSkipped ?? false));
+
+    final bool isOutdoorBeforeSkipped = measurementsBefore.any((m) =>
+        !m.measurementId.toLowerCase().contains('temperature') &&
+        (m.isSkipped ?? false));
+
+    // Cek status skip untuk "SESUDAH"
+    final bool isIndoorAfterSkipped = measurementsAfter.any((m) =>
+        m.measurementId.toLowerCase().contains('temperature') &&
+        (m.isSkipped ?? false));
+
+    final bool isOutdoorAfterSkipped = measurementsAfter.any((m) =>
+        !m.measurementId.toLowerCase().contains('temperature') &&
+        (m.isSkipped ?? false));
+
+    // --- AKHIR LOGIKA BARU ---
     return {
       'serial_no': serialNo,
       'outdoor_serial_no': outdoorSerialNo,
@@ -16,10 +36,17 @@ extension ServiceCallValidationEntryModelJson on ServiceCallValidationEntryModel
       'images_after': imagePathsAfter.map((img) => img.toJson()).toList(),
       'measurements_after': measurementsAfter.map((m) => m.toJson()).toList(),
       'trans_no': transNo,
-      'note_indoor_before': selectedIndoorNoteBefore,
-      'note_indoor_after': selectedIndoorNoteAfter,
-      'note_outdoor_before': selectedOutdoorNoteBefore,
-      'note_outdoor_after': selectedOutdoorNoteAfter,
+      'note_indoor_before':
+          isIndoorBeforeSkipped ? selectedIndoorNoteBefore : "",
+      'note_indoor_after': isIndoorAfterSkipped ? selectedIndoorNoteAfter : "",
+      'note_outdoor_before':
+          isOutdoorBeforeSkipped ? selectedOutdoorNoteBefore : "",
+      'note_outdoor_after':
+          isOutdoorAfterSkipped ? selectedOutdoorNoteAfter : "",
+      'note_outdoor_psi_before':
+          isOutdoorBeforeSkipped ? selectedOutdoorPSINoteBefore : "",
+      'note_outdoor_psi_after':
+          isOutdoorAfterSkipped ? selectedOutdoorPSINoteAfter : "",
     };
   }
 }
@@ -37,8 +64,10 @@ extension ValidationProblemJson on ValidationProblem {
 extension CapturedImageDetailJson on CapturedImageDetail {
   Map<String, dynamic> toJson() {
     return {
-      'image_file_name': imagePath.split('/').last, // Hanya kirim nama file
-      'timestamp': DateFormat("yyyy-MM-dd HH:mm:ss").format(timestamp), // Format timestamp
+      'image_file_name': imagePath.split('/').last,
+      // Hanya kirim nama file
+      'timestamp': DateFormat("yyyy-MM-dd HH:mm:ss").format(timestamp),
+      // Format timestamp
       'latitude': latitude,
       'longitude': longitude,
       'device': deviceModel,
@@ -51,9 +80,9 @@ extension MeasurementEntryJson on MeasurementEntry {
   Map<String, dynamic> toJson() {
     return {
       'measurement_id': measurementId,
-      'value': isSkipped ?? false ?0:value,
+      'value': isSkipped ?? false ? 0 : value,
       'unit': unit,
-      'image': isSkipped ?? false?null:capturedImage?.toJson(),
+      'image': isSkipped ?? false ? null : capturedImage?.toJson(),
       'is_skipped': isSkipped,
     };
   }

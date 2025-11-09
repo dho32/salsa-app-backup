@@ -134,7 +134,7 @@ Future<String> getPublicIpAddress() async {
 }
 
 String getHiveKeyForTransaction(String transNo) {
-  return transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+  return transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 }
 
 class LocationHelper {

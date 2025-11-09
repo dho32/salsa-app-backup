@@ -5,6 +5,7 @@ import '../../../blocs/service_call/validation_dropdown/validation_dropdown_even
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import '../../../components/constants.dart';
 import '../../../models/common/measurement_entry.dart';
+import '../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
@@ -47,9 +48,32 @@ class ServiceCallValidationScreen extends StatefulWidget {
 
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
-  bool _areAllMeasurementsFilled(List<MeasurementEntry> measurements) {
-    return measurements
-        .every((m) => m.isSkipped ?? false || m.capturedImage != null);
+  bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
+    // 1. Kita mulai dengan asumsi semuanya LOLOS
+    bool allItemsPassed = true;
+
+    for (int i = 0; i < measurements.length; i++) {
+      var m = measurements[i];
+
+      // Evaluasi logika
+      bool isSkippedCheck = m.isSkipped ?? false;
+      bool isFilledCheck = (m.capturedImage != null && m.value != 0);
+      bool didPass = isSkippedCheck || isFilledCheck;
+
+      if (didPass) {
+        print('>>> Status: LOLOS');
+      } else {
+        print('>>> !!! STATUS: GAGAL !!! <<<');
+        print(
+            'Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
+
+        // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
+        allItemsPassed = false;
+      }
+    }
+
+    // 3. Kembalikan hasil akhir
+    return allItemsPassed;
   }
 
   @override
@@ -155,29 +179,31 @@ class _ServiceCallValidationScreenState
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 onPressed: () {
                   // --- Validasi "Sesudah" ---
-                  final measurementError =
-                      _validateMeasurements(state.capturedMeasurementsAfter);
+                  final measurementError = _validateMeasurements(
+                      state.capturedMeasurementsAfter, kMeasurementLimits);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
+                    return;
+                  }
+
+                  if (state.capturedPhotosAfter.isEmpty ||
+                      !checkMeasurementDetails(
+                          state.capturedMeasurementsAfter)) {
+                    _showErrorSnackbar(
+                        'Lengkapi semua foto & pengukuran (Sesudah).');
+                    return;
+                  }
+
+                  // Validasi Note "Sesudah"
+                  final noteError = _validateNotes(state, isBefore: false);
+                  if (noteError != null) {
+                    _showErrorSnackbar(noteError);
                     return;
                   }
 
                   if (state.selectedUnitType == null ||
                       state.selectedProblemCards.isEmpty) {
                     _showErrorSnackbar('Lengkapi data Permasalahan & Solusi.');
-                    return;
-                  }
-                  if (state.capturedPhotosAfter.isEmpty ||
-                      !_areAllMeasurementsFilled(
-                          state.capturedMeasurementsAfter)) {
-                    _showErrorSnackbar(
-                        'Lengkapi semua foto & pengukuran (Sesudah).');
-                    return;
-                  }
-                  // Validasi Note "Sesudah"
-                  final noteError = _validateNotes(state, isBefore: false);
-                  if (noteError != null) {
-                    _showErrorSnackbar(noteError);
                     return;
                   }
 
@@ -212,8 +238,9 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
-                  final measurementError =
-                      _validateMeasurements(state.capturedMeasurementsBefore);
+                  final measurementError = _validateMeasurements(
+                      state.capturedMeasurementsBefore,
+                      kSCMeasurementLimitsBefore);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -253,8 +280,9 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
-                  final measurementError =
-                      _validateMeasurements(state.capturedMeasurementsBefore);
+                  final measurementError = _validateMeasurements(
+                      state.capturedMeasurementsBefore,
+                      kSCMeasurementLimitsBefore);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -282,11 +310,13 @@ class _ServiceCallValidationScreenState
         ? state.capturedMeasurementsBefore
         : state.capturedMeasurementsAfter;
 
+    const indoorIds = {'temperature'};
+    const outdoorElecIds = {'volt', 'ampere'};
+    const outdoorPsiIds = {'psi'};
+
     // Cek Indoor
-    final bool isAnyIndoorSkipped = measurements.any((m) {
-      bool isSkip = m.isSkipped ?? false;
-      return m.measurementId.toLowerCase().contains('temperature') && isSkip;
-    });
+    final bool isAnyIndoorSkipped = measurements.any(
+        (m) => indoorIds.contains(m.measurementId) && (m.isSkipped ?? false));
     final String? indoorNote = isBefore
         ? state.selectedIndoorNoteBefore
         : state.selectedIndoorNoteAfter;
@@ -294,41 +324,53 @@ class _ServiceCallValidationScreenState
       return 'Catatan indoor wajib diisi jika ada pengukuran yang di-skip.';
     }
 
-    // Cek Outdoor
-    final bool isAnyOutdoorSkipped = measurements.any((m) {
-      bool isSkip = m.isSkipped ?? false;
-      return !m.measurementId.toLowerCase().contains('temperature') && isSkip;
-    });
+    // Cek Outdoor Elektrikal
+    final bool isAnyOutdoorSkipped = measurements.any((m) =>
+        outdoorElecIds.contains(m.measurementId) && (m.isSkipped ?? false));
     final String? outdoorNote = isBefore
         ? state.selectedOutdoorNoteBefore
         : state.selectedOutdoorNoteAfter;
     if (isAnyOutdoorSkipped && (outdoorNote == null || outdoorNote.isEmpty)) {
-      return 'Catatan outdoor wajib diisi jika ada pengukuran yang di-skip.';
+      return 'Catatan outdoor (Volt/Ampere) wajib diisi.';
+    }
+
+    // Cek Outdoor PSI
+    final bool isAnyOutdoorPsiSkipped = measurements.any((m) =>
+        outdoorPsiIds.contains(m.measurementId) && (m.isSkipped ?? false));
+    final String? outdoorPsiNote = isBefore
+        ? state.selectedOutdoorPSINoteBefore
+        : state.selectedOutdoorPSINoteAfter;
+    if (isAnyOutdoorPsiSkipped &&
+        (outdoorPsiNote == null || outdoorPsiNote.isEmpty)) {
+      return 'Catatan outdoor (PSI) wajib diisi.';
     }
 
     return null; // Semua valid
   }
 
-  String? _validateMeasurements(List<MeasurementEntry> measurements) {
+  String? _validateMeasurements(
+    List<MeasurementEntry> measurements,
+    Map<String, MeasurementLimits> limitsMap,
+  ) {
     for (final mEntry in measurements) {
       // 1. Jika di-skip, lewati ke pengukuran berikutnya (dianggap valid)
       if (mEntry.isSkipped ?? false) continue;
 
       // 2. Jika tidak di-skip, periksa kelengkapan
       if (mEntry.capturedImage == null) {
-        final label = kMeasurementLimits[mEntry.measurementId]?.label ??
-            mEntry.measurementId;
+        final label =
+            limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
         return 'Foto untuk "$label" wajib diisi.';
       }
       // Kita anggap 0.0 adalah default (kosong)
       if (mEntry.value == 0.0) {
-        final label = kMeasurementLimits[mEntry.measurementId]?.label ??
-            mEntry.measurementId;
+        final label =
+            limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
         return 'Nilai untuk "$label" wajib diisi.';
       }
 
       // 3. Jika lengkap, periksa rentang nilainya
-      final limits = kMeasurementLimits[mEntry.measurementId];
+      final limits = limitsMap[mEntry.measurementId];
       if (limits == null) continue;
 
       if (mEntry.value < limits.min || mEntry.value > limits.max) {
