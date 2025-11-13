@@ -15,6 +15,7 @@ class PosFormState extends Equatable {
   final String serviceTime;
   final String picName;
   final String picPhone;
+  final String technician1;
   final String technician2;
   final String technician3;
   final bool showTechnician3;
@@ -53,6 +54,7 @@ class PosFormState extends Equatable {
     this.serviceTime = '',
     this.picName = '',
     this.picPhone = '',
+    this.technician1 = '',
     this.technician2 = '',
     this.technician3 = '',
     this.showTechnician3 = false,
@@ -84,6 +86,7 @@ class PosFormState extends Equatable {
     String? serviceTime,
     String? picName,
     String? picPhone,
+    String? technician1,
     String? technician2,
     String? technician3,
     bool? showTechnician3,
@@ -113,6 +116,7 @@ class PosFormState extends Equatable {
       serviceTime: serviceTime ?? this.serviceTime,
       picName: picName ?? this.picName,
       picPhone: picPhone ?? this.picPhone,
+      technician1: technician1 ?? this.technician1,
       technician2: technician2 ?? this.technician2,
       technician3: technician3 ?? this.technician3,
       showTechnician3: showTechnician3 ?? this.showTechnician3,
@@ -145,6 +149,7 @@ class PosFormState extends Equatable {
     serviceTime,
     picName,
     picPhone,
+    technician1,
     technician2,
     technician3,
     showTechnician3,

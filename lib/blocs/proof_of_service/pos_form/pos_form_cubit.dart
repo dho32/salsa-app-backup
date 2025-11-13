@@ -11,27 +11,43 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 
-import '../../../models/proof_of_service/pos_validation_entry_model.dart'; // Tambahkan package ini: flutter pub add easy_debounce
+import '../../../models/proof_of_service/pos_validation_entry_model.dart';
+import '../../auth/auth_storage.dart'; // Tambahkan package ini: flutter pub add easy_debounce
 
 class PosFormCubit extends Cubit<PosFormState> {
   final String transNo;
   final Box<PosTransactionInfoModel> _transactionInfoBox;
+  late final String _userType;
+  late final String _userName;
+
+  String _getHiveKey(String transNo) =>
+      transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   PosFormCubit({required this.transNo, required bool initialAllUnitsValidated})
       : _transactionInfoBox =
             Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox),
         super(const PosFormState()) {
+    _initAsync();
+  }
+
+  Future<void> _initAsync() async {
+    final userData = await AuthStorage.getUser();
+    _userType = userData['maintenance_type'] ?? 'WH'; // (Default 'WH')
+    _userName = userData['name'] ?? '';
+
     _loadInitialData();
   }
 
   void _loadInitialData() {
-    final info = _transactionInfoBox.get(transNo);
+    final String hiveKey = _getHiveKey(transNo);
+    final info = _transactionInfoBox.get(hiveKey);
     if (info != null) {
       emit(state.copyWith(
         picName: info.picName ?? '',
         picNik: info.picNik ?? '',
         picPosition: info.picPosition ?? '',
         picPhone: info.picPhone ?? '',
+        technician1: info.technician1 ?? '',
         technician2: info.technician2 ?? '',
         technician3: info.technician3 ?? '',
         showTechnician3: (info.technician3 ?? '').isNotEmpty,
@@ -50,6 +66,18 @@ class PosFormCubit extends Cubit<PosFormState> {
         isFinalTempInSkipped: info.isFinalTempInSkipped ?? false,
         finalTempInNote: info.finalTempInNote ?? '',
       ));
+    }else {
+      String initialTechnician1 = '';
+      if (_userType == 'WH') {
+        initialTechnician1 = _userName;
+      }
+
+      final newDraft = PosTransactionInfoModel(
+        transNo: transNo,
+        technician1: initialTechnician1,
+      );
+      _transactionInfoBox.put(hiveKey, newDraft);
+      emit(state.copyWith(technician1: initialTechnician1));
     }
     _validateForm();
   }
@@ -152,6 +180,9 @@ class PosFormCubit extends Cubit<PosFormState> {
 
   void tempOutChanged(String value) => emit(state.copyWith(tempOut: value));
 
+  void technician1Changed(String value) =>
+  emit(state.copyWith(technician1: value));
+
   void technician2Changed(String value) =>
       emit(state.copyWith(technician2: value));
 
@@ -193,6 +224,8 @@ class PosFormCubit extends Cubit<PosFormState> {
         state.picPosition.isNotEmpty &&
         state.picPhone.isNotEmpty;
 
+    final technicianValid = state.technician1.isNotEmpty;
+
     final bool tempInValid =
         (state.tempIn.isNotEmpty && state.temperatureInImage != null) ||
             (state.isTempInSkipped && state.tempInNote.isNotEmpty);
@@ -209,13 +242,14 @@ class PosFormCubit extends Cubit<PosFormState> {
     // final isReady = picStoreValid && serviceInfoValid && state.allUnitsValidated;
 
     final isReady = picStoreValid &&
+        technicianValid &&
         serviceInfoValid &&
         state.allUnitsValidated &&
         (!state.allUnitsValidated || finalTempValid);
 
     emit(state.copyWith(
       isPicStoreValid: picStoreValid,
-      isServiceInfoValid: serviceInfoValid,
+      isServiceInfoValid: serviceInfoValid && tempOutValid,
       isFormReadyToSubmit: isReady,
     ));
   }
@@ -226,6 +260,7 @@ class PosFormCubit extends Cubit<PosFormState> {
       ..picNik = state.picNik
       ..picPosition = state.picPosition
       ..picPhone = state.picPhone
+      ..technician1 = state.technician1
       ..technician2 = state.technician2
       ..technician3 = state.technician3
       ..temperatureIn = state.tempIn

@@ -37,12 +37,10 @@ import '../../proof_of_service_validation/pos_validation_screen.dart';
 
 class ProofOfServiceDetailBodyMobile extends StatefulWidget {
   final String transNo;
-  final String technician1Name;
 
   const ProofOfServiceDetailBodyMobile({
     super.key,
     required this.transNo,
-    required this.technician1Name,
   });
 
   @override
@@ -52,6 +50,9 @@ class ProofOfServiceDetailBodyMobile extends StatefulWidget {
 
 class _ProofOfServiceDetailBodyMobileState
     extends State<ProofOfServiceDetailBodyMobile> {
+  late final TextEditingController _technician1Controller;
+  late final TextEditingController _technician2Controller;
+  late final TextEditingController _technician3Controller;
   late final TextEditingController _tempInController;
   late final TextEditingController _tempOutController;
   late final TextEditingController _finalTempController;
@@ -93,6 +94,12 @@ class _ProofOfServiceDetailBodyMobileState
         TextEditingController(text: initialFormState.tempOutNote);
     _finalTempInNoteController =
         TextEditingController(text: initialFormState.finalTempInNote);
+    _technician1Controller =
+        TextEditingController(text: initialFormState.technician1);
+    _technician2Controller =
+        TextEditingController(text: initialFormState.technician2);
+    _technician3Controller =
+        TextEditingController(text: initialFormState.technician3);
   }
 
   @override
@@ -105,6 +112,9 @@ class _ProofOfServiceDetailBodyMobileState
     _tempOutNoteController.dispose();
     _finalTempInNoteController.dispose();
     _noteSearchController.dispose();
+    _technician1Controller.dispose();
+    _technician2Controller.dispose();
+    _technician3Controller.dispose();
     super.dispose();
   }
 
@@ -138,25 +148,25 @@ class _ProofOfServiceDetailBodyMobileState
           listenWhen: (previous, current) =>
               previous.tempIn != current.tempIn ||
               previous.tempOut != current.tempOut ||
-              previous.finalTempIn != current.finalTempIn,
+              previous.finalTempIn != current.finalTempIn ||
+              previous.tempInNote != current.tempInNote ||
+              previous.tempOutNote != current.tempOutNote ||
+              previous.finalTempInNote != current.finalTempInNote ||
+              previous.technician1 != current.technician1 ||
+              previous.technician2 != current.technician2 ||
+              previous.technician3 != current.technician3,
           listener: (context, state) {
+            // (Sinkronisasi Suhu & Note SAMA)
             if (_tempInController.text != state.tempIn) {
               _tempInController.text = state.tempIn;
             }
+            // ... (tempOut, finalTempIn, tempInNote, tempOutNote, finalTempInNote)
             if (_tempOutController.text != state.tempOut) {
               _tempOutController.text = state.tempOut;
             }
             if (_finalTempController.text != state.finalTempIn) {
               _finalTempController.text = state.finalTempIn;
             }
-          },
-        ),
-        BlocListener<PosFormCubit, PosFormState>(
-          listenWhen: (p, c) =>
-              p.tempInNote != c.tempInNote ||
-              p.tempOutNote != c.tempOutNote ||
-              p.finalTempInNote != c.finalTempInNote,
-          listener: (context, state) {
             if (_tempInNoteController.text != state.tempInNote) {
               _tempInNoteController.text = state.tempInNote;
             }
@@ -165,6 +175,15 @@ class _ProofOfServiceDetailBodyMobileState
             }
             if (_finalTempInNoteController.text != state.finalTempInNote) {
               _finalTempInNoteController.text = state.finalTempInNote;
+            }
+            if (_technician1Controller.text != state.technician1) {
+              _technician1Controller.text = state.technician1;
+            }
+            if (_technician2Controller.text != state.technician2) {
+              _technician2Controller.text = state.technician2;
+            }
+            if (_technician3Controller.text != state.technician3) {
+              _technician3Controller.text = state.technician3;
             }
           },
         ),
@@ -809,14 +828,18 @@ class _ProofOfServiceDetailBodyMobileState
       child: Column(
         children: [
           _buildCustomTextField(
-            initialValue: widget.technician1Name,
+            controller: _technician1Controller,
             hintText: 'Teknisi 1',
             icon: Icons.engineering,
-            readOnly: true,
+            readOnly: false,
+            onChanged: (value) {
+              formCubit.technician1Changed(value);
+              formCubit.onFieldChanged();
+            },
           ),
           const SizedBox(height: 12),
           _buildCustomTextField(
-            initialValue: formState.technician2,
+            controller: _technician2Controller,
             hintText: 'Teknisi 2',
             icon: Icons.engineering,
             onChanged: (value) {
@@ -827,7 +850,7 @@ class _ProofOfServiceDetailBodyMobileState
           const SizedBox(height: 8),
           if (formState.showTechnician3)
             _buildCustomTextField(
-              initialValue: formState.technician3,
+              controller: _technician3Controller,
               hintText: 'Teknisi 3',
               icon: Icons.engineering,
               onChanged: (value) {
@@ -1030,6 +1053,15 @@ class _ProofOfServiceDetailBodyMobileState
                 formCubit
                     .finalTempInNoteChanged(_finalTempInNoteController.text);
               }
+              if (formCubit.state.technician1 != _technician1Controller.text) {
+                formCubit.technician1Changed(_technician1Controller.text);
+              }
+              if (formCubit.state.technician2 != _technician2Controller.text) {
+                formCubit.technician2Changed(_technician2Controller.text);
+              }
+              if (formCubit.state.technician3 != _technician3Controller.text) {
+                formCubit.technician3Changed(_technician3Controller.text);
+              }
               formCubit.onFieldChanged();
 
               // 2. Baca state form terakhir untuk validasi dasar
@@ -1080,6 +1112,8 @@ class _ProofOfServiceDetailBodyMobileState
                 if (!latestFormState.isPicStoreValid) {
                   _showValidationSnackbar(context,
                       'Harap lengkapi informasi PIC Toko terlebih dahulu.');
+                } else if (latestFormState.technician1.isEmpty) {
+                  _showValidationSnackbar(context, 'Harap isi nama Teknisi 1.');
                 } else if (!latestFormState.isServiceInfoValid) {
                   _showValidationSnackbar(context,
                       'Harap lengkapi informasi servis dan foto pengukuran suhu.');
@@ -1240,6 +1274,7 @@ class _ProofOfServiceDetailBodyMobileState
   }
 
   Widget _buildCustomTextField({
+    TextEditingController? controller,
     String initialValue = '',
     required String hintText,
     required IconData icon,
@@ -1248,8 +1283,13 @@ class _ProofOfServiceDetailBodyMobileState
     Function(String)? onChanged,
     Widget? suffixIcon,
   }) {
+    final bool isUsingExternalController = controller != null;
+    final TextEditingController localController = isUsingExternalController
+        ? controller
+        : TextEditingController(text: initialValue);
+
     return TextFormField(
-      initialValue: initialValue,
+      controller: localController,
       onChanged: onChanged,
       keyboardType: keyboardType,
       readOnly: readOnly,

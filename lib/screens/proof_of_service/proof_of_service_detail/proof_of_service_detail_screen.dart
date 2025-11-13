@@ -336,7 +336,6 @@ class _ProofOfServiceDetailScreenState
               child: SafeArea(
                 child: ProofOfServiceDetailBodyMobile(
                   transNo: widget.transNo,
-                  technician1Name: _technician1Name!,
                 ),
               ),
             ),
