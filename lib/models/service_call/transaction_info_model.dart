@@ -24,10 +24,10 @@ class TransactionInfoModel extends HiveObject implements IPicPhotoStorable {
   String? picPhone;
 
   @HiveField(5)
-  String? technician2;
+  String? technician1;
 
   @HiveField(6)
-  String? technician3;
+  String? technician2;
 
   @HiveField(7)
   @override
@@ -45,12 +45,16 @@ class TransactionInfoModel extends HiveObject implements IPicPhotoStorable {
   @HiveField(11)
   String? finalTempNote;
 
+  @HiveField(12)
+  String? technician3;
+
   TransactionInfoModel({
     required this.transNo,
     this.picNik,
     this.picName,
     this.picPosition,
     this.picPhone,
+    this.technician1,
     this.technician2,
     this.technician3,
     this.picImageDetail,

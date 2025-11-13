@@ -76,7 +76,8 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _technician2Controller;
   late final TextEditingController _technician3Controller;
   late final TextEditingController _finalTempController;
-  final TextEditingController _finalTempNoteSearchController = TextEditingController();
+  final TextEditingController _finalTempNoteSearchController =
+      TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
@@ -97,7 +98,7 @@ class _ServiceCallDetailBodyMobileState
         TextEditingController(text: initialFormState.picPhone);
     _picNikController = TextEditingController(text: initialFormState.picNik);
     _technician1Controller =
-        TextEditingController(); // Diisi oleh _loadUserInfo
+        TextEditingController(text: initialFormState.technician1);
     _technician2Controller =
         TextEditingController(text: initialFormState.technician2);
     _technician3Controller =
@@ -128,6 +129,12 @@ class _ServiceCallDetailBodyMobileState
     _picNikController.addListener(() {
       if (formCubit.state.picNik != _picNikController.text) {
         formCubit.picNikChanged(_picNikController.text);
+        formCubit.onFieldChanged();
+      }
+    });
+    _technician1Controller.addListener(() {
+      if (formCubit.state.technician1 != _technician1Controller.text) {
+        formCubit.technician1Changed(_technician1Controller.text);
         formCubit.onFieldChanged();
       }
     });
@@ -163,9 +170,7 @@ class _ServiceCallDetailBodyMobileState
     final ip = await getPublicIpAddress();
     if (mounted) {
       setState(() {
-        technicianName = user['name'] ?? '';
         maintenanceBy = user['user_id'] ?? '';
-        _technician1Controller.text = technicianName;
         maintenanceByIP = ip;
       });
     }
@@ -246,6 +251,7 @@ class _ServiceCallDetailBodyMobileState
           prev.picPhone != current.picPhone ||
           prev.picNik != current.picNik ||
           prev.picPosition != current.picPosition ||
+          prev.technician1 != current.technician1 ||
           prev.technician2 != current.technician2 ||
           prev.technician3 != current.technician3 ||
           prev.finalTempIn != current.finalTempIn ||
@@ -259,6 +265,9 @@ class _ServiceCallDetailBodyMobileState
         }
         if (_picNikController.text != state.picNik) {
           _picNikController.text = state.picNik;
+        }
+        if (_technician1Controller.text != state.technician1) {
+          _technician1Controller.text = state.technician1;
         }
         if (_technician2Controller.text != state.technician2) {
           _technician2Controller.text = state.technician2;
@@ -409,11 +418,13 @@ class _ServiceCallDetailBodyMobileState
                                   BlocProvider(
                                     create: (context) {
                                       // 1. Ambil box yang SUDAH DIBUKA oleh ScFormCubit
-                                      final Box scBox = Hive.box<TransactionInfoModel>(
-                                          kTransactionInfoHiveBox);
+                                      final Box scBox =
+                                          Hive.box<TransactionInfoModel>(
+                                              kTransactionInfoHiveBox);
 
                                       // 2. Inject box tersebut ke dalam BLoC
-                                      return LocationValidationBloc(transactionBox: scBox);
+                                      return LocationValidationBloc(
+                                          transactionBox: scBox);
                                     },
                                   ),
                                   BlocProvider.value(
@@ -438,7 +449,8 @@ class _ServiceCallDetailBodyMobileState
                                           SubmitValidation(
                                             transNo: header.transNo,
                                             createdBy: maintenanceBy,
-                                            createdByName: technicianName,
+                                            createdByName:
+                                                formState.technician1,
                                             createdByIP: maintenanceByIP,
                                             pathAttachment:
                                                 header.pathAttachment,
@@ -510,9 +522,15 @@ class _ServiceCallDetailBodyMobileState
                                   // Widget Suhu Akhir (Kondisional)
                                   BlocBuilder<ScFormCubit, ScFormState>(
                                     buildWhen: (prev, current) {
-                                      return prev.allUnitsValidated != current.allUnitsValidated || // (status aktif/nonaktif berubah)
-                                          prev.isFinalTempSkipped != current.isFinalTempSkipped || // (status skip berubah)
-                                          prev.finalTempNote != current.finalTempNote; // (note berubah)
+                                      return prev.allUnitsValidated !=
+                                              current
+                                                  .allUnitsValidated || // (status aktif/nonaktif berubah)
+                                          prev.isFinalTempSkipped !=
+                                              current
+                                                  .isFinalTempSkipped || // (status skip berubah)
+                                          prev.finalTempNote !=
+                                              current
+                                                  .finalTempNote; // (note berubah)
                                     },
                                     builder: (context, formStateForTemp) {
                                       final bool isEnabled =
@@ -700,25 +718,44 @@ class _ServiceCallDetailBodyMobileState
       child: Column(
         children: [
           _buildCustomTextField(
-              controller: _technician1Controller,
-              hintText: 'Teknisi 1',
-              icon: Icons.engineering,
-              readOnly: true),
+            controller: _technician1Controller,
+            hintText: 'Teknisi 1',
+            icon: Icons.engineering,
+            readOnly: false,
+            onTap: () {},
+            onChanged: (value) {
+              formCubit.technician1Changed(value);
+              formCubit.onFieldChanged();
+            },
+          ),
           const SizedBox(height: 12),
           _buildCustomTextField(
               controller: _technician2Controller,
               hintText: 'Teknisi 2',
-              icon: Icons.engineering),
+              icon: Icons.engineering,
+              onTap: () {},
+              // Kosongkan onTap
+              onChanged: (value) {
+                // <-- Tambahkan onChanged
+                formCubit.technician2Changed(value);
+                formCubit.onFieldChanged();
+              }),
           const SizedBox(height: 8),
-          if (_showTechnician3)
+          if (formState.showTechnician3) // <-- Gunakan state dari Cubit
             _buildCustomTextField(
-              controller: _technician3Controller,
+              controller: _technician3Controller, // <-- Gunakan Controller
               hintText: 'Teknisi 3',
               icon: Icons.engineering,
-              iconBtn: IconButton(
+              onTap: () {}, // Kosongkan onTap
+              onChanged: (value) { // <-- Tambahkan onChanged
+                formCubit.technician3Changed(value);
+                formCubit.onFieldChanged();
+              },
+              iconBtn: IconButton( // <-- Ganti nama prop
                   onPressed: () {
                     formCubit.technician3Changed('');
                     formCubit.toggleTechnician3(false);
+                    formCubit.onFieldChanged(); // <-- Tambahkan
                   },
                   icon: const Icon(Icons.cancel, color: Colors.red)),
             )
@@ -1019,6 +1056,7 @@ class _ServiceCallDetailBodyMobileState
               scFormCubit.picNameChanged(_picNameController.text);
               scFormCubit.picPhoneChanged(_picPhoneController.text);
               scFormCubit.picNikChanged(_picNikController.text);
+              scFormCubit.technician1Changed(_technician1Controller.text);
               scFormCubit.technician2Changed(_technician2Controller.text);
               scFormCubit.technician3Changed(_technician3Controller.text);
               scFormCubit.finalTempInChanged(_finalTempController.text);
@@ -1037,6 +1075,8 @@ class _ServiceCallDetailBodyMobileState
                 // Tampilkan pesan error spesifik
                 if (!latestFormState.isPicStoreValid) {
                   _showValidationSnackbar(context, 'Lengkapi info PIC.');
+                } else if (latestFormState.technician1.isEmpty) {
+                  _showValidationSnackbar(context, 'Harap isi nama Teknisi 1.');
                 } else if (!latestFormState.allUnitsValidated) {
                   _showValidationSnackbar(
                       context, 'Lengkapi validasi semua unit.');
@@ -1063,12 +1103,14 @@ class _ServiceCallDetailBodyMobileState
     bool readOnly = false,
     VoidCallback? onTap,
     IconButton? iconBtn,
+    Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       readOnly: readOnly,
       onTap: onTap,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: hintText,
         hintText: hintText,
@@ -1106,32 +1148,37 @@ class _ServiceCallDetailBodyMobileState
 
     // Pastikan Anda menyalin seluruh method _buildNoteDropdown ke sini
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0), // Sesuaikan padding
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0),
+      // Sesuaikan padding
       child: DropdownButtonFormField2<String>(
         value: selectedValue,
         isExpanded: true,
         decoration: InputDecoration(
           labelText: '$label (*Wajib)',
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         ),
         hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
-        items: options.map((item) => DropdownMenuItem<String>(
-          value: item,
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Text(item, style: const TextStyle(fontSize: 14)),
-            ),
-          ),
-        )).toList(),
+        items: options
+            .map((item) => DropdownMenuItem<String>(
+                  value: item,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(item, style: const TextStyle(fontSize: 14)),
+                    ),
+                  ),
+                ))
+            .toList(),
         onChanged: onChanged,
         selectedItemBuilder: (context) {
           return options.map((item) {
             return Text(
               item,
-              style: const TextStyle(fontSize: 14, overflow: TextOverflow.ellipsis),
+              style: const TextStyle(
+                  fontSize: 14, overflow: TextOverflow.ellipsis),
               maxLines: 1,
             );
           }).toList();
@@ -1155,14 +1202,18 @@ class _ServiceCallDetailBodyMobileState
               controller: searchController,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 hintText: 'Cari alasan...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
-          searchMatchFn: (item, searchValue) =>
-              item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+          searchMatchFn: (item, searchValue) => item.value
+              .toString()
+              .toLowerCase()
+              .contains(searchValue.toLowerCase()),
         ),
         onMenuStateChange: (isOpen) {
           if (!isOpen) searchController.clear();

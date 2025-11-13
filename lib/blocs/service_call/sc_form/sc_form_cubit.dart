@@ -10,10 +10,14 @@ import 'package:easy_debounce/easy_debounce.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../models/service_call/validation_status.dart';
+import '../../auth/auth_storage.dart';
 
 class ScFormCubit extends Cubit<ScFormState> {
   final String transNo;
-  late final Box<TransactionInfoModel> _transactionInfoBox; // Gunakan Box SC
+  late final Box<TransactionInfoModel> _transactionInfoBox;
+  late final String _userType;
+  late final String _userName;
+
   String _normalizeHiveKey(String key) =>
       key.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
@@ -23,7 +27,10 @@ class ScFormCubit extends Cubit<ScFormState> {
 
   // Gabungkan inisialisasi dan load data
   Future<void> _initAndLoadData() async {
-    // Buka box di sini
+    final userData = await AuthStorage.getUser();
+    _userType = userData['maintenance_type'] ?? 'WH'; // (Default 'WH')
+    _userName = userData['name'] ?? '';
+
     _transactionInfoBox =
         await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
     _loadInitialData();
@@ -45,6 +52,7 @@ class ScFormCubit extends Cubit<ScFormState> {
           picNik: info.picNik ?? '',
           picPosition: validPosition ?? '',
           picPhone: info.picPhone ?? '',
+          technician1: info.technician1 ?? '',
           technician2: info.technician2 ?? '',
           technician3: info.technician3 ?? '',
           showTechnician3: (info.technician3 ?? '').isNotEmpty,
@@ -54,6 +62,20 @@ class ScFormCubit extends Cubit<ScFormState> {
           isFinalTempSkipped: info.isFinalTempSkipped ?? false,
           finalTempNote: info.finalTempNote,
         ));
+      } else {
+        print("Membuat draft SC baru untuk key: $normalizedKey");
+
+        String initialTechnician1 = '';
+        if (_userType == 'WH') {
+          initialTechnician1 = _userName; // Otomatis isi jika 'WH'
+        }
+
+        final newDraft = TransactionInfoModel(
+          transNo: transNo,
+          technician1: initialTechnician1,
+        );
+        _transactionInfoBox.put(normalizedKey, newDraft);
+        emit(state.copyWith(technician1: initialTechnician1));
       }
     } catch (e) {
       print(
@@ -76,6 +98,9 @@ class ScFormCubit extends Cubit<ScFormState> {
 
   void picImageChanged(CapturedImageDetail? image) =>
       emit(state.copyWith(picImageDetail: image));
+
+  void technician1Changed(String value) =>
+      emit(state.copyWith(technician1: value));
 
   void technician2Changed(String value) =>
       emit(state.copyWith(technician2: value));
@@ -131,6 +156,8 @@ class ScFormCubit extends Cubit<ScFormState> {
         state.picPosition.isNotEmpty &&
         state.picPhone.isNotEmpty;
 
+    final technicianValid = state.technician1.isNotEmpty;
+
     final bool isSkipped = state.isFinalTempSkipped;
     final bool isFilled =
         state.finalTempIn.isNotEmpty && state.finalTempInImage != null;
@@ -140,7 +167,10 @@ class ScFormCubit extends Cubit<ScFormState> {
     final finalTempValid =
         (isFilled && !isSkipped) || (isSkipped && noteFilled);
 
-    final isReady = picStoreValid && state.allUnitsValidated && finalTempValid;
+    final isReady = picStoreValid &&
+        technicianValid &&
+        state.allUnitsValidated &&
+        finalTempValid;
 
     emit(state.copyWith(
       isPicStoreValid: picStoreValid,
@@ -155,21 +185,29 @@ class ScFormCubit extends Cubit<ScFormState> {
           await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
     }
 
-    final infoToSave = TransactionInfoModel(transNo: transNo)
-      ..picName = state.picName
-      ..picNik = state.picNik
-      ..picPosition = state.picPosition
-      ..picPhone = state.picPhone
-      ..technician2 = state.technician2
-      ..technician3 = state.technician3
-      ..picImageDetail = state.picImageDetail
-      ..finalTemperatureIn = state.finalTempIn
-      ..finalTemperatureInImage = state.finalTempInImage
-      ..isFinalTempSkipped = state.isFinalTempSkipped
-      ..finalTempNote = state.finalTempNote;
-
     final String normalizedKey = _normalizeHiveKey(transNo);
-    await _transactionInfoBox.put(normalizedKey, infoToSave);
+    final infoToSave = _transactionInfoBox.get(normalizedKey);
+
+    if (infoToSave == null) {
+      print("PERINGATAN: Draft SC $normalizedKey hilang, membuat ulang.");
+      _loadInitialData(); // Panggil ini untuk membuat ulang draft
+      return;
+    }
+
+    infoToSave.picName = state.picName;
+    infoToSave.picNik = state.picNik;
+    infoToSave.picPosition = state.picPosition;
+    infoToSave.picPhone = state.picPhone;
+    infoToSave.technician1 = state.technician1;
+    infoToSave.technician2 = state.technician2;
+    infoToSave.technician3 = state.technician3;
+    infoToSave.picImageDetail = state.picImageDetail;
+    infoToSave.finalTemperatureIn = state.finalTempIn;
+    infoToSave.finalTemperatureInImage = state.finalTempInImage;
+    infoToSave.isFinalTempSkipped = state.isFinalTempSkipped;
+    infoToSave.finalTempNote = state.finalTempNote;
+
+    await infoToSave.save();
   }
 
   void updateValidationProgress(
