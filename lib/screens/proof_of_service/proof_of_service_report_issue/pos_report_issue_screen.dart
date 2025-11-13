@@ -118,6 +118,7 @@ class PosReportIssueScreen extends StatelessWidget {
       ),
       onPressed: (state.proofImages.isNotEmpty &&
           state.selectedReason != null &&
+          state.technicianName.isNotEmpty &&
           !isLoading)
           ? () {
         final progressCubit = context.read<UploadProgressCubit>();

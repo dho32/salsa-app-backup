@@ -7,6 +7,7 @@ import 'package:salsa/blocs/proof_of_service/pos_unserviceable/pos_unserviceable
 import 'package:salsa/blocs/proof_of_service/pos_unserviceable/pos_unserviceable_state.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 
+import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/shared_function.dart';
 
 class PosReportIssueBodyMobile extends StatefulWidget {
@@ -26,29 +27,56 @@ class PosReportIssueBodyMobile extends StatefulWidget {
 
 class _PosReportIssueBodyMobileState extends State<PosReportIssueBodyMobile> {
   late final TextEditingController _notesController;
+  late final TextEditingController _technicianController;
+  String _userType = 'WH';
 
   @override
   void initState() {
     super.initState();
     final bloc = context.read<PosUnserviceableBloc>();
     _notesController = TextEditingController(text: bloc.state.notes);
+    _technicianController = TextEditingController(text: bloc.state.technicianName);
+    _loadUserType();
 
     _notesController.addListener(() {
       bloc.add(NotesChanged(_notesController.text));
     });
+
+    _technicianController.addListener(() {
+      // Hanya kirim event jika teksnya berubah
+      if (bloc.state.technicianName != _technicianController.text) {
+        bloc.add(TechnicianNameChanged(_technicianController.text));
+      }
+    });
+  }
+
+  Future<void> _loadUserType() async {
+    final userData = await AuthStorage.getUser();
+    if (mounted) {
+      setState(() {
+        _userType = userData['maintenance_type'] ?? 'WH';
+      });
+    }
   }
 
   @override
   void dispose() {
     _notesController.dispose();
+    _technicianController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<PosUnserviceableBloc, PosUnserviceableState>(
-      builder: (context, state) {
-
+    return BlocListener<PosUnserviceableBloc, PosUnserviceableState>(
+      listenWhen: (prev, current) => prev.technicianName != current.technicianName,
+      listener: (context, state) {
+        if (_technicianController.text != state.technicianName) {
+          _technicianController.text = state.technicianName;
+        }
+      },
+      child: BlocBuilder<PosUnserviceableBloc, PosUnserviceableState>(builder: (context, state){
+        final bool isTechnicianReadOnly = (_userType == 'WH');
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -88,6 +116,18 @@ class _PosReportIssueBodyMobileState extends State<PosReportIssueBodyMobile> {
                   labelText: 'Alasan Gagal Kunjungan',
                 ),
               ),
+              const SizedBox(height: 24),
+              TextFormField(
+                controller: _technicianController,
+                readOnly: isTechnicianReadOnly, // <-- Set readOnly
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: 'Nama Teknisi (*Wajib)',
+                  prefixIcon: const Icon(Icons.engineering),
+                  filled: true,
+                  fillColor: isTechnicianReadOnly ? Colors.grey.shade200 : Colors.white,
+                ),
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _notesController,
@@ -103,7 +143,7 @@ class _PosReportIssueBodyMobileState extends State<PosReportIssueBodyMobile> {
             ],
           ),
         );
-      },
+      }),
     );
   }
 

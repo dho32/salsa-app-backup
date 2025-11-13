@@ -37,6 +37,14 @@ class NotesChanged extends PosUnserviceableEvent {
   List<Object?> get props => [notes];
 }
 
+class TechnicianNameChanged extends PosUnserviceableEvent {
+  final String name;
+  const TechnicianNameChanged(this.name);
+
+  @override
+  List<Object?> get props => [name];
+}
+
 class SubmitUnserviceableReport extends PosUnserviceableEvent {
   final UploadProgressCubit progressCubit;
   const SubmitUnserviceableReport(this.progressCubit);

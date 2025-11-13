@@ -29,6 +29,8 @@ class PosUnserviceableBloc
   final String transNo;
   final Box<PosUnserviceableModel> _draftBox;
   final PosUnserviceableRepository _repository;
+  late final String _userType;
+  late final String _userName;
 
   PosUnserviceableBloc({required this.transNo})
       : _draftBox = Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox),
@@ -39,6 +41,7 @@ class PosUnserviceableBloc
     on<RemoveProofPhoto>(_onRemoveProofPhoto);
     on<ReasonSelected>(_onReasonSelected);
     on<NotesChanged>(_onNotesChanged);
+    on<TechnicianNameChanged>(_onTechnicianNameChanged);
     on<SubmitUnserviceableReport>(_onSubmitReport);
     on<RetryUnserviceableUpload>(_onRetryUpload);
 
@@ -48,12 +51,23 @@ class PosUnserviceableBloc
       _saveDraftToHive(state);
     });
 
+    _initAsync();
+  }
+
+  Future<void> _initAsync() async {
+    // 1. Ambil data user dari AuthStorage
+    final userData = await AuthStorage.getUser();
+    _userType = userData['maintenance_type'] ?? 'WH'; // (Default 'WH')
+    _userName = userData['name'] ?? '';
+
+    // 2. Baru panggil load data DENGAN data user
     add(LoadUnserviceableDraft());
   }
 
   Future<void> _onLoadInitialData(
       LoadUnserviceableDraft event, Emitter<PosUnserviceableState> emit) async {
-    final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
+    final retryBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
     final retryData = retryBox.get(transNo);
 
     if (retryData != null) {
@@ -77,12 +91,21 @@ class PosUnserviceableBloc
           selectedReason:
               initialDraft.reason.isNotEmpty ? initialDraft.reason : null,
           notes: initialDraft.notes ?? '',
+          technicianName: initialDraft.technicianName,
         ));
+      } else {
+        String initialTechnician1 = '';
+        if (_userType == 'WH') {
+          initialTechnician1 = _userName; // Otomatis isi jika 'WH'
+        }
+        emit(state.copyWith(technicianName: initialTechnician1));
       }
     } catch (e) {
       print(
           "🔴 Draft lama untuk $transNo tidak kompatibel. Menghapus draft rusak...");
       _draftBox.delete(transNo);
+      final String initialTechnician1 = (_userType == 'WH') ? _userName : '';
+      emit(state.copyWith(technicianName: initialTechnician1));
     }
   }
 
@@ -93,7 +116,8 @@ class PosUnserviceableBloc
       () {
         if (state.proofImages.isEmpty &&
             state.selectedReason == null &&
-            state.notes.isEmpty) {
+            state.notes.isEmpty &&
+            state.technicianName.isEmpty) {
           _draftBox.delete(transNo);
           return;
         }
@@ -105,6 +129,7 @@ class PosUnserviceableBloc
           reportedAt: DateTime.now(),
           reportedBy: '',
           reportedById: '',
+          technicianName: state.technicianName,
         );
         _draftBox.put(transNo, draft);
         print("💾 Draft untuk $transNo berhasil disimpan ke Hive.");
@@ -131,8 +156,8 @@ class PosUnserviceableBloc
       if (!await imagesDir.exists()) {
         await imagesDir.create();
       }
-      final targetPath =
-          p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final targetPath = p.join(
+          imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final XFile? compressedImage =
           await FlutterImageCompress.compressAndGetFile(
@@ -197,12 +222,20 @@ class PosUnserviceableBloc
     emit(state.copyWith(notes: event.notes, clearPartialUploadData: true));
   }
 
+  void _onTechnicianNameChanged(
+      TechnicianNameChanged event, Emitter<PosUnserviceableState> emit) {
+    emit(state.copyWith(
+        technicianName: event.name, clearPartialUploadData: true));
+  }
+
   Future<void> _onSubmitReport(SubmitUnserviceableReport event,
       Emitter<PosUnserviceableState> emit) async {
-    if (state.proofImages.isEmpty || state.selectedReason == null) {
+    if (state.proofImages.isEmpty ||
+        state.selectedReason == null ||
+        state.technicianName.isEmpty) {
       emit(state.copyWith(
         status: UnserviceableStatus.failure,
-        errorMessage: 'Foto bukti dan alasan wajib diisi.',
+        errorMessage: 'Foto bukti, alasan, dan nama teknisi wajib diisi.',
       ));
       await Future.delayed(const Duration(milliseconds: 100));
       emit(state.copyWith(status: UnserviceableStatus.initial));
@@ -220,6 +253,7 @@ class PosUnserviceableBloc
         reportedAt: DateTime.now(),
         reportedBy: user['name'] ?? 'Unknown',
         reportedById: user['user_id'] ?? 'Unknown',
+        technicianName: state.technicianName,
       );
 
       final result = await _repository.submitReport(report);
@@ -245,10 +279,11 @@ class PosUnserviceableBloc
           await _clearAllTransactionData();
           emit(state.copyWith(status: UnserviceableStatus.success));
         } else {
-
-          final detailCacheBox = await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+          final detailCacheBox =
+              await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
           final detailData = detailCacheBox.get(transNo);
-          final storeName = detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
+          final storeName =
+              detailData?.header.shipToName ?? 'Nama Toko Tidak Ditemukan';
 
           final partialData = {
             'transNo': transNo,
@@ -258,7 +293,8 @@ class PosUnserviceableBloc
             'type': 'unserviceable',
             'storeName': storeName,
           };
-          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
+          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(
+              kPosValidationPartialHiveBox);
           await retryBox.put(transNo, partialData);
 
           emit(state.copyWith(
@@ -299,7 +335,8 @@ class PosUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
-      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
+      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(
+          kPosValidationPartialHiveBox);
       await retryBox.delete(transNo);
       await _clearAllTransactionData();
       emit(state.copyWith(status: UnserviceableStatus.success));
@@ -339,12 +376,10 @@ class PosUnserviceableBloc
     // }).toList();
     // await validationBox.deleteAll(validationKeysToDelete);
 
-
     await clearTransactionData(transNo);
     final queueBox =
-    await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-    final task =
-    ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
+        await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+    final task = ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
     await queueBox.put(transNo.trim().toUpperCase(), task);
 
     await ConfirmationService().processQueue();

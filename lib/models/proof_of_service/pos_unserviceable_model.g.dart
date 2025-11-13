@@ -24,13 +24,14 @@ class PosUnserviceableModelAdapter extends TypeAdapter<PosUnserviceableModel> {
       reportedAt: fields[4] as DateTime,
       reportedBy: fields[5] as String,
       reportedById: fields[6] as String,
+      technicianName: fields[7] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, PosUnserviceableModel obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -44,7 +45,9 @@ class PosUnserviceableModelAdapter extends TypeAdapter<PosUnserviceableModel> {
       ..writeByte(5)
       ..write(obj.reportedBy)
       ..writeByte(6)
-      ..write(obj.reportedById);
+      ..write(obj.reportedById)
+      ..writeByte(7)
+      ..write(obj.technicianName);
   }
 
   @override

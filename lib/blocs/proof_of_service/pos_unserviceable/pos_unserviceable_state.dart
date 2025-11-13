@@ -17,6 +17,7 @@ class PosUnserviceableState extends Equatable {
   final String notes;
   final String? errorMessage;
   final Map<String, dynamic>? partialUploadData;
+  final String technicianName;
 
   const PosUnserviceableState({
     this.status = UnserviceableStatus.initial,
@@ -25,6 +26,7 @@ class PosUnserviceableState extends Equatable {
     this.notes = '',
     this.errorMessage,
     this.partialUploadData,
+    this.technicianName = '',
   });
 
   PosUnserviceableState copyWith({
@@ -35,6 +37,7 @@ class PosUnserviceableState extends Equatable {
     String? errorMessage,
     Map<String, dynamic>? partialUploadData,
     bool clearPartialUploadData = false,
+    String? technicianName,
   }) {
     return PosUnserviceableState(
       status: status ?? this.status,
@@ -43,6 +46,7 @@ class PosUnserviceableState extends Equatable {
       notes: notes ?? this.notes,
       errorMessage: errorMessage ?? this.errorMessage,
       partialUploadData: clearPartialUploadData ? null : partialUploadData ?? this.partialUploadData,
+      technicianName: technicianName ?? this.technicianName,
     );
   }
 
@@ -53,6 +57,7 @@ class PosUnserviceableState extends Equatable {
     selectedReason,
     notes,
     errorMessage,
-    partialUploadData
+    partialUploadData,
+    technicianName,
   ];
 }
