@@ -256,7 +256,6 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         photosAfter: currentState.photosAfter,
         measurementsAfter: currentState.measurementsAfter,
         isCompleted: false,
-        // <-- INI KUNCINYA
         note: event.note,
         articleNo: event.articleNo,
         articleDesc: event.articleDesc,

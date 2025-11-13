@@ -29,7 +29,7 @@ class AuthRepository {
       if (token == null || token.isEmpty) {
         throw Exception(result['error_message'] ?? 'Login gagal');
       }
-      return token; // Langsung kembalikan token
+      return token;
     } else {
       throw Exception('Login gagal');
     }
@@ -41,21 +41,25 @@ class AuthRepository {
     final payload = JwtHelper.decode(token);
     if (payload == null) throw Exception("Token tidak valid");
 
-    // Tentukan maintenance_by dan maintenance_by_name
-    final maintenanceBy = selectedMaintenance?.maintenanceBy ??
-        payload['maintenance'][0]['maintenance_by'];
-    final maintenanceByName = selectedMaintenance?.maintenanceByName ??
-        payload['maintenance'][0]['maintenance_by_name'];
+    final MaintenanceInfo activeMaintenance;
+    if (selectedMaintenance != null) {
+      activeMaintenance = selectedMaintenance;
+    } else {
+      activeMaintenance = MaintenanceInfo.fromJson(payload['maintenance'][0]);
+    }
+
+    final String maintenanceType = activeMaintenance.maintenanceType;
+    final String maintenanceBy = activeMaintenance.maintenanceBy;
+    final String maintenanceByName = activeMaintenance.maintenanceByName;
 
     final deviceInfo = DeviceInfoPlugin();
     String deviceModel = 'Unknown Device';
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
-      deviceModel =
-          "${androidInfo.manufacturer} ${androidInfo.model}"; // mis: "Samsung SM-A525F"
+      deviceModel = "${androidInfo.manufacturer} ${androidInfo.model}";
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
-      deviceModel = iosInfo.utsname.machine; // mis: "iPhone13,2"
+      deviceModel = iosInfo.utsname.machine;
     }
 
     await AuthStorage.saveUser(
@@ -63,12 +67,11 @@ class AuthRepository {
       name: payload['user_name'],
       email: payload['email'],
       maintenanceBy: maintenanceBy,
-      // Gunakan nilai yang sudah ditentukan
       maintenanceByName: maintenanceByName,
-      // Gunakan nilai yang sudah ditentukan
       role: payload['role_code'],
       team: payload['team'],
       deviceModel: deviceModel,
+      maintenanceType: maintenanceType,
     );
   }
 
@@ -84,7 +87,8 @@ class AuthRepository {
     return (await getToken()) != null;
   }
 
-  Future<void> recordLogin(String token, String vendorId, String appVersion) async {
+  Future<void> recordLogin(
+      String token, String vendorId, String appVersion) async {
     try {
       // Ambil data dari token untuk dikirim
       final payload = JwtHelper.decode(token);
