@@ -33,6 +33,7 @@ import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
+import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
 import '../../../../models/service_call/problem_source_model.dart';
 import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
@@ -84,11 +85,22 @@ class _ServiceCallDetailBodyMobileState
   String technicianName = '';
   String maintenanceBy = '';
   String maintenanceByIP = '';
+  late final MeasurementLimits _scFinalTempBaseLimits;
 
   @override
   void initState() {
     super.initState();
     _loadUserInfoAndIP();
+
+    final configBox = Hive.box(kAppConfigBox);
+    final Map<String, MeasurementLimits> headerLimits =
+    Map<String, MeasurementLimits>.from(
+        configBox.get('limits_temp_header') ?? {});
+
+    _scFinalTempBaseLimits = headerLimits['sc_final_temp_in'] ?? const MeasurementLimits(
+        id: 'sc_final_temp_in', label: 'Suhu Dalam Ruangan (SC)', min: 4, max: 30,
+        unit: '°C', normalMin: 5, normalMax: 18
+    );
 
     final initialFormState = context.read<ScFormCubit>().state;
 
@@ -974,7 +986,7 @@ class _ServiceCallDetailBodyMobileState
 
   Widget _buildFinalTempSection(BuildContext context, ScFormState formState) {
     final formCubit = context.read<ScFormCubit>();
-    final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
+    final baseLimits = _scFinalTempBaseLimits;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
     final String label = baseLimits.label;
     final finalTempLimits = MeasurementLimits(

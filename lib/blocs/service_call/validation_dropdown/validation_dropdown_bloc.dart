@@ -6,6 +6,7 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk save Hive
 import '../../../components/constants.dart';
+import '../../../models/common/measurement_limits.dart';
 import 'validation_dropdown_event.dart';
 import 'validation_dropdown_state.dart';
 import 'package:hive/hive.dart'; // Untuk Hive.box
@@ -32,15 +33,15 @@ class ValidationDropdownBloc
     on<NoteChanged>(_onNoteChanged);
   }
 
-  List<MeasurementEntry> _getDefaultMeasurements() {
-    return kMeasurementLimits.values
-        .where((limits) => limits.id != 'final_temp_in_sc')
+  List<MeasurementEntry> _generateMeasurementsFromLimits(
+      Map<String, MeasurementLimits> limitsMap) {
+    return limitsMap.values
         .map((limits) => MeasurementEntry(
-              measurementId: limits.id,
-              value: 0.0,
-              unit: limits.unit,
-              isSkipped: false,
-            ))
+      measurementId: limits.id,
+      value: 0.0,
+      unit: limits.unit,
+      isSkipped: false,
+    ))
         .toList();
   }
 
@@ -68,13 +69,13 @@ class ValidationDropdownBloc
           .toList();
 
       List<MeasurementEntry> measurementsBefore =
-          initialData?.measurementsBefore.isNotEmpty == true
-              ? initialData!.measurementsBefore
-              : _getDefaultMeasurements();
+      initialData?.measurementsBefore.isNotEmpty == true
+          ? initialData!.measurementsBefore
+          : _generateMeasurementsFromLimits(event.limitsScBefore); // <-- Gunakan limits
       List<MeasurementEntry> measurementsAfter =
-          initialData?.measurementsAfter.isNotEmpty == true
-              ? initialData!.measurementsAfter
-              : _getDefaultMeasurements();
+      initialData?.measurementsAfter.isNotEmpty == true
+          ? initialData!.measurementsAfter
+          : _generateMeasurementsFromLimits(event.limitsScAfter);
 
       emit(
         ValidationDropdownLoaded(
@@ -94,6 +95,8 @@ class ValidationDropdownBloc
           currentViewMode: ValidationViewMode.before,
           outdoorSerialNumbers: availableSerialsForDropdown,
           selectedOutdoorSerialNo: initialData?.outdoorSerialNo,
+          limitsScBefore: event.limitsScBefore,
+          limitsScAfter: event.limitsScAfter,
           noteIndoorBeforeOptions: event.detailData.noteIndoorBeforeOptions,
           noteIndoorAfterOptions: event.detailData.noteIndoorAfterOptions,
           noteOutdoorBeforeOptions: event.detailData.noteOutdoorBeforeOptions,

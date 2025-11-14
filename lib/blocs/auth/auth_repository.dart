@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
+import '../../components/constants.dart';
 import '../../components/shared_function.dart';
 import '../../models/auth/maintenance_info_model.dart';
+import '../../models/common/measurement_limits.dart';
 import 'auth_storage.dart';
 
 class AuthRepository {
@@ -29,9 +32,54 @@ class AuthRepository {
       if (token == null || token.isEmpty) {
         throw Exception(result['error_message'] ?? 'Login gagal');
       }
+      if (result['app_config'] != null) {
+        await _saveAppConfigToHive(result['app_config']);
+      }
       return token;
     } else {
       throw Exception('Login gagal');
+    }
+  }
+
+  Future<void> _saveAppConfigToHive(Map<String, dynamic> configJson) async {
+    try {
+      print("Menyimpan AppConfig dari API ke Hive...");
+      // Buka box config (pastikan kAppConfigBox ada di constants.dart)
+      final configBox = await Hive.openBox(kAppConfigBox);
+
+      // Helper kecil untuk parsing Map<String, dynamic> menjadi Map<String, MeasurementLimits>
+      Map<String, MeasurementLimits> _parseLimitsMap(dynamic map) {
+        if (map == null || map is! Map) return {};
+        return map.map<String, MeasurementLimits>(
+              (key, value) => MapEntry(
+            key as String,
+            MeasurementLimits.fromJson(value as Map<String, dynamic>),
+          ),
+        );
+      }
+
+      // Parsing setiap 'key' dari JSON API (sesuai format yang kita sepakati)
+      final limitsTempHeader = _parseLimitsMap(configJson['limits_temp_header']);
+      final limitsScBefore = _parseLimitsMap(configJson['limits_validation_unit']?['sc_before']);
+      final limitsScAfter = _parseLimitsMap(configJson['limits_validation_unit']?['sc_after']);
+      final limitsPosAfter = _parseLimitsMap(configJson['limits_validation_unit']?['pos_after']);
+
+      // Simpan ke Hive (Gunakan 'put' agar menimpa config lama)
+      await configBox.put('limits_temp_header', limitsTempHeader);
+      await configBox.put('limits_sc_before', limitsScBefore);
+      await configBox.put('limits_sc_after', limitsScAfter);
+      await configBox.put('limits_pos_after', limitsPosAfter);
+
+      print("✅ AppConfig berhasil disimpan di Hive.");
+      log("Data limits_temp_header: ${limitsTempHeader.length} item");
+      log("Data limits_sc_before: ${limitsScBefore.length} item");
+      log("Data limits_sc_after: ${limitsScAfter.length} item");
+      log("Data limits_pos_after: ${limitsPosAfter.length} item");
+
+    } catch (e) {
+      print("🔴 GAGAL menyimpan AppConfig ke Hive: $e");
+      // Jangan throw error, biarkan login tetap berhasil.
+      // Aplikasi akan menggunakan data hardcode jika Hive kosong.
     }
   }
 

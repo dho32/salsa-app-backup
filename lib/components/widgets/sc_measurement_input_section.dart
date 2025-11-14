@@ -1,4 +1,3 @@
-import 'package:collection/collection.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,10 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
-import '../../../../../components/constants.dart'; // Untuk kMeasurementLimits
 import '../../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../../models/common/measurement_entry.dart';
-import '../../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
+import '../../models/common/measurement_limits.dart';
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
@@ -48,10 +46,8 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
   @override
   void didUpdateWidget(covariant ScMeasurementInputSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Jika list measurements (instance-nya) berubah, proses ulang controllers
     if (!identical(widget.measurements, oldWidget.measurements)) {
       _initializeOrUpdateControllers(widget.measurements);
-      // Panggil setState DI SINI untuk memastikan rebuild UI parent
       setState(() {});
     }
   }
@@ -59,7 +55,6 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
   void _initializeOrUpdateControllers(List<MeasurementEntry> measurements) {
     _disposeControllers();
     final currentIds = widget.measurements.map((m) => m.measurementId).toSet();
-    // Hapus controller lama
     _controllers.removeWhere((id, controller) {
       if (!currentIds.contains(id)) {
         controller.dispose();
@@ -68,16 +63,14 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
       return false;
     });
 
-    // Buat/Update controller
     for (var mEntry in widget.measurements) {
       final valueText = mEntry.isSkipped ?? false
           ? ''
           : (mEntry.value == mEntry.value.truncateToDouble()
               ? mEntry.value.truncate().toString()
-              : mEntry.value.toStringAsFixed(2)); // Sesuaikan format jika perlu
+              : mEntry.value.toStringAsFixed(2));
 
       if (_controllers.containsKey(mEntry.measurementId)) {
-        // Update jika teks berbeda & tidak di-skip
         final currentController = _controllers[mEntry.measurementId]!;
         if (mounted && currentController.text != valueText) {
           currentController.text = valueText;
@@ -107,15 +100,12 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
   TextEditingController _getController(MeasurementEntry mEntry) {
     if (!_controllers.containsKey(mEntry.measurementId)) {
-      // Jika controller hilang, coba inisialisasi ulang
       print(
           "⚠️ Controller missing for ${mEntry.measurementId}, re-initializing...");
       _initializeOrUpdateControllers(widget.measurements);
-      // Kembalikan controller baru jika berhasil dibuat
       if (_controllers.containsKey(mEntry.measurementId)) {
         return _controllers[mEntry.measurementId]!;
       } else {
-        // Fallback jika masih gagal (seharusnya tidak terjadi)
         print(
             "🔴 FATAL: Failed to create controller for ${mEntry.measurementId}");
         return TextEditingController(); // Kembalikan controller kosong
@@ -128,11 +118,11 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
   Widget build(BuildContext context) {
     final blocState = context.watch<ValidationDropdownBloc>().state;
     if (blocState is! ValidationDropdownLoaded) {
-      return const SizedBox.shrink(); // Jangan render jika state belum siap
+      return const SizedBox.shrink();
     }
 
     const indoorIds = {'temperature'};
-    const outdoorElecIds = {'volt', 'ampere'}; // Volt & Ampere
+    const outdoorElecIds = {'volt', 'ampere'};
     const outdoorPsiIds = {'psi'};
 
     // Pisahkan pengukuran indoor & outdoor
@@ -153,14 +143,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     final bool isOutdoorPsiSkipped =
         outdoorPsiMeasurements.any((m) => m.isSkipped ?? false);
 
-    // Ambil daftar Limits dari konstanta
-    // final List<MeasurementLimits> availableLimits =
-    //     kMeasurementLimits.values.toList();
-
-    // Fungsi helper untuk merender satu MeasurementInputWidget
     Widget buildMeasurementWidget(MeasurementEntry mEntry) {
-      // final limits = availableLimits
-      //     .firstWhereOrNull((ml) => ml.id == mEntry.measurementId);
       final limits = widget.limitsMap[mEntry.measurementId];
       if (limits == null) {
         return Text("Error: Config for ${mEntry.measurementId} missing");
@@ -196,13 +179,10 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           },
           isSkipEnabled: true,
           isSkipped: mEntry.isSkipped ?? false,
-
-          // --- ✅ PERBAIKAN UTAMA DI SINI ✅ ---
           onSkipChanged: (isSkipped) {
             final bloc = context.read<ValidationDropdownBloc>();
             final measurementId = mEntry.measurementId;
 
-            // 1. Tentukan NoteType yang benar
             final NoteType noteType;
             if (measurementId == 'temperature') {
               noteType = NoteType.indoor;
@@ -212,7 +192,6 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
               noteType = NoteType.outdoorPsi;
             }
 
-            // 2. Kirim event update measurement (tidak berubah)
             final updateEvent = widget.isBefore
                 ? UpdateMeasurementBefore(mEntry.copyWith(
                     isSkipped: isSkipped,
@@ -226,12 +205,10 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                   ));
             bloc.add(updateEvent);
 
-            // 3. Update controller LOKAL (tidak berubah)
             if (isSkipped) {
               controller.clear();
             }
 
-            // 4. Logika reset note (unskip)
             if (!isSkipped) {
               Future.microtask(() {
                 if (!mounted) return;
@@ -243,7 +220,6 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                           ? currentBlocState.capturedMeasurementsBefore
                           : currentBlocState.capturedMeasurementsAfter;
 
-                  // Tentukan grup ID yang relevan
                   const indoorIds = {'temperature'};
                   const outdoorElecIds = {'volt', 'ampere'};
                   const outdoorPsiIds = {'psi'};
@@ -256,17 +232,15 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                     currentGroupIds = outdoorPsiIds;
                   }
 
-                  // Cek apakah ada measurement LAIN di grup yg SAMA yg MASIH di-skip
                   final bool anyOtherSkippedInGroup = relevantMeasurements
                       .where((m) => m.measurementId != measurementId)
                       .any((m) =>
                           currentGroupIds.contains(m.measurementId) &&
                           (m.isSkipped ?? false));
 
-                  // Jika TIDAK ADA yg lain di-skip, trigger reset note
                   if (!anyOtherSkippedInGroup) {
                     bloc.add(NoteChanged(null,
-                        noteType: noteType, // <-- Kirim noteType yang benar
+                        noteType: noteType,
                         isBefore: widget.isBefore));
                   }
                 }
@@ -274,11 +248,10 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
             } else {
               // 5. Reset note (skip)
               bloc.add(NoteChanged(null,
-                  noteType: noteType, // <-- Kirim noteType yang benar
+                  noteType: noteType,
                   isBefore: widget.isBefore));
             }
           },
-          // --- AKHIR PERBAIKAN ---
         ),
       );
     }

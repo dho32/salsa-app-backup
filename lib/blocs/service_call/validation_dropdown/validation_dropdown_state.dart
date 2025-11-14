@@ -2,6 +2,7 @@
 import 'package:equatable/equatable.dart';
 import '../../../models/common/captured_image_detail.dart';
 import '../../../models/common/measurement_entry.dart';
+import '../../../models/common/measurement_limits.dart';
 import '../../../models/service_call/problem_source_model.dart';
 
 // BARU: Enum untuk mode tampilan
@@ -71,6 +72,9 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final String? selectedOutdoorPSINoteBefore;
   final String? selectedOutdoorPSINoteAfter;
 
+  final Map<String, MeasurementLimits> limitsScBefore;
+  final Map<String, MeasurementLimits> limitsScAfter;
+
   final int currentStep;
   final ValidationViewMode currentViewMode;
 
@@ -90,6 +94,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.outdoorSerialNumbers = const [],
     this.unitLocation = 'INDOOR',
     this.selectedOutdoorSerialNo,
+    required this.limitsScBefore,
+    required this.limitsScAfter,
     this.noteIndoorBeforeOptions = const [],
     this.noteIndoorAfterOptions = const [],
     this.noteOutdoorBeforeOptions = const [],
@@ -133,7 +139,9 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     Object? selectedOutdoorPSINoteBefore = const Object(),
     Object? selectedOutdoorPSINoteAfter = const Object(),
     ValidationSaveStatus? saveStatus,
-    Object? saveMessage = const Object(), // saveMessage juga bisa null
+    Object? saveMessage = const Object(),
+    Map<String, MeasurementLimits>? limitsScBefore,
+    Map<String, MeasurementLimits>? limitsScAfter,
   }) {
     // Helper untuk menangani nullable copyWith
     T _handleNullable<T>(Object? newValue, T currentValue) {
@@ -147,31 +155,46 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
 
     return ValidationDropdownLoaded(
       data: data ?? this.data,
-      selectedUnitType: _handleNullable(selectedUnitType, this.selectedUnitType),
+      selectedUnitType:
+          _handleNullable(selectedUnitType, this.selectedUnitType),
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
-      capturedMeasurementsBefore: capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
+      capturedMeasurementsBefore:
+          capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
       selectedProblemCards: selectedProblemCards ?? this.selectedProblemCards,
       capturedPhotosAfter: capturedPhotosAfter ?? this.capturedPhotosAfter,
-      capturedMeasurementsAfter: capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
+      capturedMeasurementsAfter:
+          capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
       currentStep: currentStep ?? this.currentStep,
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
-      selectedOutdoorSerialNo: _handleNullable(selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
-
-      noteIndoorBeforeOptions: noteIndoorBeforeOptions ?? this.noteIndoorBeforeOptions,
-      noteIndoorAfterOptions: noteIndoorAfterOptions ?? this.noteIndoorAfterOptions,
-      noteOutdoorBeforeOptions: noteOutdoorBeforeOptions ?? this.noteOutdoorBeforeOptions,
-      noteOutdoorAfterOptions: noteOutdoorAfterOptions ?? this.noteOutdoorAfterOptions,
-      noteOutdoorPsiBeforeOptions: noteOutdoorPsiBeforeOptions ?? this.noteOutdoorPsiBeforeOptions,
-      noteOutdoorPsiAfterOptions: noteOutdoorPsiAfterOptions ?? this.noteOutdoorPsiAfterOptions,
-      selectedIndoorNoteBefore: _handleNullable(selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
-      selectedOutdoorNoteBefore: _handleNullable(selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
-      selectedIndoorNoteAfter: _handleNullable(selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
-      selectedOutdoorNoteAfter: _handleNullable(selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
-      selectedOutdoorPSINoteBefore: _handleNullable(selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
-      selectedOutdoorPSINoteAfter: _handleNullable(selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
-
-
+      selectedOutdoorSerialNo: _handleNullable(
+          selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
+      limitsScBefore: limitsScBefore ?? this.limitsScBefore,
+      limitsScAfter: limitsScAfter ?? this.limitsScAfter,
+      noteIndoorBeforeOptions:
+          noteIndoorBeforeOptions ?? this.noteIndoorBeforeOptions,
+      noteIndoorAfterOptions:
+          noteIndoorAfterOptions ?? this.noteIndoorAfterOptions,
+      noteOutdoorBeforeOptions:
+          noteOutdoorBeforeOptions ?? this.noteOutdoorBeforeOptions,
+      noteOutdoorAfterOptions:
+          noteOutdoorAfterOptions ?? this.noteOutdoorAfterOptions,
+      noteOutdoorPsiBeforeOptions:
+          noteOutdoorPsiBeforeOptions ?? this.noteOutdoorPsiBeforeOptions,
+      noteOutdoorPsiAfterOptions:
+          noteOutdoorPsiAfterOptions ?? this.noteOutdoorPsiAfterOptions,
+      selectedIndoorNoteBefore: _handleNullable(
+          selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
+      selectedOutdoorNoteBefore: _handleNullable(
+          selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
+      selectedIndoorNoteAfter: _handleNullable(
+          selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
+      selectedOutdoorNoteAfter: _handleNullable(
+          selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
+      selectedOutdoorPSINoteBefore: _handleNullable(
+          selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
+      selectedOutdoorPSINoteAfter: _handleNullable(
+          selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
       saveStatus: saveStatus ?? this.saveStatus,
       saveMessage: _handleNullable(saveMessage, this.saveMessage),
     );
@@ -202,6 +225,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
         selectedOutdoorNoteAfter,
         selectedOutdoorPSINoteBefore,
         selectedOutdoorPSINoteAfter,
+        limitsScBefore,
+        limitsScAfter,
         saveStatus,
         saveMessage,
       ];

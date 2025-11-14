@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import '../../../components/constants.dart';
+import '../../../components/shared_function.dart';
 import '../../../models/common/measurement_entry.dart';
+import '../../../models/common/measurement_limits.dart';
 import '../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
@@ -48,14 +51,15 @@ class ServiceCallValidationScreen extends StatefulWidget {
 
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
+  late final Map<String, MeasurementLimits> _limitsScBefore;
+  late final Map<String, MeasurementLimits> _limitsScAfter;
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
-    // 1. Kita mulai dengan asumsi semuanya LOLOS
+
     bool allItemsPassed = true;
 
     for (int i = 0; i < measurements.length; i++) {
       var m = measurements[i];
 
-      // Evaluasi logika
       bool isSkippedCheck = m.isSkipped ?? false;
       bool isFilledCheck = (m.capturedImage != null && m.value != 0);
       bool didPass = isSkippedCheck || isFilledCheck;
@@ -75,6 +79,18 @@ class _ServiceCallValidationScreenState
     // 3. Kembalikan hasil akhir
     return allItemsPassed;
   }
+  @override
+  void initState() {
+    super.initState();
+    final configBox = Hive.box(kAppConfigBox);
+
+    _limitsScBefore = Map<String, MeasurementLimits>.from(
+        configBox.get('limits_sc_before') ?? kSCMeasurementLimitsBefore);
+
+    _limitsScAfter = Map<String, MeasurementLimits>.from(
+        configBox.get('limits_sc_after') ?? kMeasurementLimits);
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +103,8 @@ class _ServiceCallValidationScreenState
           allAvailableOutdoorSerials: widget.allAvailableOutdoorSerials,
           problemSources: widget.problemSources,
           detailData: widget.detailData,
+          limitsScBefore: _limitsScBefore,
+          limitsScAfter: _limitsScAfter,
         )),
       child: BlocListener<ValidationDropdownBloc, ValidationDropdownState>(
         listenWhen: (prev, current) =>
@@ -180,7 +198,7 @@ class _ServiceCallValidationScreenState
                 onPressed: () {
                   // --- Validasi "Sesudah" ---
                   final measurementError = _validateMeasurements(
-                      state.capturedMeasurementsAfter, kMeasurementLimits);
+                      state.capturedMeasurementsAfter, state.limitsScAfter);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -240,7 +258,7 @@ class _ServiceCallValidationScreenState
 
                   final measurementError = _validateMeasurements(
                       state.capturedMeasurementsBefore,
-                      kSCMeasurementLimitsBefore);
+                      state.limitsScBefore);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -282,7 +300,7 @@ class _ServiceCallValidationScreenState
 
                   final measurementError = _validateMeasurements(
                       state.capturedMeasurementsBefore,
-                      kSCMeasurementLimitsBefore);
+                      state.limitsScBefore);
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;

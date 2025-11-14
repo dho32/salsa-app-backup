@@ -21,6 +21,7 @@ import 'components/salsa_theme.dart';
 import 'firebase_options.dart';
 import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
+import 'models/common/measurement_limits.dart';
 import 'models/proof_of_service/pos_transaction_info_model.dart';
 import 'models/proof_of_service/pos_unserviceable_model.dart';
 import 'models/proof_of_service/pos_validation_entry_model.dart';
@@ -88,6 +89,7 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(ProofOfServiceItemDetailAdapter());
     Hive.registerAdapter(PosUnserviceableModelAdapter());
     Hive.registerAdapter(SCUnserviceableModelAdapter());
+    Hive.registerAdapter(MeasurementLimitsAdapter());
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -107,6 +109,7 @@ class _AppInitializerState extends State<AppInitializer> {
     await Hive.openBox('otp_state');
     await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
     await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+    await Hive.openBox(kAppConfigBox);
 
     ConfirmationService().processQueue();
   }

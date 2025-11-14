@@ -1,6 +1,8 @@
 import 'dart:ui';
 
-import '../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
+import 'package:salsa/components/shared_function.dart';
+
+import '../models/common/measurement_limits.dart';
 
 ///path url
 ///Production
@@ -33,6 +35,7 @@ const kPosUnserviceableDraftsBox = 'unserviceable_drafts_box';
 const kScUnserviceableDraftsBox = 'sc_unserviceable_drafts';
 const String kPosUnserviceablePartialBox = 'pos_unserviceable_partial_cache';
 const String kScUnserviceablePartialBox = 'sc_unserviceable_partial_cache';
+const kAppConfigBox = 'app_config_cache_box';
 
 ///string
 const kStringDialogUnitProblem = """
@@ -169,3 +172,21 @@ const Map<String, MeasurementLimits> kPOSMeasurementLimits = {
       normalMin: 6.0,
       normalMax: 8.0),
 };
+
+final kIndoorLimits = MeasurementLimits(
+    id: 'temp_in',
+    label: 'Suhu Dalam',
+    min: 20,
+    max: 35,
+    normalMax: 20,
+    normalMin: 35,
+    unit: '°C');
+
+final kOutdoorLimits = MeasurementLimits(
+    id: 'temp_out',
+    label: 'Suhu Luar',
+    min: 20,
+    max: 50,
+    normalMax: 20,
+    normalMin: 50,
+    unit: '°C');

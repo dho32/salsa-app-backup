@@ -8,15 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hive/hive.dart';
-import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_cubit.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_state.dart';
-import 'package:salsa/components/shared_function.dart';
 import 'package:salsa/models/proof_of_service/proof_of_service_detail_model.dart';
 
-import '../../../../blocs/location_validation/location_validation_bloc.dart';
-import '../../../../blocs/otp/otp_bloc.dart';
-import '../../../../blocs/otp/otp_repository.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_state.dart';
@@ -28,10 +23,9 @@ import '../../../../components/constants.dart';
 import '../../../../components/shared_widgets.dart';
 import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
-import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
+import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/proof_of_service/pos_validation_entry_model.dart';
-import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../../../../models/service_call/validation_status.dart';
 import '../../proof_of_service_validation/pos_validation_screen.dart';
 
@@ -61,28 +55,22 @@ class _ProofOfServiceDetailBodyMobileState
   late final TextEditingController _finalTempInNoteController;
   final TextEditingController _noteSearchController = TextEditingController();
 
-  final kIndoorLimits = MeasurementLimits(
-      id: 'temp_in',
-      label: 'Suhu Dalam',
-      min: 20,
-      max: 35,
-      normalMax: 20,
-      normalMin: 35,
-      unit: '°C');
-
-  final kOutdoorLimits = MeasurementLimits(
-      id: 'temp_out',
-      label: 'Suhu Luar',
-      min: 20,
-      max: 50,
-      normalMax: 20,
-      normalMin: 50,
-      unit: '°C');
+  late final MeasurementLimits _indoorLimits;
+  late final MeasurementLimits _outdoorLimits;
+  late final MeasurementLimits _finalTempBaseLimits;
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi Controller sekali saja
+    final configBox = Hive.box(kAppConfigBox);
+    final Map<String, MeasurementLimits> headerLimits =
+        Map<String, MeasurementLimits>.from(
+            configBox.get('limits_temp_header') ?? {});
+
+    _indoorLimits = headerLimits['temp_in'] ?? kIndoorLimits;
+    _outdoorLimits = headerLimits['temp_out'] ?? kOutdoorLimits;
+    _finalTempBaseLimits = headerLimits['temp_in'] ?? kIndoorLimits;
+
     final initialFormState = context.read<PosFormCubit>().state;
     _tempInController = TextEditingController(text: initialFormState.tempIn);
     _tempOutController = TextEditingController(text: initialFormState.tempOut);
@@ -263,11 +251,11 @@ class _ProofOfServiceDetailBodyMobileState
                                                   ((double.tryParse(formState
                                                                   .tempIn) ??
                                                               0) >=
-                                                          kIndoorLimits.min &&
+                                                          _indoorLimits.min &&
                                                       (double.tryParse(formState
                                                                   .tempIn) ??
                                                               0) <=
-                                                          kIndoorLimits.max)) ||
+                                                          _indoorLimits.max)) ||
                                               // Kondisi 2: Atau di-skip
                                               formState.isTempInSkipped),
                                     ),
@@ -287,11 +275,11 @@ class _ProofOfServiceDetailBodyMobileState
                                                   ((double.tryParse(formState
                                                                   .tempOut) ??
                                                               0) >=
-                                                          kOutdoorLimits.min &&
+                                                          _outdoorLimits.min &&
                                                       (double.tryParse(formState
                                                                   .tempOut) ??
                                                               0) <=
-                                                          kOutdoorLimits
+                                                          _outdoorLimits
                                                               .max)) ||
                                               // Kondisi 2: Atau di-skip
                                               formState.isTempOutSkipped),
@@ -306,8 +294,19 @@ class _ProofOfServiceDetailBodyMobileState
                                       header: header,
                                       validationStatuses:
                                           detailState.validationStatuses,
-                                      isEnabled: formState.tempIn.isNotEmpty &&
-                                          formState.tempOut.isNotEmpty,
+                                      isEnabled: (
+                                          (formState.tempIn.isNotEmpty &&
+                                              ((double.tryParse(formState.tempIn) ?? 0) >= _indoorLimits.min &&
+                                                  (double.tryParse(formState.tempIn) ?? 0) <= _indoorLimits.max))
+                                              ||
+                                              formState.isTempInSkipped
+                                      ) && (
+                                          (formState.tempOut.isNotEmpty &&
+                                              ((double.tryParse(formState.tempOut) ?? 0) >= _outdoorLimits.min &&
+                                                  (double.tryParse(formState.tempOut) ?? 0) <= _outdoorLimits.max))
+                                              ||
+                                              formState.isTempOutSkipped
+                                      ),
                                     ),
                                 ],
                               ),
@@ -394,7 +393,7 @@ class _ProofOfServiceDetailBodyMobileState
             controller: _tempInController,
             label: 'Suhu Dalam Ruangan (°C)',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            limits: kIndoorLimits,
+            limits: _indoorLimits,
             transNo: widget.transNo,
             initialImage: formState.temperatureInImage,
             onEditingComplete: (finalValue) {
@@ -429,7 +428,7 @@ class _ProofOfServiceDetailBodyMobileState
             controller: _tempOutController,
             label: 'Suhu Luar Ruangan (°C)',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            limits: kOutdoorLimits,
+            limits: _outdoorLimits,
             transNo: widget.transNo,
             initialImage: formState.temperatureOutImage,
             onEditingComplete: (finalValue) {
@@ -475,14 +474,13 @@ class _ProofOfServiceDetailBodyMobileState
         : 'Suhu Dalam Ruangan (°C)';
 
     final finalTempLimits = MeasurementLimits(
-      id: 'final_temp_in',
+      id: _finalTempBaseLimits.id,
       label: label,
-      min: minLimit ?? 4,
-      // Gunakan batas dinamis, atau 4 sebagai default
-      max: 35,
-      unit: '°C',
-      normalMin: minLimit ?? 5,
-      normalMax: 18,
+      min: minLimit ?? _finalTempBaseLimits.min,
+      max: _finalTempBaseLimits.max,
+      unit: _finalTempBaseLimits.unit,
+      normalMin: minLimit ?? _finalTempBaseLimits.normalMin,
+      normalMax: _finalTempBaseLimits.normalMax,
     );
 
     return _buildSection(
@@ -891,8 +889,8 @@ class _ProofOfServiceDetailBodyMobileState
     required bool isEnabled,
   }) {
     final String snackBarMessage = title == 'INDOOR'
-        ? 'Suhu Dalam Ruangan harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.'
-        : 'Suhu Luar Ruangan harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.';
+        ? 'Suhu Dalam Ruangan harus di antara ${_indoorLimits.min}°C dan ${_indoorLimits.max}°C.'
+        : 'Suhu Luar Ruangan harus di antara ${_outdoorLimits.min}°C dan ${_outdoorLimits.max}°C.';
 
     return Stack(
       children: [
@@ -921,8 +919,8 @@ class _ProofOfServiceDetailBodyMobileState
                   ? const Text('Ketuk untuk lihat detail')
                   : Text(
                       title == 'INDOOR'
-                          ? 'Isi Suhu Dalam antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C & foto hasil pengukuran'
-                          : 'Isi Suhu Luar antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C & foto hasil pengukuran',
+                          ? 'Isi Suhu Dalam antara ${_indoorLimits.min}°C dan ${_indoorLimits.max}°C & foto hasil pengukuran'
+                          : 'Isi Suhu Luar antara ${_outdoorLimits.min}°C dan ${_outdoorLimits.max}°C & foto hasil pengukuran',
                       style: const TextStyle(
                           color: Colors.orange, fontWeight: FontWeight.w500),
                     ),
@@ -1078,7 +1076,7 @@ class _ProofOfServiceDetailBodyMobileState
                   if (tempInValue < kIndoorLimits.min ||
                       tempInValue > kIndoorLimits.max) {
                     _showValidationSnackbar(context,
-                        'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.');
+                        'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${_indoorLimits.min}°C dan ${_indoorLimits.max}°C.');
                     return; // Hentikan proses jika tidak valid
                   }
                 }
@@ -1087,19 +1085,21 @@ class _ProofOfServiceDetailBodyMobileState
                   if (tempOutValue < kOutdoorLimits.min ||
                       tempOutValue > kOutdoorLimits.max) {
                     _showValidationSnackbar(context,
-                        'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.');
+                        'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${_outdoorLimits.min}°C dan ${_outdoorLimits.max}°C.');
                     return; // Hentikan proses jika tidak valid
                   }
                 }
 
-                if (finalTempInValue != null &&
-                    minLimit != null &&
-                    tempInValue != null) {
-                  if (finalTempInValue < minLimit ||
-                      finalTempInValue > tempInValue) {
+                if (!latestFormState.isFinalTempInSkipped && finalTempInValue != null) {
+                  // Gunakan base limit dari API jika 'minLimit' dinamis tidak ada
+                  final baseMin = minLimit ?? _finalTempBaseLimits.min;
+                  final baseMax = _finalTempBaseLimits.max;
+
+                  if (finalTempInValue < baseMin ||
+                      finalTempInValue > baseMax) {
                     _showValidationSnackbar(context,
-                        'Suhu Dalam Ruangan ($finalTempInValue°C) harus di antara $minLimit°C dan $tempInValue°C.');
-                    return; // Hentikan proses jika tidak valid
+                        'Suhu Final ($finalTempInValue°C) harus di antara ${baseMin.toStringAsFixed(1)}°C dan ${baseMax.toStringAsFixed(0)}°C.');
+                    return;
                   }
                 }
 
@@ -1139,93 +1139,6 @@ class _ProofOfServiceDetailBodyMobileState
                 }
               }
             },
-            // onPressed: () async {
-            //   FocusScope.of(context).unfocus();
-            //   // Menunggu sesaat agar event unfocus selesai diproses
-            //   await Future.delayed(const Duration(milliseconds: 150));
-            //   final latestFormState = context.read<PosFormCubit>().state;
-            //
-            //   if (latestFormState.isFormReadyToSubmit) {
-            //     final tempInValue = double.tryParse(latestFormState.tempIn);
-            //     final tempOutValue = double.tryParse(latestFormState.tempOut);
-            //     if (tempInValue != null) {
-            //       if (tempInValue < kIndoorLimits.min ||
-            //           tempInValue > kIndoorLimits.max) {
-            //         _showValidationSnackbar(context,
-            //             'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${kIndoorLimits.min}°C dan ${kIndoorLimits.max}°C.');
-            //         return; // Hentikan proses jika tidak valid
-            //       }
-            //     }
-            //     if (tempOutValue != null) {
-            //       if (tempOutValue < kOutdoorLimits.min ||
-            //           tempOutValue > kOutdoorLimits.max) {
-            //         _showValidationSnackbar(context,
-            //             'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${kOutdoorLimits.min}°C dan ${kOutdoorLimits.max}°C.');
-            //         return; // Hentikan proses jika tidak valid
-            //       }
-            //     }
-            //     final user = await AuthStorage.getUser();
-            //     final maintenanceByIP = await getPublicIpAddress();
-            //     final technicianName = user['name'] ?? '';
-            //     final maintenanceBy = user['user_id'] ?? '';
-            //     final double storeLat =
-            //         double.tryParse(header.latitude ?? '') ?? 0.0;
-            //     final double storeLong =
-            //         double.tryParse(header.longitude ?? '') ?? 0.0;
-            //
-            //     await showDialog<void>(
-            //       context: context,
-            //       builder: (_) {
-            //         return MultiBlocProvider(
-            //           providers: [
-            //             // OTP Bloc
-            //             BlocProvider(
-            //                 create: (_) =>
-            //                     OtpBloc(repository: OtpRepository())),
-            //             BlocProvider(create: (_) => LocationValidationBloc()),
-            //             BlocProvider.value(
-            //                 value: context.read<UploadProgressCubit>()),
-            //           ],
-            //           child: OtpDialog(
-            //             transNo: header.transNo,
-            //             shipTo: header.shipToCode,
-            //             email: header.storeEmail,
-            //             storeLat: storeLat,
-            //             storeLong: storeLong,
-            //             onVerified: () {
-            //               final progressCubit =
-            //                   context.read<UploadProgressCubit>();
-            //               context.read<PosSubmittedBloc>().add(
-            //                     SubmitPosValidation(
-            //                       transNo: header.transNo,
-            //                       createdBy: maintenanceBy,
-            //                       createdByName: technicianName,
-            //                       createdByIP: maintenanceByIP,
-            //                       progressCubit: progressCubit,
-            //                     ),
-            //                   );
-            //             },
-            //           ),
-            //         );
-            //       },
-            //     );
-            //   } else {
-            //     if (!formState.isPicStoreValid) {
-            //       _showValidationSnackbar(context,
-            //           'Harap lengkapi informasi PIC Toko terlebih dahulu.');
-            //     } else if (!formState.isServiceInfoValid) {
-            //       _showValidationSnackbar(context,
-            //           'Harap lengkapi informasi servis dan foto pengukuran suhu.');
-            //     } else if (!formState.allUnitsValidated) {
-            //       // <-- Gunakan state dari Cubit
-            //       _showValidationSnackbar(context,
-            //           'Harap lengkapi semua validasi unit terlebih dahulu.');
-            //     } else {
-            //       _showValidationSnackbar(context,
-            //           'Pastikan semua data sudah terisi dengan benar.');
-            //     }
-            //   }
-            // },
           ),
         ),
       ),

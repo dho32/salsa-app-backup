@@ -49,23 +49,3 @@ class ProofOfServiceDetailData extends HiveObject {
     );
   }
 }
-
-class MeasurementLimits {
-  final String id;
-  final String label;
-  final double min;
-  final double max;
-  final String unit;
-  final double normalMin; // Batas normal minimum
-  final double normalMax;
-
-  const MeasurementLimits({
-    required this.id,
-    required this.label,
-    required this.min,
-    required this.max,
-    required this.unit,
-    required this.normalMin,
-    required this.normalMax,
-  });
-}

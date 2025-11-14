@@ -15,7 +15,6 @@ class RemoteValidationBodyMobile extends StatelessWidget {
   final VoidCallback onAddProblem;
   final ValueChanged<SelectedProblemCard> onRemoveProblem;
 
-
   const RemoteValidationBodyMobile({
     super.key,
     required this.isLoading,
@@ -31,9 +30,8 @@ class RemoteValidationBodyMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final problemsForSelectedType = problemSources.isEmpty
-        ? <Problem>[]
-        : problemSources[0].problems;
+    final problemsForSelectedType =
+        problemSources.isEmpty ? <Problem>[] : problemSources[0].problems;
 
     // Body tidak lagi punya Scaffold, hanya kontennya saja
     return SingleChildScrollView(
@@ -49,9 +47,12 @@ class RemoteValidationBodyMobile extends StatelessWidget {
           if (!isLoading) ...[
             buildProblemCards(
               context: context,
-              state: ValidationDropdownLoaded( // Beri data dummy yg dibutuhkan
+              state: ValidationDropdownLoaded(
+                // Beri data dummy yg dibutuhkan
                 data: [],
                 selectedProblemCards: selectedProblemCards,
+                limitsScBefore: {},
+                limitsScAfter: {},
               ),
               problemsForType: problemsForSelectedType,
             ),

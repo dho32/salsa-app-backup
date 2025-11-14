@@ -11,16 +11,12 @@ import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown
 import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import 'package:salsa/models/service_call/problem_source_model.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart';
-import 'package:salsa/screens/service_call/service_call_validation/components/widgets/measurement_input_section.dart';
 import 'package:salsa/screens/service_call/service_call_validation/components/widgets/service_call_validation_widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/widgets/sc_measurement_input_section.dart';
 import '../../../../models/common/captured_image_detail.dart';
-
-const List<String> indoorMeasurementIds = ['Suhu'];
-const List<String> outdoorMeasurementIds = ['Tegangan', 'Arus', 'Tekanan'];
 
 class ServiceCallValidationBodyMobile extends StatefulWidget {
   final String transNo;
@@ -100,7 +96,7 @@ class _ServiceCallValidationBodyMobileState
         final XFile? compressedImage =
             await FlutterImageCompress.compressAndGetFile(
           image.path, targetPath,
-          quality: 70, minWidth: 1080, //ukuran full HD
+          quality: 70, minWidth: 1080,
           minHeight: 1920,
         );
 
@@ -284,11 +280,11 @@ class _ServiceCallValidationBodyMobileState
               // Tombol ambil foto
               const SizedBox(height: 8),
               ScMeasurementInputSection(
-                key: const ValueKey('measurements_before'), // Key tetap penting
+                key: const ValueKey('measurements_before'),
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsBefore,
                 isBefore: true,
-                limitsMap: kSCMeasurementLimitsBefore,
+                limitsMap: state.limitsScBefore,
               ),
               SizedBox(
                 height: 20,
@@ -332,7 +328,7 @@ class _ServiceCallValidationBodyMobileState
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsAfter,
                 isBefore: false,
-                limitsMap: kMeasurementLimits,
+                limitsMap: state.limitsScAfter,
               ),
               const SizedBox(height: 16),
               buildUnitTypeSelector(
