@@ -15,6 +15,7 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_bloc.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_event.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_state.dart';
+import '../../../../components/services/watermark_service.dart';
 import '../../../../components/widgets/generic_measurement_input_section.dart';
 import '../../../../components/widgets/photo_grid.dart';
 import '../../../../models/common/measurement_entry.dart';
@@ -97,7 +98,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     final currentState = context.read<PosValidationBloc>().state;
     if (currentState is PosValidationLoaded) {
       final photoList =
-          isBefore ? currentState.photosBefore : currentState.photosAfter;
+      isBefore ? currentState.photosBefore : currentState.photosAfter;
       if (photoList.length >= 2) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -115,45 +116,62 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
-      if (image == null) return;
 
-      final appDir = await getApplicationDocumentsDirectory();
-      final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
-      if (!await imagesDir.exists()) {
-        await imagesDir.create();
-      }
-      final targetPath =
-          p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+      if (image != null) {
+        final userData = await AuthStorage.getUser();
+        final technicianName = userData['name'] ?? 'Unknown';
+        final deviceModel = userData['device_model'] ?? 'Unknown Device';
+        final timestamp = DateTime.now();
 
-      final compressFuture = FlutterImageCompress.compressAndGetFile(
-        image.path,
-        targetPath,
-        quality: 70,
-        minWidth: 1080,
-        minHeight: 1920,
-      );
+        final appDir = await getApplicationDocumentsDirectory();
+        final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+        if (!await imagesDir.exists()) {
+          await imagesDir.create();
+        }
 
-      final results = await Future.wait([compressFuture]);
-      final XFile? compressedImage = results[0];
-      if (compressedImage == null) return;
-      final userData = await AuthStorage.getUser();
-      final capturedImageDetail = CapturedImageDetail(
-        imagePath: compressedImage.path,
-        timestamp: DateTime.now(),
-        latitude: 0,
-        longitude: 0,
-        address: "",
-        technicianName: userData['name'] ?? 'Unknown',
-        deviceModel: userData['device_model'] ?? 'Unknown Device',
-        transNo: widget.transNo,
-      );
+        // 2. Tentukan Path Target
+        final targetPath = p.join(
+            imagesDir.path, 'WM_POS_${timestamp.millisecondsSinceEpoch}.jpg');
 
-      if (!mounted) return;
-      final bloc = context.read<PosValidationBloc>();
-      if (isBefore) {
-        bloc.add(AddPhotoBefore(capturedImageDetail));
-      } else {
-        bloc.add(AddPhotoAfter(capturedImageDetail));
+        // 3. PROSES WATERMARK (Background Transparan + Teks)
+        final request = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: widget.transNo,
+          timestamp: timestamp,
+          technicianName: technicianName,
+          deviceModel: deviceModel,
+        );
+
+        final String? finalImagePath = await WatermarkService.processImage(request);
+
+        if (finalImagePath == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal memproses foto")));
+          }
+          return;
+        }
+
+        // 4. Simpan ke BLoC
+        final capturedImageDetail = CapturedImageDetail(
+          imagePath: finalImagePath, // Path hasil watermark
+          timestamp: timestamp,
+          latitude: 0.0, // (Isi jika pakai GPS)
+          longitude: 0.0,
+          address: "",
+          technicianName: technicianName,
+          deviceModel: deviceModel,
+          transNo: widget.transNo,
+        );
+
+        if (mounted) {
+          final bloc = context.read<PosValidationBloc>();
+          if (isBefore) {
+            bloc.add(AddPhotoBefore(capturedImageDetail));
+          } else {
+            bloc.add(AddPhotoAfter(capturedImageDetail));
+          }
+        }
       }
     } catch (e) {
       if (mounted) {

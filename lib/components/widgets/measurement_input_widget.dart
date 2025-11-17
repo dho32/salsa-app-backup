@@ -11,6 +11,7 @@ import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../../models/common/measurement_limits.dart';
 import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
+import '../services/watermark_service.dart';
 import '../shared_function.dart';
 import 'full_screen_image_viewer.dart';
 
@@ -172,37 +173,63 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   Future<void> _takePhoto() async {
     if (_currentImage != null) return;
     setState(() => _isLoading = true);
+
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
+
       if (image != null) {
+        // 1. Siapkan Data (User & Waktu)
+        final userData = await AuthStorage.getUser();
+        final technicianName = userData['name'] ?? 'Unknown';
+        final deviceModel = userData['device_model'] ?? 'Unknown Device';
+        final timestamp = DateTime.now();
+
+        // 2. Siapkan Folder Permanen
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
         if (!await imagesDir.exists()) {
           await imagesDir.create();
         }
+
+        // 3. Buat nama file unik
+        // final cleanLabel = widget.label.replaceAll(RegExp(r'[^\w]'), '_');
         final targetPath = p.join(
-            imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final XFile? compressedImage =
-            await FlutterImageCompress.compressAndGetFile(
-          image.path,
-          targetPath,
-          quality: 70,
+            imagesDir.path, 'WM_${timestamp.millisecondsSinceEpoch}.jpg');
+
+        // 4. PROSES WATERMARK (Background Transparan + Teks)
+        final request = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: widget.transNo,
+          timestamp: timestamp,
+          technicianName: technicianName,
+          deviceModel: deviceModel,
         );
-        if (compressedImage == null) return;
-        final userData = await AuthStorage.getUser();
+
+        final String? finalImagePath = await WatermarkService.processImage(request);
+
+        if (finalImagePath == null) {
+          // Gagal watermark, batalkan
+          return;
+        }
+
+        // 5. Update State
         _currentImage = CapturedImageDetail(
-          imagePath: compressedImage.path,
-          timestamp: DateTime.now(),
+          imagePath: finalImagePath, // Path hasil watermark
+          timestamp: timestamp,
           latitude: 0,
           longitude: 0,
           address: "",
-          technicianName: userData['name'] ?? 'Unknown',
-          deviceModel: userData['device_model'] ?? 'Unknown Device',
+          technicianName: technicianName,
+          deviceModel: deviceModel,
           transNo: widget.transNo,
         );
+
         widget.onImageChanged?.call(_currentImage);
       }
+    } catch (e) {
+      print("Error taking photo: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

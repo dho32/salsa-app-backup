@@ -12,6 +12,7 @@ import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../../components/services/hive_clear_service.dart';
+import '../../../components/services/watermark_service.dart';
 import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/proof_of_service/pos_transaction_info_model.dart';
@@ -151,42 +152,56 @@ class PosUnserviceableBloc
         return;
       }
 
+      // 1. Siapkan Data User & Waktu
+      final userData = await AuthStorage.getUser();
+      final technicianName = userData['name'] ?? 'Unknown';
+      final deviceModel = userData['device_model'] ?? 'Unknown Device';
+      final timestamp = DateTime.now();
+
+      // 2. Siapkan Direktori Permanen
       final appDir = await getApplicationDocumentsDirectory();
       final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
       if (!await imagesDir.exists()) {
         await imagesDir.create();
       }
-      final targetPath = p.join(
-          imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-      final XFile? compressedImage =
-          await FlutterImageCompress.compressAndGetFile(
-        pickedFile.path,
-        targetPath,
-        quality: 70,
-        minWidth: 1080,
-        minHeight: 1920,
+      // 3. Tentukan Path Tujuan
+      final targetPath = p.join(
+          imagesDir.path, 'WM_ISSUE_${timestamp.millisecondsSinceEpoch}.jpg');
+
+      // 4. PROSES WATERMARK
+      final request = WatermarkRequest(
+        originalPath: pickedFile.path,
+        targetPath: targetPath,
+        transNo: transNo,
+        timestamp: timestamp,
+        technicianName: technicianName,
+        deviceModel: deviceModel,
       );
 
-      if (compressedImage == null) {
-        emit(state.copyWith(status: UnserviceableStatus.initial));
+      final String? finalImagePath = await WatermarkService.processImage(request);
+
+      if (finalImagePath == null) {
+        emit(state.copyWith(
+            status: UnserviceableStatus.failure,
+            errorMessage: 'Gagal memproses watermark foto'));
         return;
       }
 
+      // 5. Ambil GPS (Untuk Metadata)
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
       );
 
-      final user = await AuthStorage.getUser();
-
+      // 6. Simpan ke State
       final imageDetail = CapturedImageDetail(
-        imagePath: compressedImage.path,
-        timestamp: DateTime.now(),
+        imagePath: finalImagePath, // Gunakan path hasil watermark
+        timestamp: timestamp,
         latitude: position.latitude,
         longitude: position.longitude,
         address: "",
-        technicianName: user['name'] ?? 'Unknown',
-        deviceModel: user['device_model'] ?? "Device Model Placeholder",
+        technicianName: technicianName,
+        deviceModel: deviceModel,
         transNo: transNo,
       );
 
@@ -195,6 +210,7 @@ class PosUnserviceableBloc
 
       emit(state.copyWith(
           proofImages: updatedPhotos, status: UnserviceableStatus.initial));
+
     } catch (e) {
       emit(state.copyWith(
           status: UnserviceableStatus.failure,

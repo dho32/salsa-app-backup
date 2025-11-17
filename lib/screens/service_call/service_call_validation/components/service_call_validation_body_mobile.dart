@@ -15,6 +15,7 @@ import 'package:salsa/screens/service_call/service_call_validation/components/wi
 import 'package:image_picker/image_picker.dart';
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/constants.dart';
+import '../../../../components/services/watermark_service.dart';
 import '../../../../components/widgets/sc_measurement_input_section.dart';
 import '../../../../models/common/captured_image_detail.dart';
 
@@ -82,29 +83,45 @@ class _ServiceCallValidationBodyMobileState
       ValidationDropdownLoaded state, bool isBefore) async {
     try {
       final picker = ImagePicker();
+      // 1. Ambil Foto dari Kamera
       final XFile? image = await picker.pickImage(source: ImageSource.camera);
 
       if (image != null) {
-        // Proses kompresi gambar
+        // 2. Siapkan Data User & Waktu (Dibutuhkan untuk teks watermark)
+        final userData = await AuthStorage.getUser();
+        final technicianName = userData['name'] ?? 'Unknown';
+        final deviceModel = userData['device_model'] ?? 'Unknown Device';
+        final timestamp = DateTime.now();
+
+        // 3. Siapkan Direktori Penyimpanan
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
         if (!await imagesDir.exists()) {
           await imagesDir.create();
         }
+
+        // Tentukan nama file output (Prefix 'WM_' untuk menandai Watermark)
         final targetPath = p.join(
-            imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final XFile? compressedImage =
-            await FlutterImageCompress.compressAndGetFile(
-          image.path, targetPath,
-          quality: 70, minWidth: 1080,
-          minHeight: 1920,
+            imagesDir.path, 'WM_${timestamp.millisecondsSinceEpoch}.jpg');
+
+        // 4. PROSES WATERMARK
+        final request = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: widget.transNo,
+          timestamp: timestamp,
+          technicianName: technicianName,
+          deviceModel: deviceModel,
         );
 
-        if (compressedImage == null) {
+        final String? finalImagePath =
+            await WatermarkService.processImage(request);
+
+        if (finalImagePath == null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Gagal memproses gambar.'),
+                content: Text('Gagal memproses watermark foto.'),
                 backgroundColor: Colors.red,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -113,35 +130,15 @@ class _ServiceCallValidationBodyMobileState
           return;
         }
 
-        // Proses ambil data GPS
-        final timestamp = DateTime.now();
+        // 5. Data GPS (Placeholder, sesuaikan jika ingin diaktifkan kembali)
         double latitude = 0.0;
         double longitude = 0.0;
         String address = '';
 
-        // try {
-        //   Position position = await Geolocator.getCurrentPosition(
-        //     locationSettings:
-        //         const LocationSettings(accuracy: LocationAccuracy.high),
-        //   );
-        //   latitude = position.latitude;
-        //   longitude = position.longitude;
-        //   List<Placemark> placemarks =
-        //       await placemarkFromCoordinates(latitude, longitude);
-        //   Placemark place = placemarks.first;
-        //   address =
-        //       "${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}";
-        // } catch (e) {
-        //   // Handle error GPS
-        // }
-
-        final userData = await AuthStorage.getUser();
-        final technicianName = userData['name'] ?? 'Unknown';
-        final deviceModel = userData['device_model'] ?? 'Unknown Device';
-
-        // Buat detail gambar
+        // 6. Buat Object CapturedImageDetail
+        // Gunakan 'finalImagePath' yang sudah ada watermark-nya
         final capturedImageDetail = CapturedImageDetail(
-          imagePath: compressedImage.path,
+          imagePath: finalImagePath,
           timestamp: timestamp,
           latitude: latitude,
           longitude: longitude,
@@ -151,7 +148,7 @@ class _ServiceCallValidationBodyMobileState
           transNo: widget.transNo,
         );
 
-        // Kirim event ke BLoC
+        // 7. Kirim ke BLoC
         if (mounted) {
           final bloc = context.read<ValidationDropdownBloc>();
           if (isBefore) {
@@ -161,8 +158,17 @@ class _ServiceCallValidationBodyMobileState
           }
         }
       }
+    } catch (e) {
+      print("Error capturing image: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text("Terjadi kesalahan: $e"),
+              backgroundColor: Colors.red),
+        );
+      }
     } finally {
-      // Pastikan loading selalu berhenti, apapun yang terjadi
+      // Pastikan loading selalu berhenti
       if (mounted) {
         setState(() {
           _isTakingUnitPhoto = false;
@@ -276,7 +282,8 @@ class _ServiceCallValidationBodyMobileState
               ),
               buildPhotoSection(context, state,
                   isBefore: true, isLoading: _isTakingUnitPhoto),
-              _handleButtonPhotoWidget(context, state, isBefore: true),
+              _handleButtonPhotoWidget(context, state,
+                  isBefore: true, isLoading: _isTakingUnitPhoto),
               // Tombol ambil foto
               const SizedBox(height: 8),
               ScMeasurementInputSection(
@@ -321,10 +328,12 @@ class _ServiceCallValidationBodyMobileState
               ),
               buildPhotoSection(context, state,
                   isBefore: false, isLoading: _isTakingUnitPhoto),
-              _handleButtonPhotoWidget(context, state, isBefore: false),
+              _handleButtonPhotoWidget(context, state,
+                  isBefore: false, isLoading: _isTakingUnitPhoto),
               const SizedBox(height: 8),
               ScMeasurementInputSection(
-                key: const ValueKey('measurements_after'), // Key tetap penting
+                key: const ValueKey('measurements_after'),
+                // Key tetap penting
                 transNo: widget.transNo,
                 measurements: state.capturedMeasurementsAfter,
                 isBefore: false,
@@ -368,22 +377,39 @@ class _ServiceCallValidationBodyMobileState
   // Helper untuk tombol foto agar tidak duplikat kode
   Widget _handleButtonPhotoWidget(
       BuildContext context, ValidationDropdownLoaded state,
-      {required bool isBefore}) {
+      {required bool isBefore, required bool isLoading}) {
     final Color primary = Theme.of(context).primaryColor;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: OutlinedButton.icon(
-        icon: const Icon(Icons.camera_alt),
-        label: Text('Ambil Foto Unit (${isBefore ? 'Sebelum' : 'Sesudah'})'),
-        onPressed: () => _handlePhoto(context, state, isBefore: isBefore),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 40),
-          side: BorderSide(color: primary),
-          foregroundColor: primary,
-        ),
-      ),
-    );
+    return isLoading
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: OutlinedButton.icon(
+              label: Transform.scale(
+                scale: 0.5, // 50% lebih kecil
+                child: CircularProgressIndicator(),
+              ),
+              onPressed: () {},
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 40),
+                side: BorderSide(color: primary),
+                foregroundColor: primary,
+              ),
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.camera_alt),
+              label:
+                  Text('Ambil Foto Unit (${isBefore ? 'Sebelum' : 'Sesudah'})'),
+              onPressed: () => _handlePhoto(context, state, isBefore: isBefore),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 40),
+                side: BorderSide(color: primary),
+                foregroundColor: primary,
+              ),
+            ),
+          );
   }
 
   // Helper untuk tombol tambah masalah
