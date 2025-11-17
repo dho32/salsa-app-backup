@@ -59,6 +59,10 @@ class _ProofOfServiceDetailBodyMobileState
   late final MeasurementLimits _outdoorLimits;
   late final MeasurementLimits _finalTempBaseLimits;
 
+  late final TextEditingController _picNameController;
+  late final TextEditingController _picPhoneController;
+  late final TextEditingController _picNikController;
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +92,10 @@ class _ProofOfServiceDetailBodyMobileState
         TextEditingController(text: initialFormState.technician2);
     _technician3Controller =
         TextEditingController(text: initialFormState.technician3);
+    _picNameController = TextEditingController(text: initialFormState.picName);
+    _picPhoneController =
+        TextEditingController(text: initialFormState.picPhone);
+    _picNikController = TextEditingController(text: initialFormState.picNik);
   }
 
   @override
@@ -103,6 +111,9 @@ class _ProofOfServiceDetailBodyMobileState
     _technician1Controller.dispose();
     _technician2Controller.dispose();
     _technician3Controller.dispose();
+    _picNameController.dispose();
+    _picPhoneController.dispose();
+    _picNikController.dispose();
     super.dispose();
   }
 
@@ -142,7 +153,10 @@ class _ProofOfServiceDetailBodyMobileState
               previous.finalTempInNote != current.finalTempInNote ||
               previous.technician1 != current.technician1 ||
               previous.technician2 != current.technician2 ||
-              previous.technician3 != current.technician3,
+              previous.technician3 != current.technician3 ||
+              previous.picName != current.picName ||
+              previous.picPhone != current.picPhone ||
+              previous.picNik != current.picNik,
           listener: (context, state) {
             // (Sinkronisasi Suhu & Note SAMA)
             if (_tempInController.text != state.tempIn) {
@@ -172,6 +186,15 @@ class _ProofOfServiceDetailBodyMobileState
             }
             if (_technician3Controller.text != state.technician3) {
               _technician3Controller.text = state.technician3;
+            }
+            if (_picNameController.text != state.picName) {
+              _picNameController.text = state.picName;
+            }
+            if (_picPhoneController.text != state.picPhone) {
+              _picPhoneController.text = state.picPhone;
+            }
+            if (_picNikController.text != state.picNik) {
+              _picNikController.text = state.picNik;
             }
           },
         ),
@@ -294,19 +317,25 @@ class _ProofOfServiceDetailBodyMobileState
                                       header: header,
                                       validationStatuses:
                                           detailState.validationStatuses,
-                                      isEnabled: (
-                                          (formState.tempIn.isNotEmpty &&
-                                              ((double.tryParse(formState.tempIn) ?? 0) >= _indoorLimits.min &&
-                                                  (double.tryParse(formState.tempIn) ?? 0) <= _indoorLimits.max))
-                                              ||
-                                              formState.isTempInSkipped
-                                      ) && (
-                                          (formState.tempOut.isNotEmpty &&
-                                              ((double.tryParse(formState.tempOut) ?? 0) >= _outdoorLimits.min &&
-                                                  (double.tryParse(formState.tempOut) ?? 0) <= _outdoorLimits.max))
-                                              ||
-                                              formState.isTempOutSkipped
-                                      ),
+                                      isEnabled: ((formState.tempIn.isNotEmpty &&
+                                                  ((double.tryParse(formState.tempIn) ??
+                                                              0) >=
+                                                          _indoorLimits.min &&
+                                                      (double.tryParse(formState
+                                                                  .tempIn) ??
+                                                              0) <=
+                                                          _indoorLimits.max)) ||
+                                              formState.isTempInSkipped) &&
+                                          ((formState.tempOut.isNotEmpty &&
+                                                  ((double.tryParse(formState.tempOut) ??
+                                                              0) >=
+                                                          _outdoorLimits.min &&
+                                                      (double.tryParse(formState
+                                                                  .tempOut) ??
+                                                              0) <=
+                                                          _outdoorLimits
+                                                              .max)) ||
+                                              formState.isTempOutSkipped),
                                     ),
                                 ],
                               ),
@@ -774,7 +803,7 @@ class _ProofOfServiceDetailBodyMobileState
       child: Column(
         children: [
           _buildCustomTextField(
-            initialValue: formState.picName,
+            controller: _picNameController,
             hintText: 'Nama Lengkap PIC',
             icon: Icons.person_outline,
             onChanged: (value) {
@@ -784,7 +813,7 @@ class _ProofOfServiceDetailBodyMobileState
           ),
           const SizedBox(height: 12),
           _buildCustomTextField(
-            initialValue: formState.picPhone,
+            controller: _picPhoneController,
             hintText: 'Nomor Telepon',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
@@ -798,7 +827,7 @@ class _ProofOfServiceDetailBodyMobileState
             children: [
               Expanded(
                 child: _buildCustomTextField(
-                  initialValue: formState.picNik,
+                  controller: _picNikController,
                   hintText: 'NIK',
                   icon: Icons.badge_outlined,
                   onChanged: (value) {
@@ -1090,7 +1119,8 @@ class _ProofOfServiceDetailBodyMobileState
                   }
                 }
 
-                if (!latestFormState.isFinalTempInSkipped && finalTempInValue != null) {
+                if (!latestFormState.isFinalTempInSkipped &&
+                    finalTempInValue != null) {
                   // Gunakan base limit dari API jika 'minLimit' dinamis tidak ada
                   final baseMin = minLimit ?? _finalTempBaseLimits.min;
                   final baseMax = _finalTempBaseLimits.max;
@@ -1187,8 +1217,7 @@ class _ProofOfServiceDetailBodyMobileState
   }
 
   Widget _buildCustomTextField({
-    TextEditingController? controller,
-    String initialValue = '',
+    required TextEditingController controller,
     required String hintText,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
@@ -1196,13 +1225,8 @@ class _ProofOfServiceDetailBodyMobileState
     Function(String)? onChanged,
     Widget? suffixIcon,
   }) {
-    final bool isUsingExternalController = controller != null;
-    final TextEditingController localController = isUsingExternalController
-        ? controller
-        : TextEditingController(text: initialValue);
-
     return TextFormField(
-      controller: localController,
+      controller: controller,
       onChanged: onChanged,
       keyboardType: keyboardType,
       readOnly: readOnly,
