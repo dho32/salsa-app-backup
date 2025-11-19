@@ -195,7 +195,9 @@ class _ServiceCallValidationScreenState
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: () {
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 200));
                   // --- Validasi "Sesudah" ---
                   final measurementError = _validateMeasurements(
                       state.capturedMeasurementsAfter, state.limitsScAfter);
@@ -240,7 +242,10 @@ class _ServiceCallValidationScreenState
           else if (state.currentStep == 0) ...[
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () {
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   bool hasDataToSave = state.capturedPhotosBefore.isNotEmpty ||
                       state.capturedMeasurementsBefore
                           .any((m) => m.value != 0.0);
@@ -282,7 +287,10 @@ class _ServiceCallValidationScreenState
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   if (state.capturedPhotosBefore.isEmpty) {
                     _showErrorSnackbar('Lengkapi semua foto unit (Sebelum).');
                     return;

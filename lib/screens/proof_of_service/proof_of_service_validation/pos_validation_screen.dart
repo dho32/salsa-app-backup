@@ -47,10 +47,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   /// Fungsi debug yang mencetak status setiap elemen
   /// DAN mengembalikan 'true' HANYA JIKA semua elemen lolos.
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
-    print('--- MEMULAI DEBUGGING _areAllMeasurementsFilled ---');
-    print('Total elemen: ${measurements.length}');
 
-    // 1. Kita mulai dengan asumsi semuanya LOLOS
     bool allItemsPassed = true;
 
     for (int i = 0; i < measurements.length; i++) {
@@ -60,11 +57,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       bool isSkippedCheck = m.isSkipped ?? false;
       bool isFilledCheck = (m.capturedImage != null && m.value != 0);
       bool didPass = isSkippedCheck || isFilledCheck;
-
-      print('\n--- Memeriksa Item ke-$i ---');
-      print('isSkipped: ${m.isSkipped} (Evaluasi: $isSkippedCheck)');
-      print('capturedImage != null: ${m.capturedImage != null}');
-      print('value: ${m.value} (Evaluasi: ${m.value != 0})');
 
       if (didPass) {
         print('>>> Status: LOLOS');
@@ -77,8 +69,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       }
     }
 
-    print('\n--- DEBUGGING SELESAI ---');
-
     // 3. Kembalikan hasil akhir
     return allItemsPassed;
   }
@@ -87,8 +77,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   void initState() {
     super.initState();
     _noteController.text = widget.initialData?.note ?? '';
-
-
   }
 
   @override
@@ -115,8 +103,8 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
         ..add(FetchPosValidationData(
           initialData: widget.initialData,
           unitType: widget.unitType,
-          allIndoorSerials: widget.allIndoorSerials, // <-- Kirim daftar
-          serialNo: widget.serialNo, // <-- Kirim SN unit ini
+          allIndoorSerials: widget.allIndoorSerials,
+          serialNo: widget.serialNo,
           transNo: widget.transNo,
         )),
       child: BlocListener<PosValidationBloc, PosValidationState>(
@@ -184,7 +172,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       child: Row(
         children: [
           if (state.currentStep == 1) ...[
-            // Tombol di Step 2 (Sesudah)
             Expanded(
               child: OutlinedButton.icon(
                 label: const Text('Kembali'),
@@ -200,8 +187,8 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 child: const Text('Simpan'),
                 onPressed: () async {
                   FocusScope.of(context).unfocus();
-                  // Menunggu sesaat agar event unfocus selesai diproses
-                  await Future.delayed(const Duration(milliseconds: 150));
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   final latestState = context.read<PosValidationBloc>().state;
                   if (latestState is! PosValidationLoaded) return;
 
@@ -266,12 +253,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     articleType: widget.unitType,
                     indoorTemp: widget.indoorTemp,
                   ));
-                  // Navigator.of(context).pop(true);
-                  // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  //   content: Text('Data berhasil disimpan'),
-                  //   backgroundColor: Colors.green,
-                  //   behavior: SnackBarBehavior.floating,
-                  // ));
                 },
               ),
             ),
