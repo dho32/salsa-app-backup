@@ -176,7 +176,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
     try {
       final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.camera);
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
 
       if (image != null) {
         // 1. Siapkan Data (User & Waktu)

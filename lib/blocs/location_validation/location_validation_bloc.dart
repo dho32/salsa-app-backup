@@ -51,7 +51,12 @@ class LocationValidationBloc
 
     try {
       final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.camera);
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
 
       if (image == null) {
         // Kembalikan ke state Loaded jika user cancel (agar loading hilang)

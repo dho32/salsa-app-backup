@@ -145,7 +145,12 @@ class PosUnserviceableBloc
 
     try {
       final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.camera);
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
 
       if (pickedFile == null) {
         emit(state.copyWith(status: UnserviceableStatus.initial));

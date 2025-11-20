@@ -84,7 +84,12 @@ class _ServiceCallValidationBodyMobileState
     try {
       final picker = ImagePicker();
       // 1. Ambil Foto dari Kamera
-      final XFile? image = await picker.pickImage(source: ImageSource.camera);
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
 
       if (image != null) {
         // 2. Siapkan Data User & Waktu (Dibutuhkan untuk teks watermark)
