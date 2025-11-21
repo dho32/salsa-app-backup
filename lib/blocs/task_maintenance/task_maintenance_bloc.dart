@@ -14,9 +14,8 @@ class TaskMaintenanceBloc extends Bloc<SearchPO, POSearchState> {
   Future<void> _onSearchPO(SearchPO event, Emitter<POSearchState> emit) async {
     emit(POSearchLoading());
     try {
-      // Panggil method repository yang baru
       final results = await repository.searchTransactions(
-          event.transNo, event.maintenanceBy, event.taskType);
+          event.transNo, event.maintenanceBy);
       emit(POSearchSuccess(results));
     } catch (e) {
       emit(POSearchFailure(e.toString()));
