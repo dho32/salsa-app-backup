@@ -16,7 +16,7 @@ class TaskMaintenanceRepository {
         'maintenance_by': maintenanceBy
       };
 
-      Uri uri = getUrl(pathUrl: 'task_maintenance', params: params);
+      Uri uri = getUrl(pathUrl: 'task_maintenance/v2', params: params);
       final response = await http.get(uri);
 
       print(uri);

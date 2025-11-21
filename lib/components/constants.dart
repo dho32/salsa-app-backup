@@ -136,11 +136,8 @@ const Map<String, MeasurementLimits> kMeasurementLimits = {
   'final_temp_in_sc': MeasurementLimits(
       id: 'final_temp_in_sc',
       label: 'Suhu Dalam Ruangan',
-      // Label dasar
       min: 4,
-      // Batas bawah default (akan ditimpa oleh BLoC)
       max: 30,
-      // Batas atas
       unit: '°C',
       normalMin: 5,
       normalMax: 18),
