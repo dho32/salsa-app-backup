@@ -11,9 +11,9 @@ import '../../models/service_call/sc_unserviceable_model.dart';
 import '../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../screens/common/services/confirmation_service.dart';
 
-part 'failed_uploads_event.dart'; // Pastikan event FinalizeSuccessfulRetry ada di sini
-part 'failed_uploads_state.dart'; // Pastikan state punya field retry...
+part 'failed_uploads_event.dart';
 
+part 'failed_uploads_state.dart';
 
 class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
   final UploadProgressCubit progressCubit;
@@ -42,13 +42,12 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         final box = await Hive.openBox<Map<dynamic, dynamic>>(boxName);
         final subscription = box.watch().listen((event) {
           if (event.deleted) {
-
-            print("📦 Hive DELETION detected in $boxName for key ${event.key}, scheduling reload...");
+            print(
+                "📦 Hive DELETION detected in $boxName for key ${event.key}, scheduling reload...");
             if (!isClosed) {
               // Tambahkan delay
               Future.delayed(const Duration(milliseconds: 500), () {
                 if (!isClosed) {
-                  // HAPUS DELAY: Langsung add event
                   add(LoadFailedUploads());
                 }
               });
@@ -73,23 +72,21 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
 
   Future<void> _onLoadFailedUploads(
       LoadFailedUploads event, Emitter<FailedUploadsState> emit) async {
-    // Pastikan reset uploadingTransNo hanya saat loading awal, bukan saat refresh
-    final bool isInitialLoad = state.status == FailedUploadsStatus.initial || state.status == FailedUploadsStatus.loading;
+    final bool isInitialLoad = state.status == FailedUploadsStatus.initial ||
+        state.status == FailedUploadsStatus.loading;
     emit(state.copyWith(
         status: FailedUploadsStatus.loading,
         clearErrorMessage: true,
-        // Reset uploadingTransNo hanya jika ini BUKAN refresh karena watch()
-        clearUploadingTransNo: isInitialLoad
-    ));
+        clearUploadingTransNo: isInitialLoad));
 
     final List<Map<String, dynamic>> allFailedTyped = [];
     try {
       print("🔄 Loading failed uploads...");
 
       Future<void> loadFromBox(String boxName, String moduleHint) async {
-        Box<Map<dynamic, dynamic>>? box; // Deklarasi box nullable
+        Box<Map<dynamic, dynamic>>? box;
         try {
-          // 1. Coba akses via Hive.box() dulu (asumsi sudah dibuka di main)
+          // 1. Coba akses via Hive.box() dulu
           if (Hive.isBoxOpen(boxName)) {
             box = Hive.box<Map<dynamic, dynamic>>(boxName);
             print("  [Loader] Accessed open box: $boxName");
@@ -108,7 +105,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           }).toList();
           allFailedTyped.addAll(values);
           print("  - Found ${values.length} items in $boxName.");
-
         } catch (e) {
           // Tangani error saat mencoba membuka atau membaca
           print("🔴 Error accessing/reading from $boxName: $e");
@@ -139,45 +135,67 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
   Future<void> _onRetrySingleFailedUpload(
       RetrySingleFailedUpload event, Emitter<FailedUploadsState> emit) async {
     final transactionData = event.transactionData;
-    final String transNo = transactionData['transNo']?.toString() ?? 'UNKNOWN_TRANSNO';
-    final List<String> originalFailedFiles = (transactionData['failedFiles'] as List<dynamic>?)?.cast<String>() ?? [];
-    final List<dynamic> presignedDetail = (transactionData['presignedDetail'] as List<dynamic>?) ?? [];
-    final String moduleType = transactionData['module']?.toString() ?? 'UNKNOWN';
-    final String storeName = transactionData['storeName']?.toString() ?? 'Nama Toko Tidak Tersedia';
+    final String transNo =
+        transactionData['transNo']?.toString() ?? 'UNKNOWN_TRANSNO';
+    final List<String> originalFailedFiles =
+        (transactionData['failedFiles'] as List<dynamic>?)?.cast<String>() ??
+            [];
+    final List<dynamic> presignedDetail =
+        (transactionData['presignedDetail'] as List<dynamic>?) ?? [];
+    final String moduleType =
+        transactionData['module']?.toString() ?? 'UNKNOWN';
+    final String storeName =
+        transactionData['storeName']?.toString() ?? 'Nama Toko Tidak Tersedia';
 
-    if (transNo == 'UNKNOWN_TRANSNO' || moduleType == 'UNKNOWN' || originalFailedFiles.isEmpty || presignedDetail.isEmpty) {
+    if (transNo == 'UNKNOWN_TRANSNO' ||
+        moduleType == 'UNKNOWN' ||
+        originalFailedFiles.isEmpty ||
+        presignedDetail.isEmpty) {
       emit(state.copyWith(
-          snackbarMessage: "Data tidak lengkap untuk mencoba upload ulang $transNo.",
-          status: FailedUploadsStatus.loaded, clearUploadingTransNo: true
-      ));
+          snackbarMessage:
+              "Data tidak lengkap untuk mencoba upload ulang $transNo.",
+          status: FailedUploadsStatus.loaded,
+          clearUploadingTransNo: true));
       return;
     }
 
     emit(state.copyWith(
       status: FailedUploadsStatus.uploading,
       uploadingTransNo: transNo,
-      clearSnackbarMessage: true, clearSuccessMessage: true, clearErrorMessage: true, clearRetryResult: true,
+      clearSnackbarMessage: true,
+      clearSuccessMessage: true,
+      clearErrorMessage: true,
+      clearRetryResult: true,
     ));
 
     try {
       UploadResult result;
 
       if (moduleType == 'POS') {
-        result = await uploadPosImagesToS3( transNo, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles );
+        result = await uploadPosImagesToS3(transNo, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'SC') {
-        result = await uploadAllImagesToS3( transNo, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles );
+        result = await uploadAllImagesToS3(transNo, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'POS_UNSERVICEABLE') {
-        final draftBox = Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox); // Gunakan Hive.box()
+        final draftBox = Hive.box<PosUnserviceableModel>(
+            kPosUnserviceableDraftsBox); // Gunakan Hive.box()
         final report = draftBox.get(transNo);
-        if (report == null) throw Exception("Draft POS Unserviceable $transNo tidak ditemukan.");
-        result = await uploadPOSUnserviceableImagesToS3( report, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles );
+        if (report == null)
+          throw Exception("Draft POS Unserviceable $transNo tidak ditemukan.");
+        result = await uploadPOSUnserviceableImagesToS3(report, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'SC_UNSERVICEABLE') {
-        final draftBox = Hive.box<SCUnserviceableModel>(kScUnserviceableDraftsBox); // Gunakan Hive.box()
+        final draftBox = Hive.box<SCUnserviceableModel>(
+            kScUnserviceableDraftsBox); // Gunakan Hive.box()
         final report = draftBox.get(transNo);
-        if (report == null) throw Exception("Draft SC Unserviceable $transNo tidak ditemukan.");
-        result = await uploadSCUnserviceableImagesToS3( report, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles );
+        if (report == null)
+          throw Exception("Draft SC Unserviceable $transNo tidak ditemukan.");
+        result = await uploadSCUnserviceableImagesToS3(report, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
+      } else {
+        throw Exception('Tipe modul tidak dikenali untuk retry.');
       }
-      else { throw Exception('Tipe modul tidak dikenali untuk retry.'); }
 
       if (result.allSuccess) {
         print("✅ Retry successful for $transNo. Melakukan cleanup SEKARANG.");
@@ -187,8 +205,9 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         // 2. Tambahkan ke queue SEKARANG
         await _addToConfirmationQueueIfNeeded(transNo, moduleType);
 
-        final List<Map<String, dynamic>> updatedList = List.from(state.failedTransactions)
-          ..removeWhere((t) => t['transNo'] == transNo);
+        final List<Map<String, dynamic>> updatedList =
+            List.from(state.failedTransactions)
+              ..removeWhere((t) => t['transNo'] == transNo);
 
         emit(state.copyWith(
           status: FailedUploadsStatus.loaded,
@@ -200,24 +219,28 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           retryFailedFiles: [],
         ));
         // Jangan tambah ke queue di sini
-
       } else {
-        final bool allMissing = result.failedFiles.isNotEmpty && result.failedFiles.every((f) => f.startsWith("[MISSING]"));
+        final bool allMissing = result.failedFiles.isNotEmpty &&
+            result.failedFiles.every((f) => f.startsWith("[MISSING]"));
         String snackbarMsg;
 
         if (allMissing) {
-          print("⚠️ All files for retry ($transNo) are missing. Removing item from partial cache ONLY.");
-          snackbarMsg = "File foto untuk $transNo tidak ditemukan di perangkat.";
+          print(
+              "⚠️ All files for retry ($transNo) are missing. Removing item from partial cache ONLY.");
+          snackbarMsg =
+              "File foto untuk $transNo tidak ditemukan di perangkat.";
           // Hapus HANYA dari cache partial
           await _removeFailedTransactionFromCache(transNo, moduleType);
 
           // Hapus dari list state saat ini
-          final List<Map<String, dynamic>> updatedList = List.from(state.failedTransactions)
-            ..removeWhere((t) => t['transNo'] == transNo);
+          final List<Map<String, dynamic>> updatedList =
+              List.from(state.failedTransactions)
+                ..removeWhere((t) => t['transNo'] == transNo);
 
           emit(state.copyWith(
             status: FailedUploadsStatus.loaded,
-            failedTransactions: updatedList, // Emit list yg sudah diupdate
+            failedTransactions: updatedList,
+            // Emit list yg sudah diupdate
             clearUploadingTransNo: true,
             snackbarMessage: snackbarMsg,
             retrySuccessCount: 0,
@@ -226,17 +249,21 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           ));
         } else {
           print("⚠️ Retry partially failed for $transNo");
-          await _updateFailedTransactionInCache( transNo, moduleType, result.failedFiles, presignedDetail, storeName);
+          await _updateFailedTransactionInCache(transNo, moduleType,
+              result.failedFiles, presignedDetail, storeName);
 
-          final List<Map<String, dynamic>> updatedList = state.failedTransactions.map((t) {
+          final List<Map<String, dynamic>> updatedList =
+              state.failedTransactions.map((t) {
             final typedT = Map<String, dynamic>.from(t);
             if (typedT['transNo'] == transNo) {
-              return Map<String, dynamic>.from(typedT)..['failedFiles'] = result.failedFiles;
+              return Map<String, dynamic>.from(typedT)
+                ..['failedFiles'] = result.failedFiles;
             }
             return typedT;
           }).toList();
 
-          snackbarMsg = "Masih ada ${result.failureCount} file gagal untuk $transNo.";
+          snackbarMsg =
+              "Masih ada ${result.failureCount} file gagal untuk $transNo.";
           emit(state.copyWith(
             status: FailedUploadsStatus.loaded,
             failedTransactions: updatedList,
@@ -248,16 +275,17 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           ));
         }
       }
-
     } catch (e) {
       print("🔴 Retry failed with exception for $transNo: $e");
       emit(state.copyWith(
         status: FailedUploadsStatus.loaded,
         clearUploadingTransNo: true,
-        snackbarMessage: "Gagal mencoba upload ulang untuk $transNo: ${e.toString()}",
+        snackbarMessage:
+            "Gagal mencoba upload ulang untuk $transNo: ${e.toString()}",
         retrySuccessCount: 0,
         retryFailureCount: originalFailedFiles.length,
-        retryFailedFiles: originalFailedFiles.map((f) => "$f (Exception)").toList(),
+        retryFailedFiles:
+            originalFailedFiles.map((f) => "$f (Exception)").toList(),
       ));
     }
   }
@@ -266,28 +294,45 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       ClearSnackbarMessage event, Emitter<FailedUploadsState> emit) {
     emit(state.copyWith(clearSnackbarMessage: true, clearRetryResult: true));
   }
+
   void _onClearSuccessMessage(
       ClearSuccessMessage event, Emitter<FailedUploadsState> emit) {
     emit(state.copyWith(clearSuccessMessage: true, clearRetryResult: true));
   }
 
-
   // --- Helper Functions ---
-  Future<void> _removeFailedTransactionFromCache(String transNo, String moduleType) async {
+  Future<void> _removeFailedTransactionFromCache(
+      String transNo, String moduleType) async {
     String? boxName = _getBoxNameForModule(moduleType);
-    if (boxName == null) { print("🔴 Cannot remove from cache: Unknown box name for module $moduleType"); return; }
+    if (boxName == null) {
+      print(
+          "🔴 Cannot remove from cache: Unknown box name for module $moduleType");
+      return;
+    }
     try {
-      final cacheBox = Hive.box<Map<dynamic, dynamic>>(boxName); // Gunakan Hive.box()
+      final cacheBox =
+          Hive.box<Map<dynamic, dynamic>>(boxName); // Gunakan Hive.box()
       await cacheBox.delete(transNo);
       print("🗑️ Removed $transNo ($moduleType) from cache box $boxName.");
-    } catch (e) { print("🔴 Error removing $transNo from cache box $boxName: $e"); }
+    } catch (e) {
+      print("🔴 Error removing $transNo from cache box $boxName: $e");
+    }
   }
 
-  Future<void> _updateFailedTransactionInCache(String transNo, String moduleType, List<String> remainingFailedFiles, List<dynamic> presignedDetail, String storeName) async {
+  Future<void> _updateFailedTransactionInCache(
+      String transNo,
+      String moduleType,
+      List<String> remainingFailedFiles,
+      List<dynamic> presignedDetail,
+      String storeName) async {
     String? boxName = _getBoxNameForModule(moduleType);
-    if (boxName == null) { print("🔴 Cannot update cache: Unknown box name for module $moduleType"); return; }
+    if (boxName == null) {
+      print("🔴 Cannot update cache: Unknown box name for module $moduleType");
+      return;
+    }
     try {
-      final cacheBox = Hive.box<Map<dynamic, dynamic>>(boxName); // Gunakan Hive.box()
+      final cacheBox =
+          Hive.box<Map<dynamic, dynamic>>(boxName); // Gunakan Hive.box()
       final oldData = Map<String, dynamic>.from(cacheBox.get(transNo) ?? {});
       await cacheBox.put(transNo, {
         ...oldData,
@@ -298,36 +343,46 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         'module': moduleType,
       });
       print("💾 Updated cache for $transNo ($moduleType) in box $boxName.");
-    } catch (e) { print("🔴 Error updating cache for $transNo in box $boxName: $e"); }
+    } catch (e) {
+      print("🔴 Error updating cache for $transNo in box $boxName: $e");
+    }
   }
 
   String? _getBoxNameForModule(String moduleType) {
     switch (moduleType) {
-      case 'POS': return kPosValidationPartialHiveBox;
-      case 'SC': return kServiceCallValidationPartialHiveBox;
-      case 'POS_UNSERVICEABLE': return kPosUnserviceablePartialBox;
-      case 'SC_UNSERVICEABLE': return kScUnserviceablePartialBox;
+      case 'POS':
+        return kPosValidationPartialHiveBox;
+      case 'SC':
+        return kServiceCallValidationPartialHiveBox;
+      case 'POS_UNSERVICEABLE':
+        return kPosUnserviceablePartialBox;
+      case 'SC_UNSERVICEABLE':
+        return kScUnserviceablePartialBox;
       default:
         print("🔴 Unknown module type in _getBoxNameForModule: $moduleType");
         return null;
     }
   }
 
-  Future<void> _addToConfirmationQueueIfNeeded(String transNo, String moduleType) async {
+  Future<void> _addToConfirmationQueueIfNeeded(
+      String transNo, String moduleType) async {
     if (moduleType == 'POS' || moduleType == 'SC') {
       try {
-        final queueBox = Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox); // Gunakan Hive.box()
+        final queueBox = Hive.box<ConfirmationTaskModel>(
+            kConfirmationQueueBox); // Gunakan Hive.box()
         final key = transNo.trim().toUpperCase();
         if (!queueBox.containsKey(key)) {
           final task = ConfirmationTaskModel(transNo: key);
           await queueBox.put(key, task);
           await ConfirmationService().processQueue();
-          print("✅ Added $key ($moduleType) to confirmation queue after successful retry.");
+          print(
+              "✅ Added $key ($moduleType) to confirmation queue after successful retry.");
         } else {
           print("ℹ️ $key ($moduleType) already in confirmation queue.");
         }
-      } catch (e) { print("🔴 Error adding $transNo to confirmation queue: $e"); }
+      } catch (e) {
+        print("🔴 Error adding $transNo to confirmation queue: $e");
+      }
     }
   }
-
 }

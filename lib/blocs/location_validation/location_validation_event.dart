@@ -31,6 +31,7 @@ class TakeLocationPhoto extends LocationValidationEvent {
 
 class RemoveLocationPhoto extends LocationValidationEvent {
   final String transNo;
+
   const RemoveLocationPhoto(this.transNo);
 
   @override

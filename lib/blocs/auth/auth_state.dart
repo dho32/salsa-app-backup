@@ -19,13 +19,13 @@ class AuthFailure extends AuthState {
 
 class AuthRequiresMaintenanceSelection extends AuthState {
   final List<MaintenanceInfo> maintenanceOptions;
-  final String token; // Bawa token sementara
+  final String token;
 
   AuthRequiresMaintenanceSelection(this.maintenanceOptions, this.token);
 }
 
 class AuthUpdateRequired extends AuthState {
-  final String newVersionUrl; // URL ke Play Store / App Store
+  final String newVersionUrl;
 
   AuthUpdateRequired(this.newVersionUrl);
 

@@ -30,7 +30,8 @@ class LocationValidationBloc
 
   Future<void> _onLoadPhoto(
       LoadLocationPhoto event, Emitter<LocationValidationState> emit) async {
-    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+    final txn =
+        transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     final photo = txn?.picImageDetail;
 
     if (photo != null) {
@@ -59,8 +60,6 @@ class LocationValidationBloc
       );
 
       if (image == null) {
-        // Kembalikan ke state Loaded jika user cancel (agar loading hilang)
-        // Kita coba load ulang data yang ada (jika ada)
         add(LoadLocationPhoto(event.transNo, event.tokoLat, event.tokoLng));
         return;
       }
@@ -100,15 +99,17 @@ class LocationValidationBloc
         location: locationString,
       );
 
-      final String? finalImagePath = await WatermarkService.processImage(request);
+      final String? finalImagePath =
+          await WatermarkService.processImage(request);
 
       if (finalImagePath == null) {
-        emit(const LocationValidationFailure("Gagal memproses watermark foto", photo: null));
+        emit(const LocationValidationFailure("Gagal memproses watermark foto",
+            photo: null));
         return;
       }
 
       final detail = CapturedImageDetail(
-        imagePath: finalImagePath, // Gunakan path watermark
+        imagePath: finalImagePath,
         timestamp: timestamp,
         latitude: position.latitude,
         longitude: position.longitude,
@@ -125,16 +126,17 @@ class LocationValidationBloc
       );
 
       // 6. Simpan ke Hive (via Interface)
-      final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+      final txn =
+          transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
       if (txn != null) {
         txn.picImageDetail = detail;
         await txn.save();
       } else {
-        print("PERINGATAN: Gagal menemukan TransactionInfo/PosTransactionInfo untuk ${event.transNo}");
+        print(
+            "PERINGATAN: Gagal menemukan TransactionInfo/PosTransactionInfo untuk ${event.transNo}");
       }
 
       emit(LocationPhotoLoaded(detail, distance: distance));
-
     } catch (e) {
       emit(LocationValidationFailure("Terjadi kesalahan: $e", photo: null));
     }
@@ -142,7 +144,8 @@ class LocationValidationBloc
 
   Future<void> _onRemovePhoto(
       RemoveLocationPhoto event, Emitter<LocationValidationState> emit) async {
-    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+    final txn =
+        transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     if (txn != null) {
       txn.picImageDetail = null;
       await txn.save();
@@ -155,7 +158,8 @@ class LocationValidationBloc
     emit(LocationValidationLoading());
     await Future.delayed(const Duration(milliseconds: 50));
 
-    final txn = transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+    final txn =
+        transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
     final photo = txn?.picImageDetail;
 
     if (photo == null) {

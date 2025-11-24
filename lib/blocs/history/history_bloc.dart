@@ -16,7 +16,8 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     on<HistoryRefreshed>(_onHistoryRefreshed);
   }
 
-  Future<void> _onHistoryFetched(HistoryFetched event, Emitter<HistoryState> emit) async {
+  Future<void> _onHistoryFetched(
+      HistoryFetched event, Emitter<HistoryState> emit) async {
     if (state.hasReachedMax) return;
     try {
       final userData = await AuthStorage.getUser();
@@ -33,11 +34,11 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       emit(transactions.isEmpty
           ? state.copyWith(hasReachedMax: true)
           : state.copyWith(
-        status: HistoryStatus.success,
-        transactions: List.of(state.transactions)..addAll(transactions),
-        hasReachedMax: transactions.length < _postLimit,
-        page: state.page + 1,
-      ));
+              status: HistoryStatus.success,
+              transactions: List.of(state.transactions)..addAll(transactions),
+              hasReachedMax: transactions.length < _postLimit,
+              page: state.page + 1,
+            ));
     } catch (_) {
       emit(state.copyWith(status: HistoryStatus.failure));
     }
@@ -45,9 +46,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
 
   Future<void> _onHistoryRefreshed(
       HistoryRefreshed event, Emitter<HistoryState> emit) async {
-
     // 1. Tentukan nilai filter final dengan menggabungkan event dan state
-    //    Jika event punya nilai baru, gunakan itu. Jika tidak, pertahankan nilai dari state.
     final newSearchQuery = event.searchQuery ?? state.searchQuery;
     final newTransactionType = event.transactionType ?? state.transactionType;
     final newStatus = event.status ?? state.filterStatus;

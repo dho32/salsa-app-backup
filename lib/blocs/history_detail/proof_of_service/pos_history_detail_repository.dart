@@ -10,8 +10,8 @@ class PosHistoryDetailRepository {
   Future<PosHistoryDetailModel> fetchPosHistoryDetail(String transNo) async {
     final params = {'trans_no': transNo};
 
-    // Ganti dengan endpoint API detail riwayat POS Anda
-    Uri uri = getUrl(pathUrl: '/history/proof_of_service/detail', params: params);
+    Uri uri =
+        getUrl(pathUrl: '/history/proof_of_service/detail', params: params);
     final response = await http.get(uri);
 
     if (response.statusCode == 200) {

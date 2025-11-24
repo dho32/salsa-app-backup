@@ -8,7 +8,6 @@ class HistoryState extends Equatable {
   final List<HistoryTransactionModel> transactions;
   final bool hasReachedMax;
   final int page;
-  // Simpan filter saat ini di dalam state
   final String searchQuery;
   final String transactionType;
   final String filterStatus;
@@ -44,5 +43,13 @@ class HistoryState extends Equatable {
   }
 
   @override
-  List<Object> get props => [status, transactions, hasReachedMax, page, searchQuery, transactionType, filterStatus];
+  List<Object> get props => [
+        status,
+        transactions,
+        hasReachedMax,
+        page,
+        searchQuery,
+        transactionType,
+        filterStatus
+      ];
 }

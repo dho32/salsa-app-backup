@@ -92,7 +92,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       MaintenanceSelected event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      // BARU: Ambil versi aplikasi di sini juga
       final packageInfo = await PackageInfo.fromPlatform();
       final appVersion = packageInfo.version;
 

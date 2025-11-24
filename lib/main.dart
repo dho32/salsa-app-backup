@@ -100,16 +100,24 @@ class _AppInitializerState extends State<AppInitializer> {
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
   Future<void> _loadRetryableData() async {
-    // Hanya berisi hal-hal yang bisa gagal & di-retry
-    await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-    await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
-    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-    await Hive.openBox('otp_state');
-    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-    await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
-    await Hive.openBox(kAppConfigBox);
+    try {
+      // Coba buka semua box
+      await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
+      await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+      await Hive.openBox('otp_state');
+      await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+      await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+      await Hive.openBox(kAppConfigBox);
+    } catch (e) {
+      print("🔴 Hive Error detected (Schema Mismatch?). Resetting all data...");
+      // JIKA GAGAL (Data Korup), HAPUS SEMUA DATA LAMA
+      await Hive.deleteFromDisk();
+      // Restart app mandiri atau lempar error biar user tekan 'Coba Lagi'
+      throw Exception("Data aplikasi diperbarui. Silakan tekan 'Coba Lagi'.");
+    }
 
     ConfirmationService().processQueue();
   }

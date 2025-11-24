@@ -12,7 +12,7 @@ import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
-import '../../auth/auth_storage.dart'; // Tambahkan package ini: flutter pub add easy_debounce
+import '../../auth/auth_storage.dart';
 
 class PosFormCubit extends Cubit<PosFormState> {
   final String transNo;
@@ -32,7 +32,7 @@ class PosFormCubit extends Cubit<PosFormState> {
 
   Future<void> _initAsync() async {
     final userData = await AuthStorage.getUser();
-    _userType = userData['maintenance_type'] ?? 'WH'; // (Default 'WH')
+    _userType = userData['maintenance_type'] ?? 'WH';
     _userName = userData['name'] ?? '';
 
     _loadInitialData();
@@ -66,7 +66,7 @@ class PosFormCubit extends Cubit<PosFormState> {
         isFinalTempInSkipped: info.isFinalTempInSkipped ?? false,
         finalTempInNote: info.finalTempInNote ?? '',
       ));
-    }else {
+    } else {
       String initialTechnician1 = '';
       if (_userType == 'WH') {
         initialTechnician1 = _userName;
@@ -87,8 +87,7 @@ class PosFormCubit extends Cubit<PosFormState> {
       isTempInSkipped: isSkipped,
       tempIn: isSkipped ? '' : state.tempIn,
       temperatureInImage: isSkipped ? null : state.temperatureInImage,
-      tempInNote:
-          !isSkipped ? '' : state.tempInNote, // Reset note jika di-unskip
+      tempInNote: !isSkipped ? '' : state.tempInNote,
     ));
     onFieldChanged();
   }
@@ -98,7 +97,7 @@ class PosFormCubit extends Cubit<PosFormState> {
       isTempOutSkipped: isSkipped,
       tempOut: isSkipped ? '' : state.tempOut,
       temperatureOutImage: isSkipped ? null : state.temperatureOutImage,
-      tempOutNote: !isSkipped ? '' : state.tempOutNote, // Reset note
+      tempOutNote: !isSkipped ? '' : state.tempOutNote,
     ));
     onFieldChanged();
   }
@@ -123,7 +122,7 @@ class PosFormCubit extends Cubit<PosFormState> {
       isFinalTempInSkipped: isSkipped,
       finalTempIn: isSkipped ? '' : state.finalTempIn,
       finalTempInImage: isSkipped ? null : state.finalTempInImage,
-      finalTempInNote: !isSkipped ? '' : state.finalTempInNote, // Reset note
+      finalTempInNote: !isSkipped ? '' : state.finalTempInNote,
     ));
     onFieldChanged();
   }
@@ -145,7 +144,7 @@ class PosFormCubit extends Cubit<PosFormState> {
           isComplete;
     });
 
-    double minTemp = double.infinity; // Mulai dengan nilai yang sangat tinggi
+    double minTemp = double.infinity;
 
     for (final entry in indoorEntries) {
       final tempMeasurement = entry.measurementsAfter.firstWhereOrNull((m) {
@@ -181,7 +180,7 @@ class PosFormCubit extends Cubit<PosFormState> {
   void tempOutChanged(String value) => emit(state.copyWith(tempOut: value));
 
   void technician1Changed(String value) =>
-  emit(state.copyWith(technician1: value));
+      emit(state.copyWith(technician1: value));
 
   void technician2Changed(String value) =>
       emit(state.copyWith(technician2: value));
@@ -206,7 +205,6 @@ class PosFormCubit extends Cubit<PosFormState> {
     EasyDebounce.debounce(
       'save-to-hive-debouncer',
       const Duration(milliseconds: 500),
-      // Tunggu 500ms setelah user berhenti mengetik
       _saveStateToHive,
     );
   }

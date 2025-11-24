@@ -7,11 +7,11 @@ class PosPairingCubit extends Cubit<PosPairingState> {
     required List<String> outdoorSerials,
     Map<String, String>? initialPairings,
   }) : super(PosPairingState(
-    indoorSerials: indoorSerials.map(_norm).toList(),
-    outdoorSerials: outdoorSerials.map(_norm).toList(),
-    pairings: (initialPairings ?? {})
-        .map((k, v) => MapEntry(_norm(k), _norm(v))),
-  ));
+          indoorSerials: indoorSerials.map(_norm).toList(),
+          outdoorSerials: outdoorSerials.map(_norm).toList(),
+          pairings: (initialPairings ?? {})
+              .map((k, v) => MapEntry(_norm(k), _norm(v))),
+        ));
 
   static String _norm(String s) => s.trim().toUpperCase();
 

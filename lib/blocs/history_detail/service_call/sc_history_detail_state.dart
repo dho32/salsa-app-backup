@@ -4,6 +4,7 @@ import 'package:salsa/models/history/sc_history_detail_model.dart';
 
 abstract class ScHistoryDetailState extends Equatable {
   const ScHistoryDetailState();
+
   @override
   List<Object> get props => [];
 }

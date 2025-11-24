@@ -3,7 +3,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 
-// Enum untuk status, agar lebih jelas
+// Enum untuk status
 enum FormSubmissionStatus { initial, inProgress, success, failure }
 
 class PosFormState extends Equatable {
@@ -74,7 +74,6 @@ class PosFormState extends Equatable {
     this.isFinalTempInSkipped = false,
   });
 
-  // Method `copyWith` sangat penting untuk memperbarui state secara immutable
   PosFormState copyWith({
     String? picNik,
     String? picPosition,
@@ -139,33 +138,33 @@ class PosFormState extends Equatable {
 
   @override
   List<Object?> get props => [
-    picNik,
-    picPosition,
-    tempIn,
-    tempOut,
-    finalTempIn,
-    finalTempInImage,
-    minFinalTempInLimit,
-    serviceTime,
-    picName,
-    picPhone,
-    technician1,
-    technician2,
-    technician3,
-    showTechnician3,
-    picImageDetail,
-    temperatureInImage,
-    temperatureOutImage,
-    isPicStoreValid,
-    isServiceInfoValid,
-    allUnitsValidated,
-    isFormReadyToSubmit,
-    submissionStatus,
-    tempInNote,
-    tempOutNote,
-    finalTempInNote,
-    isTempInSkipped,
-    isTempOutSkipped,
-    isFinalTempInSkipped,
-  ];
+        picNik,
+        picPosition,
+        tempIn,
+        tempOut,
+        finalTempIn,
+        finalTempInImage,
+        minFinalTempInLimit,
+        serviceTime,
+        picName,
+        picPhone,
+        technician1,
+        technician2,
+        technician3,
+        showTechnician3,
+        picImageDetail,
+        temperatureInImage,
+        temperatureOutImage,
+        isPicStoreValid,
+        isServiceInfoValid,
+        allUnitsValidated,
+        isFormReadyToSubmit,
+        submissionStatus,
+        tempInNote,
+        tempOutNote,
+        finalTempInNote,
+        isTempInSkipped,
+        isTempOutSkipped,
+        isFinalTempInSkipped,
+      ];
 }

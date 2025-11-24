@@ -19,7 +19,6 @@ class HistoryRepository {
       'status': status,
     };
 
-    // Ganti dengan endpoint API history Anda
     Uri uri = getUrl(pathUrl: '/history/list', params: params);
     final response = await http.get(uri);
 
@@ -27,7 +26,9 @@ class HistoryRepository {
       final body = jsonDecode(response.body);
       if (body['status'] == 'OK') {
         final List<dynamic> results = body['result'] ?? [];
-        return results.map((json) => HistoryTransactionModel.fromJson(json)).toList();
+        return results
+            .map((json) => HistoryTransactionModel.fromJson(json))
+            .toList();
       } else {
         throw Exception('API returned error: ${body['message']}');
       }

@@ -43,26 +43,26 @@ class AuthRepository {
 
   Future<void> _saveAppConfigToHive(Map<String, dynamic> configJson) async {
     try {
-      print("Menyimpan AppConfig dari API ke Hive...");
-      // Buka box config (pastikan kAppConfigBox ada di constants.dart)
       final configBox = await Hive.openBox(kAppConfigBox);
 
-      // Helper kecil untuk parsing Map<String, dynamic> menjadi Map<String, MeasurementLimits>
-      Map<String, MeasurementLimits> _parseLimitsMap(dynamic map) {
+      Map<String, MeasurementLimits> parseLimitsMap(dynamic map) {
         if (map == null || map is! Map) return {};
         return map.map<String, MeasurementLimits>(
-              (key, value) => MapEntry(
+          (key, value) => MapEntry(
             key as String,
             MeasurementLimits.fromJson(value as Map<String, dynamic>),
           ),
         );
       }
 
-      // Parsing setiap 'key' dari JSON API (sesuai format yang kita sepakati)
-      final limitsTempHeader = _parseLimitsMap(configJson['limits_temp_header']);
-      final limitsScBefore = _parseLimitsMap(configJson['limits_validation_unit']?['sc_before']);
-      final limitsScAfter = _parseLimitsMap(configJson['limits_validation_unit']?['sc_after']);
-      final limitsPosAfter = _parseLimitsMap(configJson['limits_validation_unit']?['pos_after']);
+      // Parsing setiap 'key' dari JSON API
+      final limitsTempHeader = parseLimitsMap(configJson['limits_temp_header']);
+      final limitsScBefore =
+          parseLimitsMap(configJson['limits_validation_unit']?['sc_before']);
+      final limitsScAfter =
+          parseLimitsMap(configJson['limits_validation_unit']?['sc_after']);
+      final limitsPosAfter =
+          parseLimitsMap(configJson['limits_validation_unit']?['pos_after']);
 
       // Simpan ke Hive (Gunakan 'put' agar menimpa config lama)
       await configBox.put('limits_temp_header', limitsTempHeader);
@@ -75,11 +75,8 @@ class AuthRepository {
       log("Data limits_sc_before: ${limitsScBefore.length} item");
       log("Data limits_sc_after: ${limitsScAfter.length} item");
       log("Data limits_pos_after: ${limitsPosAfter.length} item");
-
     } catch (e) {
       print("🔴 GAGAL menyimpan AppConfig ke Hive: $e");
-      // Jangan throw error, biarkan login tetap berhasil.
-      // Aplikasi akan menggunakan data hardcode jika Hive kosong.
     }
   }
 
@@ -214,8 +211,6 @@ class AuthRepository {
       print("Gagal mencatat log logout: $e");
     }
   }
-
-  // auth_repository.dart
 
   Future<Map<String, String>> getAppConfig() async {
     Uri uri = getUrl(pathUrl: '/version');

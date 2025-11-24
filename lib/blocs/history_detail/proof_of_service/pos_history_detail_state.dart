@@ -3,6 +3,7 @@ import 'package:salsa/models/history/pos_history_detail_model.dart';
 
 abstract class PosHistoryDetailState extends Equatable {
   const PosHistoryDetailState();
+
   @override
   List<Object> get props => [];
 }

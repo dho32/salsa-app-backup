@@ -4,7 +4,8 @@ import 'package:salsa/blocs/history_detail/service_call/sc_history_detail_event.
 import 'package:salsa/blocs/history_detail/service_call/sc_history_detail_repository.dart';
 import 'package:salsa/blocs/history_detail/service_call/sc_history_detail_state.dart';
 
-class ScHistoryDetailBloc extends Bloc<ScHistoryDetailEvent, ScHistoryDetailState> {
+class ScHistoryDetailBloc
+    extends Bloc<ScHistoryDetailEvent, ScHistoryDetailState> {
   final ScHistoryDetailRepository repository;
 
   ScHistoryDetailBloc(this.repository) : super(ScHistoryDetailInitial()) {

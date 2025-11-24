@@ -1,9 +1,9 @@
 import 'package:equatable/equatable.dart';
 
 class PosPairingState extends Equatable {
-  final List<String> indoorSerials;   // kandidat IN
-  final List<String> outdoorSerials;  // subjek OUT
-  final Map<String, String> pairings; // OUT -> IN
+  final List<String> indoorSerials;
+  final List<String> outdoorSerials;
+  final Map<String, String> pairings;
 
   const PosPairingState({
     required this.indoorSerials,
