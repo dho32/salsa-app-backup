@@ -82,6 +82,10 @@ class _ServiceCallValidationBodyMobileState
   Future<void> _startImageCaptureProcess(BuildContext context,
       ValidationDropdownLoaded state, bool isBefore) async {
     try {
+      // Bersihkan memori gambar sebelum membuka kamera berat
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
       final picker = ImagePicker();
       // 1. Ambil Foto dari Kamera
       final XFile? image = await picker.pickImage(

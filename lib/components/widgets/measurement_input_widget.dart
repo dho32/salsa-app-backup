@@ -175,6 +175,10 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     setState(() => _isLoading = true);
 
     try {
+      // Bersihkan memori gambar sebelum membuka kamera berat
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.camera,

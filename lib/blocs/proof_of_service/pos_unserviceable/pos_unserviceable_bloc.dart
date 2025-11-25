@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:easy_debounce/easy_debounce.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
@@ -144,6 +145,10 @@ class PosUnserviceableBloc
     emit(state.copyWith(status: UnserviceableStatus.loading));
 
     try {
+      // Bersihkan memori gambar sebelum membuka kamera berat
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(
         source: ImageSource.camera,

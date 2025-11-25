@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -51,6 +52,10 @@ class LocationValidationBloc
     emit(LocationValidationLoading());
 
     try {
+      // Bersihkan memori gambar sebelum membuka kamera berat
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.camera,

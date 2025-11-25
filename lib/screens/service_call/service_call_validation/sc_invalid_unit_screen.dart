@@ -33,6 +33,10 @@ class _ScInvalidUnitScreenState extends State<ScInvalidUnitScreen> {
   Future<void> _takePhoto() async {
     setState(() => _isTakingPhoto = true);
     try {
+      // Bersihkan memori gambar sebelum membuka kamera berat
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.camera,
