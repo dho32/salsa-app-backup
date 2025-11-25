@@ -31,6 +31,7 @@ class ValidationDropdownBloc
     on<SaveValidationData>(_onSaveValidationData);
     on<SelectOutdoorSerial>(_onSelectOutdoorSerial);
     on<NoteChanged>(_onNoteChanged);
+    on<MarkUnitAsInvalid>(_onMarkUnitAsInvalid);
   }
 
   List<MeasurementEntry> _generateMeasurementsFromLimits(
@@ -43,6 +44,20 @@ class ValidationDropdownBloc
       isSkipped: false,
     ))
         .toList();
+  }
+
+  List<MeasurementEntry> _generateSkippedMeasurements(
+      Map<String, dynamic> limitsMap) {
+    // Menggunakan keys dari limitsMap (baik Before atau After)
+    return limitsMap.keys.map((key) {
+      return MeasurementEntry(
+        measurementId: key,
+        value: 0.0,
+        unit: '', // Tidak penting karena skip
+        isSkipped: true, // <-- KUNCI: Otomatis SKIP
+        capturedImage: null,
+      );
+    }).toList();
   }
 
   Future<void> _onFetchData(FetchValidationDropdownData event,
@@ -107,10 +122,89 @@ class ValidationDropdownBloc
           selectedOutdoorNoteBefore: initialData?.selectedOutdoorNoteBefore,
           selectedIndoorNoteAfter: initialData?.selectedIndoorNoteAfter,
           selectedOutdoorNoteAfter: initialData?.selectedOutdoorNoteAfter,
+          selectedOutdoorPSINoteBefore: initialData?.selectedOutdoorPSINoteBefore,
+          selectedOutdoorPSINoteAfter: initialData?.selectedOutdoorPSINoteAfter,
         ),
       );
     } catch (e) {
       emit(ValidationDropdownError(e.toString()));
+    }
+  }
+
+  Future<void> _onMarkUnitAsInvalid(
+      MarkUnitAsInvalid event, Emitter<ValidationDropdownState> emit) async {
+
+    if (state is! ValidationDropdownLoaded) return;
+    final currentState = state as ValidationDropdownLoaded;
+
+    emit(currentState.copyWith(saveStatus: ValidationSaveStatus.saving));
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    try {
+      // 1. Generate Dummy Measurements (Semua 0 & Skipped)
+      final dummyMeasurementsBefore = _generateSkippedMeasurements(currentState.limitsScBefore);
+      final dummyMeasurementsAfter = _generateSkippedMeasurements(currentState.limitsScAfter);
+
+      // 2. Buat Objek Model (Inject Note & Foto Bukti)
+      final validationEntry = ServiceCallValidationEntryModel(
+        unitType: currentState.selectedUnitType ?? 'INVALID_UNIT', // Fallback jika belum pilih
+        serialNo: event.serialNo,
+        transNo: event.transNo,
+
+        // Foto Bukti kita taruh di 'Before' (Sesuai request: minimal 1 foto)
+        imagePathsBefore: event.proofPhotos,
+        measurementsBefore: dummyMeasurementsBefore,
+
+        // Note: Tembak Rata ke Semua Field
+        selectedIndoorNoteBefore: event.reason,
+        selectedOutdoorNoteBefore: event.reason,
+        selectedOutdoorPSINoteBefore: event.reason,
+
+        // Bagian 'After' kita kosongkan total (tapi tetap valid secara struktur)
+        imagePathsAfter: [],
+        measurementsAfter: dummyMeasurementsAfter,
+        selectedIndoorNoteAfter: event.reason,
+        selectedOutdoorNoteAfter: event.reason,
+        selectedOutdoorPSINoteAfter: event.reason,
+
+        problems: [], // Tidak ada masalah spesifik karena unit batal
+        isCompleted: true, // <-- TANDAI SELESAI (Hijau)
+        outdoorSerialNo: null, // Reset outdoor assignment
+      );
+
+      // 3. Simpan ke Hive (Sama seperti _onSaveValidationData)
+      final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull(
+            (key) =>
+        box.get(key, defaultValue: null)?.serialNo == event.serialNo &&
+            box.get(key, defaultValue: null)?.transNo == event.transNo,
+      );
+
+      if (existingKey != null) {
+        await box.put(existingKey, validationEntry);
+      } else {
+        await box.add(validationEntry);
+      }
+
+      // 4. Hapus Assignment Outdoor (Jika ada, karena unit ini batal)
+      final assignmentBox = Hive.box(kOutdoorUnitAssignmentsBox);
+      final Map<dynamic, dynamic> currentAssignments =
+          assignmentBox.get(event.transNo) ?? {};
+      currentAssignments.remove(event.serialNo);
+      await assignmentBox.put(event.transNo, currentAssignments);
+
+      // 5. Emit Sukses
+      emit(currentState.copyWith(
+        saveStatus: ValidationSaveStatus.successFinal,
+        saveMessage: "Unit berhasil ditandai tidak sesuai.",
+      ));
+
+    } catch (e) {
+      print('Error marking unit as invalid: $e');
+      emit(currentState.copyWith(
+        saveStatus: ValidationSaveStatus.error,
+        saveMessage: "Gagal membatalkan unit: $e",
+      ));
     }
   }
 

@@ -116,6 +116,23 @@ class SelectSolutionsForCard extends ValidationDropdownEvent {
   List<Object?> get props => [index, solutionIds];
 }
 
+class MarkUnitAsInvalid extends ValidationDropdownEvent {
+  final String transNo;
+  final String serialNo;
+  final List<CapturedImageDetail> proofPhotos;
+  final String reason;
+
+  const MarkUnitAsInvalid({
+    required this.transNo,
+    required this.serialNo,
+    required this.proofPhotos,
+    required this.reason,
+  });
+
+  @override
+  List<Object?> get props => [transNo, serialNo, proofPhotos, reason];
+}
+
 // ============= Event untuk Data SEBELUM =============
 class AddCapturedPhotoBefore extends ValidationDropdownEvent {
   final CapturedImageDetail imageDetail;
