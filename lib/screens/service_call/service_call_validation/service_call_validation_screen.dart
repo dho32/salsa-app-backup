@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/common/measurement_limits.dart';
-import 'package:salsa/screens/service_call/service_call_validation/sc_invalid_unit_screen.dart';
+import 'package:salsa/screens/service_call/service_call_validation/components/invalid_unit_screen/sc_invalid_unit_screen.dart';
 import '../../../blocs/auth/auth_storage.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
@@ -15,6 +15,7 @@ import '../../../blocs/service_call/validation_dropdown/validation_dropdown_stat
 import '../../../components/constants.dart';
 import '../../../components/services/watermark_service.dart';
 import '../../../models/common/measurement_entry.dart';
+import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
@@ -150,7 +151,6 @@ class _ServiceCallValidationScreenState
         },
         child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
           builder: (context, state) {
-
             bool isSaving = false;
             if (state is ValidationDropdownLoaded) {
               isSaving = state.saveStatus == ValidationSaveStatus.saving;
@@ -410,35 +410,93 @@ class _ServiceCallValidationScreenState
     final measurements = isBefore
         ? state.capturedMeasurementsBefore
         : state.capturedMeasurementsAfter;
+
+    // Definisi Group ID
     const indoorIds = {'temperature'};
     const outdoorElecIds = {'volt', 'ampere'};
     const outdoorPsiIds = {'psi'};
-    final bool isAnyIndoorSkipped = measurements.any(
-        (m) => indoorIds.contains(m.measurementId) && (m.isSkipped ?? false));
-    final String? indoorNote = isBefore
-        ? state.selectedIndoorNoteBefore
-        : state.selectedIndoorNoteAfter;
-    if (isAnyIndoorSkipped && (indoorNote == null || indoorNote.isEmpty)) {
-      return 'Catatan indoor wajib diisi jika ada pengukuran yang di-skip.';
+
+    // Helper Validasi Per Grup
+    String? checkGroup({
+      required Set<String> ids,
+      required List<NoteOption> options,
+      required String? selectedNoteLabel,
+      required String groupName,
+    }) {
+      // 1. Cek apakah ada item di grup ini yang di-skip
+      final skippedItems = measurements
+          .where((m) => ids.contains(m.measurementId) && (m.isSkipped ?? false))
+          .toList();
+
+      if (skippedItems.isNotEmpty) {
+        // 2. Cek apakah Note sudah dipilih
+        if (selectedNoteLabel == null || selectedNoteLabel.isEmpty) {
+          return 'Catatan $groupName wajib diisi jika ada pengukuran yang di-skip.';
+        }
+
+        // 3. Cek apakah Note ini butuh Remark (Keterangan Tambahan)
+        if (!isBefore) {
+          final selectedOptionObj = options.firstWhere(
+              (o) => o.label == selectedNoteLabel,
+              orElse: () => NoteOption(label: '', requireRemark: false));
+
+          if (selectedOptionObj.requireRemark) {
+            final firstSkipped = skippedItems.first;
+            final remarkText = firstSkipped.remark ?? '';
+            if (firstSkipped.remark == null ||
+                firstSkipped.remark!.trim().isEmpty) {
+              return 'Keterangan Tambahan untuk $groupName wajib diisi.';
+            }
+            final int charCount = remarkText.replaceAll(' ', '').length;
+            if (charCount < 20) {
+              return 'Keterangan $groupName minimal 20 huruf (tanpa spasi). Saat ini: $charCount.';
+            }
+          }
+        }
+      }
+      return null;
     }
-    final bool isAnyOutdoorSkipped = measurements.any((m) =>
-        outdoorElecIds.contains(m.measurementId) && (m.isSkipped ?? false));
-    final String? outdoorNote = isBefore
-        ? state.selectedOutdoorNoteBefore
-        : state.selectedOutdoorNoteAfter;
-    if (isAnyOutdoorSkipped && (outdoorNote == null || outdoorNote.isEmpty)) {
-      return 'Catatan outdoor (Volt/Ampere) wajib diisi.';
-    }
-    final bool isAnyOutdoorPsiSkipped = measurements.any((m) =>
-        outdoorPsiIds.contains(m.measurementId) && (m.isSkipped ?? false));
-    final String? outdoorPsiNote = isBefore
-        ? state.selectedOutdoorPSINoteBefore
-        : state.selectedOutdoorPSINoteAfter;
-    if (isAnyOutdoorPsiSkipped &&
-        (outdoorPsiNote == null || outdoorPsiNote.isEmpty)) {
-      return 'Catatan outdoor (PSI) wajib diisi.';
-    }
-    return null;
+
+    // Validasi Indoor
+    final indoorError = checkGroup(
+      ids: indoorIds,
+      options: isBefore
+          ? state.noteIndoorBeforeOptions
+          : state.noteIndoorAfterOptions,
+      selectedNoteLabel: isBefore
+          ? state.selectedIndoorNoteBefore
+          : state.selectedIndoorNoteAfter,
+      groupName: 'Indoor',
+    );
+    if (indoorError != null) return indoorError;
+
+    // Validasi Outdoor
+    final outdoorError = checkGroup(
+      ids: outdoorElecIds,
+      options: isBefore
+          ? state.noteOutdoorBeforeOptions
+          : state.noteOutdoorAfterOptions,
+      selectedNoteLabel: isBefore
+          ? state.selectedOutdoorNoteBefore
+          : state.selectedOutdoorNoteAfter,
+      groupName: 'Outdoor (Volt/Ampere)',
+    );
+    if (outdoorError != null) return outdoorError;
+
+    // Validasi PSI
+    final psiError = checkGroup(
+      ids: outdoorPsiIds,
+      options: isBefore
+          ? state.noteOutdoorPsiBeforeOptions
+          : state.noteOutdoorPsiAfterOptions,
+      selectedNoteLabel: isBefore
+          ? state.selectedOutdoorPSINoteBefore
+          : state.selectedOutdoorPSINoteAfter,
+      groupName: 'Outdoor (Tekanan)',
+    );
+    if (psiError != null) return psiError;
+
+    return null; // Lolos Semua
   }
 
   String? _validateMeasurements(

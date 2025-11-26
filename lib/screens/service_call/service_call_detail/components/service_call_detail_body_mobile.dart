@@ -34,6 +34,7 @@ import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/common/measurement_limits.dart';
+import '../../../../models/common/note_option.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
 import '../../../../models/service_call/problem_source_model.dart';
 import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
@@ -343,6 +344,8 @@ class _ServiceCallDetailBodyMobileState
               }
             });
 
+            final List<NoteOption> noteOptions = detailState.data.noteIndoorAfterOptions;
+
             return BlocBuilder<ScFormCubit, ScFormState>(
               builder: (context, formState) {
                 if (_validationStatusFuture == null) {
@@ -557,7 +560,7 @@ class _ServiceCallDetailBodyMobileState
                                               child: AbsorbPointer(
                                                 absorbing: !isEnabled,
                                                 child: _buildFinalTempSection(
-                                                    context, formStateForTemp),
+                                                    context, formStateForTemp, noteOptions),
                                               ),
                                             ),
                                             if (!isEnabled)
@@ -984,7 +987,7 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildFinalTempSection(BuildContext context, ScFormState formState) {
+  Widget _buildFinalTempSection(BuildContext context, ScFormState formState, List<NoteOption> noteOptions) {
     final formCubit = context.read<ScFormCubit>();
     final baseLimits = _scFinalTempBaseLimits;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
@@ -998,11 +1001,7 @@ class _ServiceCallDetailBodyMobileState
       normalMin: baseLimits.normalMin,
       normalMax: baseLimits.normalMax,
     );
-    final detailState = context.read<ServiceCallDetailBloc>().state;
-    List<String> noteOptions = [];
-    if (detailState is ServiceCallDetailLoaded) {
-      noteOptions = detailState.data.noteIndoorAfterOptions;
-    }
+
 
     return _buildSection(
       title: 'Suhu Dalam Ruangan Setelah Service (*Wajib)',
@@ -1148,13 +1147,20 @@ class _ServiceCallDetailBodyMobileState
 
   Widget _buildNoteDropdown({
     required BuildContext context,
-    required List<String> options,
+    required List<NoteOption> options,
     required String? selectedValue,
     required TextEditingController searchController,
     required String label,
     required ValueChanged<String?> onChanged,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+
+    final filteredOptions = options.where((opt) {
+      return !opt.isSystemOnly || opt.label == selectedValue;
+    }).toList();
+    final selectedOptionObj = filteredOptions.where((opt) => opt.label == selectedValue).firstOrNull;
+    final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
+
     // ... (Sisa kode _buildNoteDropdown persis sama seperti
     //      yang ada di ScMeasurementInputSection: Padding, DropdownButtonFormField2, dll.)
 
@@ -1174,12 +1180,12 @@ class _ServiceCallDetailBodyMobileState
         hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
         items: options
             .map((item) => DropdownMenuItem<String>(
-                  value: item,
+                  value: item.label,
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(item, style: const TextStyle(fontSize: 14)),
+                      child: Text(item.label, style: const TextStyle(fontSize: 14)),
                     ),
                   ),
                 ))
@@ -1188,7 +1194,7 @@ class _ServiceCallDetailBodyMobileState
         selectedItemBuilder: (context) {
           return options.map((item) {
             return Text(
-              item,
+              item.label,
               style: const TextStyle(
                   fontSize: 14, overflow: TextOverflow.ellipsis),
               maxLines: 1,

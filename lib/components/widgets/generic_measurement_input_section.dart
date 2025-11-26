@@ -1,17 +1,17 @@
-// generic_measurement_input_section.dart - Versi FINAL
-
 import 'package:flutter/material.dart';
 import 'package:salsa/components/widgets/measurement_input_widget.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
-import '../../models/common/measurement_limits.dart';
-import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
-import '../constants.dart';
-import '../shared_function.dart';
+import 'package:salsa/models/common/measurement_limits.dart'; // <-- Import Model Baru
 
 class GenericMeasurementInputSection extends StatelessWidget {
   final String transNo;
   final List<MeasurementEntry> measurements;
   final Map<String, TextEditingController> controllers;
+
+  // --- 1. TAMBAHKAN MAP LIMIT DINAMIS ---
+  final Map<String, MeasurementLimits> limitsMap;
+  // --------------------------------------
+
   final Function(MeasurementEntry) onUpdate;
   final double? indoorTemp;
   final VoidCallback? onMaybeResetNote;
@@ -21,6 +21,11 @@ class GenericMeasurementInputSection extends StatelessWidget {
     required this.transNo,
     required this.measurements,
     required this.controllers,
+
+    // --- 2. TAMBAHKAN DI CONSTRUCTOR ---
+    required this.limitsMap,
+    // -----------------------------------
+
     required this.onUpdate,
     required this.indoorTemp,
     this.onMaybeResetNote,
@@ -43,9 +48,16 @@ class GenericMeasurementInputSection extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
         ...measurements.map((mEntry) {
-          final limits = kPOSMeasurementLimits.values.firstWhere(
-            (ml) => ml.id == mEntry.measurementId,
-          );
+
+          // --- 3. GANTI LOGIC LOOKUP LIMIT ---
+          // Dulu: kPOSMeasurementLimits...
+          // Sekarang: Ambil dari limitsMap yang dipassing
+          final limits = limitsMap[mEntry.measurementId];
+
+          if (limits == null) {
+            return Text("Error: Config for ${mEntry.measurementId} missing");
+          }
+          // -----------------------------------
 
           final controller = controllers[mEntry.measurementId];
 
@@ -58,11 +70,12 @@ class GenericMeasurementInputSection extends StatelessWidget {
 
           if (mEntry.measurementId == indoorTempMeasurementId &&
               indoorTemp != null) {
+            // Logic penyesuaian limit suhu indoor (tetap dipertahankan)
             limitsToUse = MeasurementLimits(
               id: limits.id,
               label: limits.label,
               min: limits.min,
-              max: indoorTemp!,
+              max: indoorTemp!, // Override max dengan suhu ruangan saat ini
               normalMax: limits.normalMax,
               normalMin: limits.normalMin,
               unit: limits.unit,
@@ -71,13 +84,13 @@ class GenericMeasurementInputSection extends StatelessWidget {
 
           return Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: MeasurementInputWidget(
               controller: controller,
               transNo: transNo,
               label: limitsToUse.label,
               keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              const TextInputType.numberWithOptions(decimal: true),
               limits: limitsToUse,
               initialImage: mEntry.capturedImage,
               onEditingComplete: (finalValue) {

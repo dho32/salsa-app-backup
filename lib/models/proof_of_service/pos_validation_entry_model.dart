@@ -45,6 +45,9 @@ class PosValidationEntryModel extends HiveObject {
   @HiveField(12)
   String? pairedSerialNo;
 
+  @HiveField(13)
+  String? noteRemark;
+
   PosValidationEntryModel({
     required this.transNo,
     required this.serialNo,
@@ -59,6 +62,7 @@ class PosValidationEntryModel extends HiveObject {
     required this.capacity,
     required this.articleType,
     this.pairedSerialNo,
+    this.noteRemark,
   });
 
   factory PosValidationEntryModel.empty() {
@@ -76,6 +80,7 @@ class PosValidationEntryModel extends HiveObject {
       capacity: null,
       articleType: '',
       pairedSerialNo: '',
+      noteRemark: '',
     );
   }
 }

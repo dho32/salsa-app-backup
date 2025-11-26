@@ -1,6 +1,8 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
+import 'package:salsa/models/common/note_option.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
 import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_bloc.dart';
@@ -20,7 +22,7 @@ class PosValidationScreen extends StatefulWidget {
   final int capacity;
   final double? indoorTemp;
   final List<String> allIndoorSerials;
-  final List<String> noteOptions;
+  final List<NoteOption> noteOptions;
 
   const PosValidationScreen({
     super.key,
@@ -47,7 +49,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   /// Fungsi debug yang mencetak status setiap elemen
   /// DAN mengembalikan 'true' HANYA JIKA semua elemen lolos.
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
-
     bool allItemsPassed = true;
 
     for (int i = 0; i < measurements.length; i++) {
@@ -62,7 +63,8 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
         print('>>> Status: LOLOS');
       } else {
         print('>>> !!! STATUS: GAGAL !!! <<<');
-        print('Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
+        print(
+            'Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
 
         // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
         allItemsPassed = false;
@@ -103,6 +105,9 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
         ..add(FetchPosValidationData(
           initialData: widget.initialData,
           unitType: widget.unitType,
+          articleNo: widget.articleNo,
+          articleDesc: widget.articleDesc,
+          articleUnitDesc: widget.articleUnitDesc,
           allIndoorSerials: widget.allIndoorSerials,
           serialNo: widget.serialNo,
           transNo: widget.transNo,
@@ -118,8 +123,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 behavior: SnackBarBehavior.floating,
               ),
             );
-          }
-          else if (state is PosValidationSaveSuccess) {
+          } else if (state is PosValidationSaveSuccess) {
             Navigator.of(context).pop(true); // Kembali ke halaman sebelumnya
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Data berhasil disimpan'),
@@ -192,8 +196,9 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                   final latestState = context.read<PosValidationBloc>().state;
                   if (latestState is! PosValidationLoaded) return;
 
-                  final bool isAnyMeasurementSkipped =
-                  latestState.measurementsAfter.any((m) => m.isSkipped ?? false);
+                  final bool isAnyMeasurementSkipped = latestState
+                      .measurementsAfter
+                      .any((m) => m.isSkipped ?? false);
 
                   if (latestState.photosAfter.isEmpty) {
                     _showValidationErrorSnackbar(
@@ -207,22 +212,49 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     return;
                   }
 
-                  if (isAnyMeasurementSkipped &&
-                      _noteController.text.trim().isEmpty) {
-                    _showValidationErrorSnackbar(
-                        'Catatan wajib diisi, jika unit tidak bisa diukur.');
-                    return;
+                  if (isAnyMeasurementSkipped) {
+                    // 1. Cek Note Dropdown
+                    if (_noteController.text.trim().isEmpty) {
+                      _showValidationErrorSnackbar(
+                          'Catatan wajib diisi, jika unit tidak bisa diukur.');
+                      return;
+                    }
+
+                    // 2. Cek Remark Manual (Logic Baru)
+                    final selectedOption = widget.noteOptions.firstWhereOrNull(
+                        (o) => o.label == _noteController.text);
+
+                    // Jika opsi tersebut mewajibkan remark
+                    if (selectedOption?.requireRemark == true) {
+                      final remark = latestState.noteRemark ?? '';
+
+                      // A. Cek Kosong
+                      if (remark.trim().isEmpty) {
+                        _showValidationErrorSnackbar(
+                            'Keterangan Tambahan wajib diisi.');
+                        return;
+                      }
+
+                      // B. Cek Panjang Karakter (Tanpa Spasi)
+                      if (remark.replaceAll(' ', '').length < 20) {
+                        _showValidationErrorSnackbar(
+                            'Keterangan Tambahan minimal 20 huruf (tanpa spasi).');
+                        return;
+                      }
+                    }
                   }
 
                   for (final measurement in latestState.measurementsAfter) {
                     if (measurement.isSkipped ?? false) continue;
 
-                    final limits = kPOSMeasurementLimits[measurement.measurementId];
+                    final limits =
+                        kPOSMeasurementLimits[measurement.measurementId];
                     if (limits != null) {
                       // Tentukan batas atas dinamis untuk suhu
                       double maxLimit = limits.max;
                       double minLimit = limits.min;
-                      if (measurement.measurementId == 'temperature' && widget.indoorTemp != null) {
+                      if (measurement.measurementId == 'temperature' &&
+                          widget.indoorTemp != null) {
                         maxLimit = widget.indoorTemp!;
                       }
 

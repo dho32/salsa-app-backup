@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../../../models/common/captured_image_detail.dart';
 import '../../../models/common/measurement_entry.dart';
 import '../../../models/common/measurement_limits.dart';
+import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
 
 // BARU: Enum untuk mode tampilan
@@ -57,12 +58,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final List<MeasurementEntry> capturedMeasurementsAfter;
 
   // Daftar Opsi Catatan (dari API)
-  final List<String> noteIndoorBeforeOptions;
-  final List<String> noteIndoorAfterOptions;
-  final List<String> noteOutdoorBeforeOptions;
-  final List<String> noteOutdoorAfterOptions;
-  final List<String> noteOutdoorPsiBeforeOptions;
-  final List<String> noteOutdoorPsiAfterOptions;
+  final List<NoteOption> noteIndoorBeforeOptions;
+  final List<NoteOption> noteIndoorAfterOptions;
+  final List<NoteOption> noteOutdoorBeforeOptions;
+  final List<NoteOption> noteOutdoorAfterOptions;
+  final List<NoteOption> noteOutdoorPsiBeforeOptions;
+  final List<NoteOption> noteOutdoorPsiAfterOptions;
 
   //selected note
   final String? selectedIndoorNoteBefore;
@@ -126,12 +127,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     ValidationViewMode? currentViewMode,
     List<String>? outdoorSerialNumbers,
     Object? selectedOutdoorSerialNo = const Object(),
-    List<String>? noteIndoorBeforeOptions,
-    List<String>? noteIndoorAfterOptions,
-    List<String>? noteOutdoorBeforeOptions,
-    List<String>? noteOutdoorAfterOptions,
-    List<String>? noteOutdoorPsiBeforeOptions,
-    List<String>? noteOutdoorPsiAfterOptions,
+    List<NoteOption>? noteIndoorBeforeOptions,
+    List<NoteOption>? noteIndoorAfterOptions,
+    List<NoteOption>? noteOutdoorBeforeOptions,
+    List<NoteOption>? noteOutdoorAfterOptions,
+    List<NoteOption>? noteOutdoorPsiBeforeOptions,
+    List<NoteOption>? noteOutdoorPsiAfterOptions,
     Object? selectedIndoorNoteBefore = const Object(),
     Object? selectedOutdoorNoteBefore = const Object(),
     Object? selectedIndoorNoteAfter = const Object(),

@@ -1,20 +1,21 @@
-// pos_validation_body_mobile.dart
-
 import 'dart:io';
 import 'dart:math';
 
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
+import 'package:salsa/models/common/measurement_limits.dart';
+import 'package:salsa/models/common/note_option.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_bloc.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_event.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_state.dart';
+import '../../../../components/constants.dart';
 import '../../../../components/services/watermark_service.dart';
 import '../../../../components/widgets/generic_measurement_input_section.dart';
 import '../../../../components/widgets/photo_grid.dart';
@@ -28,7 +29,7 @@ class PosValidationBodyMobile extends StatefulWidget {
   final String articleUnitDesc;
   final TextEditingController noteController;
   final double? indoorTemp;
-  final List<String> noteOptions;
+  final List<NoteOption> noteOptions;
 
   const PosValidationBodyMobile({
     super.key,
@@ -50,10 +51,15 @@ class PosValidationBodyMobile extends StatefulWidget {
 class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   bool _isTakingPhoto = false;
   final Map<String, TextEditingController> _controllers = {};
+  late final TextEditingController _remarkController;
   String labelUnitIndoor = "Foto Unit Indoor & Evaporator";
   String labelUnitOutdoor = "Foto Unit Outdoor & Kondensor";
   String labelUnit = "";
+
   final TextEditingController _noteSearchController = TextEditingController();
+
+  // Variable Limit Dinamis
+  late final Map<String, MeasurementLimits> _limitsPosAfter;
 
   @override
   void initState() {
@@ -63,16 +69,40 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     } else if (widget.unitType.toUpperCase() == 'OUT') {
       labelUnit = labelUnitOutdoor;
     }
+
+    // --- Load Limit Dinamis dari Hive ---
+    final configBox = Hive.box(kAppConfigBox);
+    final rawLimits = configBox.get('limits_pos_after');
+    final Map<String, MeasurementLimits> limitsMap = {};
+
+    if (rawLimits is Map) {
+      rawLimits.forEach((key, value) {
+        if (key is String && value is MeasurementLimits) {
+          limitsMap[key] = value;
+        }
+      });
+    }
+
+    // Fallback ke kPOSMeasurementLimits jika Hive kosong
+    _limitsPosAfter = limitsMap.isNotEmpty ? limitsMap : kPOSMeasurementLimits;
+
+    final state = context.read<PosValidationBloc>().state;
+    String initialRemark = '';
+    if (state is PosValidationLoaded) {
+      initialRemark = state.noteRemark ?? '';
+    }
+    _remarkController = TextEditingController(text: initialRemark);
   }
 
   @override
   void dispose() {
     _disposeControllers();
+    _noteSearchController.dispose();
+    _remarkController.dispose();
     super.dispose();
   }
 
   void _initializeControllers(List<MeasurementEntry> measurements) {
-    // Hapus controller lama untuk mencegah memory leak
     _disposeControllers();
 
     for (var measurement in measurements) {
@@ -98,7 +128,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     final currentState = context.read<PosValidationBloc>().state;
     if (currentState is PosValidationLoaded) {
       final photoList =
-      isBefore ? currentState.photosBefore : currentState.photosAfter;
+          isBefore ? currentState.photosBefore : currentState.photosAfter;
       if (photoList.length >= 2) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -114,7 +144,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     setState(() => _isTakingPhoto = true);
 
     try {
-      // Bersihkan memori gambar sebelum membuka kamera berat
+      // Bersihkan memori gambar sebelum membuka kamera berat (Anti OOM)
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
 
@@ -138,11 +168,11 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           await imagesDir.create();
         }
 
-        // 2. Tentukan Path Target
+        // Path Target Watermark
         final targetPath = p.join(
             imagesDir.path, 'WM_POS_${timestamp.millisecondsSinceEpoch}.jpg');
 
-        // 3. PROSES WATERMARK (Background Transparan + Teks)
+        // Proses Watermark di Background
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
@@ -152,20 +182,21 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           deviceModel: deviceModel,
         );
 
-        final String? finalImagePath = await WatermarkService.processImage(request);
+        final String? finalImagePath =
+            await WatermarkService.processImage(request);
 
         if (finalImagePath == null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal memproses foto")));
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Gagal memproses foto")));
           }
           return;
         }
 
-        // 4. Simpan ke BLoC
         final capturedImageDetail = CapturedImageDetail(
-          imagePath: finalImagePath, // Path hasil watermark
+          imagePath: finalImagePath,
           timestamp: timestamp,
-          latitude: 0.0, // (Isi jika pakai GPS)
+          latitude: 0.0,
           longitude: 0.0,
           address: "",
           technicianName: technicianName,
@@ -198,10 +229,11 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     return BlocListener<PosValidationBloc, PosValidationState>(
       listener: (context, state) {
         if (state is PosValidationLoaded) {
-          // Setiap kali BLoC memuat data, kita buat ulang controllernya
-          // setState dipanggil agar UI tahu ada controller baru
           setState(() {
             _initializeControllers(state.measurementsAfter);
+            if (_remarkController.text != (state.noteRemark ?? '')) {
+              _remarkController.text = state.noteRemark ?? '';
+            }
           });
         }
       },
@@ -214,7 +246,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             return Center(child: Text("Error: ${state.message}"));
           }
           if (state is PosValidationLoaded) {
-            // Safety check: Jangan tampilkan UI sebelum controller siap
             if (_controllers.length != state.measurementsAfter.length) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -266,23 +297,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   Step _buildStep2(BuildContext context, PosValidationLoaded state) {
     final bool isAnyMeasurementSkipped =
         state.measurementsAfter.any((m) => m.isSkipped ?? false);
-
-    const double itemHeight = 40.0; // Tinggi satu item di menu
-    const double searchBarHeight = 50.0; // Tinggi kotak pencarian
-    const double verticalPadding = 20.0; // Padding atas & bawah
-
-    // Batas maksimum tinggi dropdown (misal: 40% dari tinggi layar)
-    final double maxAllowedHeight = MediaQuery.of(context).size.height * 0.8;
-
-    // Hitung total tinggi yang dibutuhkan oleh semua item + search bar
-    final double calculatedContentHeight =
-        (widget.noteOptions.length * itemHeight) +
-            searchBarHeight +
-            verticalPadding;
-
-    // Tentukan tinggi akhir: ambil nilai terkecil antara tinggi yg dihitung dan batas maks
-    final double dynamicMaxHeight =
-        min(calculatedContentHeight, maxAllowedHeight);
 
     return Step(
       title: const Text('Sesudah'),
@@ -349,130 +363,182 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                     .add(UpdateMeasurementAfter(measurement));
               },
               onMaybeResetNote: () {
-                // Dipanggil setiap kali ada measurement yg di-unskip
-                // Cek state BLoC saat ini
                 final currentState = context.read<PosValidationBloc>().state;
                 if (currentState is PosValidationLoaded) {
-                  // Periksa apakah MASIH ADA measurement lain yg di-skip
                   final anyOtherSkipped = currentState.measurementsAfter
                       .any((m) => m.isSkipped ?? false);
 
-                  // Jika TIDAK ADA lagi yg di-skip, baru reset controller note
                   if (!anyOtherSkipped) {
-                    print(
-                        "📝 No other measurements skipped, clearing note controller."); // Log untuk debug
                     widget.noteController.clear();
-                    // Opsional: Kirim event ke BLoC untuk membersihkan state note jika perlu
-                    // context.read<PosValidationBloc>().add(ClearNoteAfter());
-                  } else {
-                    print(
-                        "📝 Still other measurements skipped, note controller remains."); // Log untuk debug
                   }
                 }
               },
+              limitsMap: _limitsPosAfter, // Pass limit dinamis
             ),
             if (isAnyMeasurementSkipped)
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: DropdownButtonFormField2<String>(
-                  value: widget.noteController.text.isNotEmpty
-                      ? widget.noteController.text
-                      : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Catatan (Wajib jika skip pengukuran)',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        vertical: 16, horizontal: 12),
-                  ),
-                  hint: const Text(
-                    'Pilih Catatan',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  items: widget.noteOptions
-                      .map((item) => DropdownMenuItem<String>(
-                            value: item,
-                            child: Align(
-                              alignment: Alignment.topLeft,
-                              child: Text(
-                                item,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 2,
-                              ),
-                            ),
-                          ))
-                      .toList(),
+
+                // Gunakan Widget Dropdown Dinamis
+                child: _buildNoteDropdown(
+                  context: context,
+                  label: 'Catatan (Wajib jika skip pengukuran)',
+                  controller: widget.noteController,
+                  noteOptions: widget.noteOptions,
                   onChanged: (value) {
                     widget.noteController.text = value ?? '';
+                    _remarkController.clear();
+                    context.read<PosValidationBloc>().add(UpdateNoteRemark(''));
                     FocusScope.of(context).unfocus();
-                    context.read<PosValidationBloc>().add(UpdateNoteAfter(value ?? ''));
-                  },
-                  dropdownStyleData: DropdownStyleData(
-                    maxHeight: dynamicMaxHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                  menuItemStyleData: const MenuItemStyleData(
-                    height: itemHeight,
-                    // Gunakan konstanta yg sudah didefinisikan
-                    padding: EdgeInsets.only(left: 14, right: 14),
-                  ),
-                  dropdownSearchData: DropdownSearchData(
-                    searchController: _noteSearchController,
-                    searchInnerWidgetHeight: searchBarHeight,
-                    // Gunakan konstanta
-                    searchInnerWidget: Container(
-                      height: searchBarHeight,
-                      padding: const EdgeInsets.all(8),
-                      child: TextFormField(
-                        expands: true,
-                        maxLines: null,
-                        controller: _noteSearchController,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
-                          hintText: 'Cari catatan...',
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                    ),
-                    searchMatchFn: (item, searchValue) {
-                      return item.value
-                          .toString()
-                          .toLowerCase()
-                          .contains(searchValue.toLowerCase());
-                    },
-                  ),
-                  onMenuStateChange: (isOpen) {
-                    if (!isOpen) {
-                      _noteSearchController.clear();
-                    }
-                  },
-                  selectedItemBuilder: (context) {
-                    return widget.noteOptions.map((item) {
-                      return Text(
-                        item,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          overflow: TextOverflow.ellipsis,
-                          color: Colors.black,
-                        ),
-                        maxLines: 1,
-                      );
-                    }).toList();
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateNoteAfter(value ?? ''));
+
+                    setState(() {});
                   },
                 ),
               ),
           ],
         ),
       ),
+    );
+  }
+
+  // --- WIDGET DROPDOWN DINAMIS ---
+  Widget _buildNoteDropdown({
+    required BuildContext context,
+    required String label,
+    required TextEditingController controller,
+    required List<NoteOption> noteOptions,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+
+    // 1. Filter System Only
+    final filteredOptions = noteOptions.where((opt) {
+      return !opt.isSystemOnly || opt.label == controller.text;
+    }).toList();
+
+    // 2. Cek Read-Only
+    final selectedOptionObj = filteredOptions
+        .where((opt) => opt.label == controller.text)
+        .firstOrNull;
+    final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
+    final bool requireRemark = selectedOptionObj?.requireRemark ?? false;
+
+    return Column(
+      children: [
+        DropdownButtonFormField2<String>(
+          value: controller.text.isNotEmpty ? controller.text : null,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: label,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            filled: true,
+            fillColor:
+                isReadOnlySystemValue ? Colors.grey.shade200 : Colors.white,
+          ),
+          hint: const Text('Pilih Catatan', style: TextStyle(fontSize: 14)),
+          onChanged: isReadOnlySystemValue
+              ? null
+              : (value) {
+                  onChanged(value);
+                  FocusScope.of(context).unfocus();
+                },
+          items: filteredOptions
+              .map((item) => DropdownMenuItem<String>(
+                    value: item.label,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(item.label,
+                            style: const TextStyle(fontSize: 14)),
+                      ),
+                    ),
+                  ))
+              .toList(),
+          selectedItemBuilder: (context) {
+            return noteOptions.map((item) {
+              return Text(
+                item.label,
+                style: const TextStyle(
+                    fontSize: 14, overflow: TextOverflow.ellipsis),
+                maxLines: 1,
+              );
+            }).toList();
+          },
+          dropdownStyleData: DropdownStyleData(
+            maxHeight: maxDropdownHeight,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+          ),
+          menuItemStyleData: const MenuItemStyleData(
+            padding: EdgeInsets.symmetric(horizontal: 14),
+          ),
+          dropdownSearchData: DropdownSearchData(
+            searchController: _noteSearchController,
+            searchInnerWidgetHeight: 50,
+            searchInnerWidget: Container(
+              height: 50,
+              padding: const EdgeInsets.all(8),
+              child: TextFormField(
+                expands: true,
+                maxLines: null,
+                controller: _noteSearchController,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  hintText: 'Cari catatan...',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+            searchMatchFn: (item, searchValue) => item.value
+                .toString()
+                .toLowerCase()
+                .contains(searchValue.toLowerCase()),
+          ),
+          onMenuStateChange: (isOpen) {
+            if (!isOpen) _noteSearchController.clear();
+          },
+        ),
+        if (requireRemark)
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: TextFormField(
+              controller: _remarkController,
+              // Gunakan controller state
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: const InputDecoration(
+                labelText: 'Keterangan Tambahan (*Wajib)',
+                hintText: 'Jelaskan detail masalah (Min. 20 huruf)...',
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.all(12),
+                prefixIcon: Icon(Icons.edit_note),
+              ),
+              onChanged: (val) {
+                // Simpan ke BLoC
+                context.read<PosValidationBloc>().add(UpdateNoteRemark(val));
+              },
+              validator: (value) {
+                final text = value ?? '';
+                if (text.trim().isEmpty) return 'Wajib diisi';
+                final int charCount = text.replaceAll(' ', '').length;
+                if (charCount < 20) {
+                  return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
+                }
+                return null;
+              },
+              maxLines: 2,
+            ),
+          ),
+      ],
     );
   }
 

@@ -12,7 +12,7 @@ import 'auth_storage.dart';
 
 class AuthRepository {
   Future<String> login(String email, String password, String appVersion) async {
-    Uri uri = getUrl(pathUrl: '/login');
+    Uri uri = getUrl(pathUrl: 'login');
     var map = <String, dynamic>{};
     map['user'] = email;
     map['password'] = password;
@@ -26,6 +26,12 @@ class AuthRepository {
 
     final data = jsonDecode(response.body);
     final result = data['result'];
+
+    JsonEncoder encoder = const JsonEncoder.withIndent('  ');
+    String prettyJson = encoder.convert(result);
+    log("====== BODY REQUEST LENGKAP ======");
+    log(prettyJson);
+    log("================================");
 
     if (response.statusCode == 200 && data['status'] == 'OK') {
       final token = result['user_token'];

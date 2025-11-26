@@ -4,12 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import '../../../blocs/auth/auth_storage.dart';
-import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
-import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
-import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
-import '../../../components/services/watermark_service.dart';
-import '../../../models/common/captured_image_detail.dart';
+import '../../../../../blocs/auth/auth_storage.dart';
+import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
+import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
+import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
+import '../../../../../components/services/watermark_service.dart';
+import '../../../../../models/common/captured_image_detail.dart';
 
 class ScInvalidUnitScreen extends StatefulWidget {
   final String transNo;

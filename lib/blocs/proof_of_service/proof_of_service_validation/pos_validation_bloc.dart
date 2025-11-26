@@ -20,6 +20,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     on<SavePosValidationData>(_onSaveData);
     on<MarkAsInProgress>(_onMarkAsInProgress);
     on<PairOutdoorWithIndoor>(_onPairOutdoor);
+    on<UpdateNoteAfter>(_onUpdateNoteAfter);
+    on<UpdateNoteRemark>(_onUpdateNoteRemark);
   }
 
   // Helper untuk membuat daftar pengukuran default berdasarkan tipe unit
@@ -57,7 +59,6 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     bool isComplete = initialData?.isCompleted ?? false;
 
     if (initialData != null && isComplete) {
-      // Jika ya, panggil event MarkAsInProgress dari dalam BLoC itu sendiri
       add(MarkAsInProgress(
         transNo: event.transNo,
         serialNo: event.serialNo,
@@ -86,22 +87,35 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (initialData != null) {
       emit(PosValidationLoaded(
         unitType: event.unitType,
+        transNo: event.transNo,
+        serialNo: event.serialNo,
+        articleNo: event.articleNo,
+        articleDesc: event.articleDesc,
+        articleUnitDesc: event.articleUnitDesc,
         photosBefore: initialData.photosBefore,
         photosAfter: initialData.photosAfter,
         measurementsAfter: initialData.measurementsAfter,
         pairedIndoorSerial: initialData.pairedSerialNo,
         availableIndoorSerials: availableIndoors,
+        note: initialData.note,
+        noteRemark: initialData.noteRemark,
       ));
     } else {
       emit(PosValidationLoaded(
         unitType: event.unitType,
+        transNo: event.transNo,
+        serialNo: event.serialNo,
+        articleNo: event.articleNo,
+        articleDesc: event.articleDesc,
+        articleUnitDesc: event.articleUnitDesc,
         measurementsAfter: _getDefaultMeasurements(event.unitType),
         availableIndoorSerials: availableIndoors,
       ));
     }
   }
 
-  void _onPairOutdoor(PairOutdoorWithIndoor event, Emitter<PosValidationState> emit) {
+  void _onPairOutdoor(
+      PairOutdoorWithIndoor event, Emitter<PosValidationState> emit) {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       emit(currentState.copyWith(pairedIndoorSerial: event.indoorSerialNo));
@@ -121,8 +135,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-      List<CapturedImageDetail>.from(currentState.photosBefore)
-        ..add(event.imageDetail);
+          List<CapturedImageDetail>.from(currentState.photosBefore)
+            ..add(event.imageDetail);
       emit(currentState.copyWith(photosBefore: updatedPhotos));
     }
   }
@@ -142,8 +156,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-      List<CapturedImageDetail>.from(currentState.photosAfter)
-        ..add(event.imageDetail);
+          List<CapturedImageDetail>.from(currentState.photosAfter)
+            ..add(event.imageDetail);
       emit(currentState.copyWith(photosAfter: updatedPhotos));
     }
   }
@@ -164,13 +178,62 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedMeasurements =
-      List<MeasurementEntry>.from(currentState.measurementsAfter);
+          List<MeasurementEntry>.from(currentState.measurementsAfter);
       final index = updatedMeasurements.indexWhere(
-              (m) => m.measurementId == event.measurement.measurementId);
+          (m) => m.measurementId == event.measurement.measurementId);
       if (index != -1) {
         updatedMeasurements[index] = event.measurement;
       }
       emit(currentState.copyWith(measurementsAfter: updatedMeasurements));
+    }
+  }
+
+  Future<void> _onUpdateNoteAfter(
+      UpdateNoteAfter event, Emitter<PosValidationState> emit) async {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+      emit(currentState.copyWith(note: event.note));
+      await _saveToHive(currentState.copyWith(note: event.note)); // Auto Save
+    }
+  }
+
+  Future<void> _onUpdateNoteRemark(
+      UpdateNoteRemark event, Emitter<PosValidationState> emit) async {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+      emit(currentState.copyWith(noteRemark: event.remark));
+      await _saveToHive(
+          currentState.copyWith(noteRemark: event.remark)); // Auto Save
+    }
+  }
+
+  Future<void> _saveToHive(PosValidationLoaded state) async {
+    try {
+      final box =
+          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      // Buat entry baru atau ambil yg lama
+      final entry = PosValidationEntryModel(
+        transNo: state.transNo,
+        serialNo: state.serialNo.trim().toUpperCase(),
+        photosBefore: state.photosBefore,
+        photosAfter: state.photosAfter,
+        measurementsAfter: state.measurementsAfter,
+        isCompleted: false,
+        // Kalau auto-save, belum completed
+        note: state.note,
+        noteRemark: state.noteRemark,
+        // <-- SIMPAN REMARK
+        articleNo: state.articleNo,
+        articleDesc: state.articleDesc,
+        articleUnitDesc: state.articleUnitDesc,
+        capacity: 0,
+        articleType: state.unitType,
+        // <-- Gunakan articleType
+        pairedSerialNo: state.pairedIndoorSerial,
+      );
+      await box.put(state.serialNo.trim().toUpperCase(), entry);
+    } catch (e) {
+      print("Gagal auto-save ke Hive: $e");
     }
   }
 
@@ -183,35 +246,35 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       // =================================================================
       // --- LOGIKA VALIDASI DITAMBAHKAN DI SINI ---
       // =================================================================
-      for (final measurement in currentState.measurementsAfter) {
-        // Jangan validasi jika pengukuran di-skip
-        if (measurement.isSkipped ?? false) continue;
-
-        // Ambil batas (limits) dari konstanta
-        final limits = kPOSMeasurementLimits[measurement.measurementId];
-
-        // Cek jika nilai yang diinput melebihi batas maksimal
-        if (limits != null) {
-          // Secara default, gunakan batas atas dari konstanta
-          double maxLimit = limits.max;
-
-          // TAPI, jika ini adalah pengukuran suhu ('temperature') DAN kita menerima
-          // nilai indoorTemp dari event, maka GUNAKAN nilai indoorTemp sebagai batas atas.
-          if (measurement.measurementId == 'temperature' &&
-              event.indoorTemp != null) {
-            maxLimit = event.indoorTemp!;
-          }
-
-          // // Lakukan validasi dengan batas atas (maxLimit) yang sudah dinamis
-          // if (measurement.value > maxLimit) {
-          //   final errorMessage =
-          //       'Nilai untuk "${limits.label}" (${measurement.value} ${limits.unit}) melebihi batas maksimal 3.';
-          //
-          //   emit(PosValidationSaveFailure(errorMessage, currentState));
-          //   return;
-          // }
-        }
-      }
+      // for (final measurement in currentState.measurementsAfter) {
+      //   // Jangan validasi jika pengukuran di-skip
+      //   if (measurement.isSkipped ?? false) continue;
+      //
+      //   // Ambil batas (limits) dari konstanta
+      //   final limits = kPOSMeasurementLimits[measurement.measurementId];
+      //
+      //   // Cek jika nilai yang diinput melebihi batas maksimal
+      //   if (limits != null) {
+      //     // Secara default, gunakan batas atas dari konstanta
+      //     double maxLimit = limits.max;
+      //
+      //     // TAPI, jika ini adalah pengukuran suhu ('temperature') DAN kita menerima
+      //     // nilai indoorTemp dari event, maka GUNAKAN nilai indoorTemp sebagai batas atas.
+      //     if (measurement.measurementId == 'temperature' &&
+      //         event.indoorTemp != null) {
+      //       maxLimit = event.indoorTemp!;
+      //     }
+      //
+      //     // // Lakukan validasi dengan batas atas (maxLimit) yang sudah dinamis
+      //     // if (measurement.value > maxLimit) {
+      //     //   final errorMessage =
+      //     //       'Nilai untuk "${limits.label}" (${measurement.value} ${limits.unit}) melebihi batas maksimal 3.';
+      //     //
+      //     //   emit(PosValidationSaveFailure(errorMessage, currentState));
+      //     //   return;
+      //     // }
+      //   }
+      // }
       // =================================================================
       // --- AKHIR DARI LOGIKA VALIDASI ---
       // =================================================================
@@ -225,6 +288,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         measurementsAfter: currentState.measurementsAfter,
         isCompleted: event.markAsCompleted,
         note: event.note,
+        noteRemark: currentState.noteRemark,
         articleNo: event.articleNo,
         articleDesc: event.articleDesc,
         articleUnitDesc: event.articleUnitDesc,
@@ -234,7 +298,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       );
 
       final box =
-      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
 
       // Pancarkan (emit) state SUKSES setelah menyimpan
@@ -265,7 +329,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       );
 
       final box =
-      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       await box.put(event.serialNo.trim().toUpperCase(), entry);
     }
   }

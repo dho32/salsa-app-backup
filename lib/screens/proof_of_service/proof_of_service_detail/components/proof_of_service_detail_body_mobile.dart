@@ -25,6 +25,7 @@ import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/common/measurement_limits.dart';
+import '../../../../models/common/note_option.dart';
 import '../../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../../models/service_call/validation_status.dart';
 import '../../proof_of_service_validation/pos_validation_screen.dart';
@@ -210,7 +211,7 @@ class _ProofOfServiceDetailBodyMobileState
           if (detailState is ProofOfServiceDetailLoaded) {
             final header = detailState.data.header;
             final detailList = detailState.data.detail;
-            final List<String> noteOptions =
+            final List<NoteOption> noteOptions =
                 detailState.data.noteIndoorOptions ?? [];
 
             return BlocBuilder<PosFormCubit, PosFormState>(
@@ -410,8 +411,8 @@ class _ProofOfServiceDetailBodyMobileState
 
   // --- WIDGET BUILDER METHODS ---
 
-  Widget _buildServiceInfoPanel(
-      BuildContext context, PosFormState formState, List<String> noteOptions) {
+  Widget _buildServiceInfoPanel(BuildContext context, PosFormState formState,
+      List<NoteOption> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
     return _buildSection(
       title: 'Informasi Servis Sebelum Cleaning',
@@ -492,7 +493,7 @@ class _ProofOfServiceDetailBodyMobileState
   }
 
   Widget _buildServiceInfoAfterPanel(
-      BuildContext context, PosFormState formState, List<String> noteOptions) {
+      BuildContext context, PosFormState formState, List<NoteOption> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
 
     // Batasan untuk suhu akhir, bisa sama atau beda dari suhu awal
@@ -558,7 +559,7 @@ class _ProofOfServiceDetailBodyMobileState
     required BuildContext context,
     required String label,
     required TextEditingController controller,
-    required List<String> noteOptions,
+    required List<NoteOption> noteOptions,
     required ValueChanged<String?> onChanged,
   }) {
     // Salin logika perhitungan tinggi dropdown
@@ -571,10 +572,22 @@ class _ProofOfServiceDetailBodyMobileState
     final double dynamicMaxHeight =
         min(calculatedContentHeight, maxAllowedHeight);
 
+    final filteredOptions = noteOptions.where((opt) {
+      return !opt.isSystemOnly || opt.label == controller.text;
+    }).toList();
+
+    final selectedOption = filteredOptions
+        .where((opt) => opt.label == controller.text)
+        .firstOrNull;
+
+    final bool isReadOnlySystemValue = selectedOption?.isSystemOnly ?? false;
+
     return Padding(
       padding: const EdgeInsets.only(top: 12.0),
       child: DropdownButtonFormField2<String>(
-        value: controller.text.isNotEmpty ? controller.text : null,
+        value: filteredOptions.any((opt) => opt.label == controller.text)
+            ? controller.text
+            : null,
         isExpanded: true,
         decoration: InputDecoration(
           labelText: label,
@@ -591,21 +604,23 @@ class _ProofOfServiceDetailBodyMobileState
           'Pilih Catatan',
           style: TextStyle(fontSize: 14),
         ),
-        items: noteOptions
-            .map((item) => DropdownMenuItem<String>(
-                  value: item,
+        onChanged: isReadOnlySystemValue
+            ? null
+            : (value) {
+                onChanged(value);
+                FocusScope.of(context).unfocus();
+              },
+        items: filteredOptions
+            .map((opt) => DropdownMenuItem<String>(
+                  value: opt.label,
                   child: Text(
-                    item,
+                    opt.label,
                     style: const TextStyle(fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 2,
                   ),
                 ))
             .toList(),
-        onChanged: (value) {
-          onChanged(value); // Panggil callback
-          FocusScope.of(context).unfocus();
-        },
         dropdownStyleData: DropdownStyleData(
           maxHeight: dynamicMaxHeight,
           decoration: BoxDecoration(
@@ -651,7 +666,7 @@ class _ProofOfServiceDetailBodyMobileState
         selectedItemBuilder: (context) {
           return noteOptions.map((item) {
             return Text(
-              item,
+              item.label,
               style: const TextStyle(
                 fontSize: 14,
                 overflow: TextOverflow.ellipsis,
@@ -1265,7 +1280,7 @@ class _ProofOfServiceDetailBodyMobileState
     final double? indoorTemp = double.tryParse(tempIn);
     final detailState = context.read<ProofOfServiceDetailBloc>().state;
     List<String> allIndoorSerials = [];
-    List<String> noteOptions = [];
+    List<NoteOption> noteOptionsToSend = [];
 
     if (detailState is ProofOfServiceDetailLoaded) {
       // 3. Filter hanya unit indoor, lalu ambil serial number-nya
@@ -1274,9 +1289,12 @@ class _ProofOfServiceDetailBodyMobileState
           .map((d) => d.serialNo)
           .toList();
 
-      noteOptions = detail.unitType == 'IN'
+      final rawOptions = detail.unitType == 'IN'
           ? detailState.data.noteIndoorOptions ?? []
           : detailState.data.noteOutdoorOptions ?? [];
+
+      noteOptionsToSend = rawOptions ?? [];
+
     }
 
     if (!context.mounted) return;
@@ -1295,7 +1313,7 @@ class _ProofOfServiceDetailBodyMobileState
           capacity: 0,
           indoorTemp: indoorTemp,
           allIndoorSerials: allIndoorSerials,
-          noteOptions: noteOptions,
+          noteOptions: noteOptionsToSend,
         ),
       ),
     );
