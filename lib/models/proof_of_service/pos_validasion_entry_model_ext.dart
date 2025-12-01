@@ -12,6 +12,7 @@ extension PosValidationEntryModelJson on PosValidationEntryModel {
       'article_unit_desc': articleUnitDesc,
       'article_type': articleType,
       'note': isAnyMeasurementSkipped ? note : "",
+      'remark': noteRemark,
       'images_before': photosBefore.map((img) => img.toJson()).toList(),
       'images_after': photosAfter.map((img) => img.toJson()).toList(),
       'measurements_after': measurementsAfter.map((m) => m.toJson()).toList(),
