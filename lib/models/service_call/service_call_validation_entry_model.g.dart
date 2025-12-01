@@ -35,13 +35,18 @@ class ServiceCallValidationEntryModelAdapter
       selectedOutdoorNoteAfter: fields[14] as String?,
       selectedOutdoorPSINoteBefore: fields[15] as String?,
       selectedOutdoorPSINoteAfter: fields[16] as String?,
+      correctSerialNo: fields[17] as String?,
+      noteRemarkIndoor: fields[18] as String?,
+      noteRemarkOutdoor: fields[19] as String?,
+      noteRemarkPSI: fields[20] as String?,
+      noteRemark: fields[21] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ServiceCallValidationEntryModel obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(22)
       ..writeByte(0)
       ..write(obj.unitType)
       ..writeByte(1)
@@ -75,7 +80,17 @@ class ServiceCallValidationEntryModelAdapter
       ..writeByte(15)
       ..write(obj.selectedOutdoorPSINoteBefore)
       ..writeByte(16)
-      ..write(obj.selectedOutdoorPSINoteAfter);
+      ..write(obj.selectedOutdoorPSINoteAfter)
+      ..writeByte(17)
+      ..write(obj.correctSerialNo)
+      ..writeByte(18)
+      ..write(obj.noteRemarkIndoor)
+      ..writeByte(19)
+      ..write(obj.noteRemarkOutdoor)
+      ..writeByte(20)
+      ..write(obj.noteRemarkPSI)
+      ..writeByte(21)
+      ..write(obj.noteRemark);
   }
 
   @override

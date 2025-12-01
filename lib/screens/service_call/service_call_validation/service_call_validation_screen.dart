@@ -24,6 +24,7 @@ import 'components/service_call_validation_body_mobile.dart';
 class ServiceCallValidationScreen extends StatefulWidget {
   final String transNo;
   final String serialNo;
+  final String? displaySerialNo;
   final String lineNo;
   final String assetAge;
   final String rentDate;
@@ -39,6 +40,7 @@ class ServiceCallValidationScreen extends StatefulWidget {
     super.key,
     required this.transNo,
     required this.serialNo,
+    this.displaySerialNo,
     required this.lineNo,
     required this.assetAge,
     required this.rentDate,
@@ -156,6 +158,11 @@ class _ServiceCallValidationScreenState
               isSaving = state.saveStatus == ValidationSaveStatus.saving;
             }
 
+            final currentSerial = (state is ValidationDropdownLoaded &&
+                    state.correctSerialNo != null)
+                ? state.correctSerialNo!
+                : (widget.displaySerialNo ?? widget.serialNo);
+
             return Stack(
               children: [
                 Scaffold(
@@ -169,7 +176,7 @@ class _ServiceCallValidationScreenState
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.block, size: 16),
                             label: const Text(
-                              "Unit Tidak Sesuai",
+                              "Tukar Unit",
                               style: TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.bold),
                             ),
@@ -187,22 +194,69 @@ class _ServiceCallValidationScreenState
                             // Disable jika sedang saving
                             onPressed: isSaving
                                 ? null
-                                : () {
+                                : () async {
                                     final bloc =
                                         context.read<ValidationDropdownBloc>();
+                                    List<String> swapOptions = widget
+                                        .detailData.indoorAvailable
+                                        .map((e) => e.serialNo)
+                                        .toList();
 
-                                    Navigator.push(
+                                    swapOptions.remove(currentSerial);
+
+                                    // --- 3. FILTER SERIAL YANG DIPAKAI UNIT LAIN YANG SUDAH DIPAKAI ------
+                                    final box = Hive.box<
+                                            ServiceCallValidationEntryModel>(
+                                        kServiceCallHiveBox);
+
+                                    // Ambil semua serial number yang SUDAH diambil oleh unit lain sebagai 'correctSerialNo'
+                                    final usedByOthers = box.values
+                                        .where((e) =>
+                                            e.transNo ==
+                                                widget
+                                                    .transNo && // Transaksi sama
+                                            e.serialNo !=
+                                                widget
+                                                    .serialNo && // Unit lain (bukan unit ini)
+                                            e.correctSerialNo !=
+                                                null && // Ada data swap
+                                            e.correctSerialNo!.isNotEmpty)
+                                        .map((e) => e.correctSerialNo!)
+                                        .toSet();
+
+                                    // Hapus dari opsi jika sudah dipakai tetangga
+                                    swapOptions.removeWhere((serial) =>
+                                        usedByOthers.contains(serial));
+
+                                    if (currentSerial != widget.serialNo) {
+                                      if (!swapOptions
+                                          .contains(widget.serialNo)) {
+                                        swapOptions.add(widget.serialNo);
+                                      }
+                                    }
+
+                                    swapOptions.sort();
+
+                                    final result = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => BlocProvider.value(
                                           value: bloc,
                                           child: ScInvalidUnitScreen(
                                             transNo: widget.transNo,
-                                            serialNo: widget.serialNo,
+                                            ticketSerialNo: widget.serialNo,
+                                            currentSerialNo: currentSerial,
+                                            swapOptions: swapOptions,
                                           ),
                                         ),
                                       ),
                                     );
+
+                                    // 3. Cek hasil kembalian
+                                    // Jika result == true (berarti sukses swap), tutup halaman Validasi ini juga
+                                    if (result == true && context.mounted) {
+                                      Navigator.of(context).pop(true);
+                                    }
                                   },
                           ),
                         ),
@@ -210,12 +264,12 @@ class _ServiceCallValidationScreenState
                   ),
                   body: GestureDetector(
                     onTap: () => FocusScope.of(context).unfocus(),
-                    // Disable interaksi jika sedang saving
                     child: AbsorbPointer(
                       absorbing: isSaving,
                       child: ServiceCallValidationBodyMobile(
                         transNo: widget.transNo,
                         serialNo: widget.serialNo,
+                        displaySerialNo: currentSerial,
                         lineNo: widget.lineNo,
                         assetAge: widget.assetAge,
                         rentDate: widget.rentDate,

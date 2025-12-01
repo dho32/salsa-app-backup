@@ -218,3 +218,20 @@ class SaveValidationData extends ValidationDropdownEvent {
   @override
   List<Object?> get props => [transNo, serialNo, markAsCompleted, showNotification];
 }
+
+class CorrectUnitSerial extends ValidationDropdownEvent {
+  final String transNo;
+  final String oldSerialNo;
+  final String newSerialNo;
+  final String reason;
+
+  const CorrectUnitSerial({
+    required this.transNo,
+    required this.oldSerialNo,
+    required this.newSerialNo,
+    required this.reason,
+  });
+
+  @override
+  List<Object?> get props => [transNo, oldSerialNo, newSerialNo, reason];
+}

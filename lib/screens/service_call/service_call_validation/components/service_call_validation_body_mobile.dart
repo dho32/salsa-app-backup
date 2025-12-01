@@ -22,6 +22,7 @@ import '../../../../models/common/captured_image_detail.dart';
 class ServiceCallValidationBodyMobile extends StatefulWidget {
   final String transNo;
   final String serialNo;
+  final String? displaySerialNo;
   final String lineNo;
   final String assetAge;
   final String rentDate;
@@ -34,6 +35,7 @@ class ServiceCallValidationBodyMobile extends StatefulWidget {
     super.key,
     required this.transNo,
     required this.serialNo,
+    this.displaySerialNo,
     required this.lineNo,
     required this.assetAge,
     required this.rentDate,
@@ -284,7 +286,9 @@ class _ServiceCallValidationBodyMobileState
               HeaderInfo(
                 key: _step1Key,
                 transNo: widget.transNo,
-                serialNo: widget.serialNo,
+                serialNo: state.correctSerialNo ??
+                    widget.displaySerialNo ??
+                    widget.serialNo,
                 lineNo: widget.lineNo,
                 complaintDetails: widget.complaintDetails,
                 imageFile: widget.imageFile,
@@ -330,7 +334,9 @@ class _ServiceCallValidationBodyMobileState
               HeaderInfo(
                 key: _step2Key,
                 transNo: widget.transNo,
-                serialNo: widget.serialNo,
+                serialNo: state.correctSerialNo ??
+                    widget.displaySerialNo ??
+                    widget.serialNo,
                 lineNo: widget.lineNo,
                 complaintDetails: widget.complaintDetails,
                 imageFile: widget.imageFile,

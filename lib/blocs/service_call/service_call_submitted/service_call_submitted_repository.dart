@@ -46,7 +46,7 @@ class ServiceCallSubmittedRepository {
       log(prettyJson);
       log("================================");
 
-      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted');
+      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted/v2');
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},

@@ -58,6 +58,21 @@ class ServiceCallValidationEntryModel extends HiveObject {
   @HiveField(16)
   String? selectedOutdoorPSINoteAfter;
 
+  @HiveField(17)
+  String? correctSerialNo;
+
+  @HiveField(18)
+  String? noteRemarkIndoor;
+
+  @HiveField(19)
+  String? noteRemarkOutdoor;
+
+  @HiveField(20)
+  String? noteRemarkPSI;
+
+  @HiveField(21)
+  String? noteRemark;
+
   ServiceCallValidationEntryModel({
     required this.unitType,
     required this.serialNo,
@@ -76,6 +91,11 @@ class ServiceCallValidationEntryModel extends HiveObject {
     this.selectedOutdoorNoteAfter,
     this.selectedOutdoorPSINoteBefore,
     this.selectedOutdoorPSINoteAfter,
+    this.correctSerialNo,
+    this.noteRemarkIndoor,
+    this.noteRemarkOutdoor,
+    this.noteRemarkPSI,
+    this.noteRemark,
   });
 
   factory ServiceCallValidationEntryModel.empty() {
@@ -97,6 +117,11 @@ class ServiceCallValidationEntryModel extends HiveObject {
       selectedOutdoorNoteAfter: null,
       selectedOutdoorPSINoteBefore: null,
       selectedOutdoorPSINoteAfter: null,
+      correctSerialNo: null,
+      noteRemarkIndoor: null,
+      noteRemarkOutdoor: null,
+      noteRemarkPSI: null,
+      noteRemark: null,
     );
   }
 }

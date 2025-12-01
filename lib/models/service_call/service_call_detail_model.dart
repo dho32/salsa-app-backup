@@ -5,7 +5,8 @@ import '../common/note_option.dart';
 class ServiceCallDetailModel {
   final ServiceCallHeader header;
   final List<ServiceCallUnitDetail> detail;
-  final List<OutdoorUnit> outdoor;
+  final List<SerialNo> indoorAvailable;
+  final List<SerialNo> outdoor;
   final List<ProblemSourceModel> problems;
   final List<NoteOption> unserviceableReasons;
   final List<NoteOption> noteIndoorBeforeOptions;
@@ -18,6 +19,7 @@ class ServiceCallDetailModel {
   ServiceCallDetailModel({
     required this.header,
     required this.detail,
+    required this.indoorAvailable,
     required this.outdoor,
     required this.problems,
     required this.unserviceableReasons,
@@ -30,6 +32,7 @@ class ServiceCallDetailModel {
   });
 
   factory ServiceCallDetailModel.fromJson(Map<String, dynamic> json) {
+    var indoorList = json['indoor'] as List<dynamic>? ?? [];
     var outdoorList = json['outdoor'] as List<dynamic>? ?? [];
     var problemList = json['problems'] as List<dynamic>? ?? [];
 
@@ -51,7 +54,8 @@ class ServiceCallDetailModel {
       detail: (json['detail'] as List<dynamic>)
           .map((item) => ServiceCallUnitDetail.fromJson(item))
           .toList(),
-      outdoor: outdoorList.map((item) => OutdoorUnit.fromJson(item)).toList(),
+      indoorAvailable: indoorList.map((item) => SerialNo.fromJson(item)).toList(),
+      outdoor: outdoorList.map((item) => SerialNo.fromJson(item)).toList(),
       problems: problemList.map((item) => ProblemSourceModel.fromJson(item)).toList(),
       unserviceableReasons: _parseNotes(json['unserviceable_reasons']),
       noteIndoorBeforeOptions: _parseNotes(json['note_indoor_before_options']),
@@ -170,13 +174,13 @@ class ServiceCallUnitDetail {
   }
 }
 
-class OutdoorUnit {
+class SerialNo {
   final String serialNo;
 
-  OutdoorUnit({required this.serialNo});
+  SerialNo({required this.serialNo});
 
-  factory OutdoorUnit.fromJson(Map<String, dynamic> json) {
-    return OutdoorUnit(
+  factory SerialNo.fromJson(Map<String, dynamic> json) {
+    return SerialNo(
       serialNo: json['serial_no'] ?? '',
     );
   }

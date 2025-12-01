@@ -95,13 +95,18 @@ class _ServiceCallDetailBodyMobileState
 
     final configBox = Hive.box(kAppConfigBox);
     final Map<String, MeasurementLimits> headerLimits =
-    Map<String, MeasurementLimits>.from(
-        configBox.get('limits_temp_header') ?? {});
+        Map<String, MeasurementLimits>.from(
+            configBox.get('limits_temp_header') ?? {});
 
-    _scFinalTempBaseLimits = headerLimits['sc_final_temp_in'] ?? const MeasurementLimits(
-        id: 'sc_final_temp_in', label: 'Suhu Dalam Ruangan (SC)', min: 4, max: 30,
-        unit: '°C', normalMin: 5, normalMax: 18
-    );
+    _scFinalTempBaseLimits = headerLimits['sc_final_temp_in'] ??
+        const MeasurementLimits(
+            id: 'sc_final_temp_in',
+            label: 'Suhu Dalam Ruangan (SC)',
+            min: 4,
+            max: 30,
+            unit: '°C',
+            normalMin: 5,
+            normalMax: 18);
 
     final initialFormState = context.read<ScFormCubit>().state;
 
@@ -344,7 +349,8 @@ class _ServiceCallDetailBodyMobileState
               }
             });
 
-            final List<NoteOption> noteOptions = detailState.data.noteIndoorAfterOptions;
+            final List<NoteOption> noteOptions =
+                detailState.data.noteIndoorAfterOptions;
 
             return BlocBuilder<ScFormCubit, ScFormState>(
               builder: (context, formState) {
@@ -560,7 +566,9 @@ class _ServiceCallDetailBodyMobileState
                                               child: AbsorbPointer(
                                                 absorbing: !isEnabled,
                                                 child: _buildFinalTempSection(
-                                                    context, formStateForTemp, noteOptions),
+                                                    context,
+                                                    formStateForTemp,
+                                                    noteOptions),
                                               ),
                                             ),
                                             if (!isEnabled)
@@ -758,15 +766,19 @@ class _ServiceCallDetailBodyMobileState
           const SizedBox(height: 8),
           if (formState.showTechnician3) // <-- Gunakan state dari Cubit
             _buildCustomTextField(
-              controller: _technician3Controller, // <-- Gunakan Controller
+              controller: _technician3Controller,
+              // <-- Gunakan Controller
               hintText: 'Teknisi 3',
               icon: Icons.engineering,
-              onTap: () {}, // Kosongkan onTap
-              onChanged: (value) { // <-- Tambahkan onChanged
+              onTap: () {},
+              // Kosongkan onTap
+              onChanged: (value) {
+                // <-- Tambahkan onChanged
                 formCubit.technician3Changed(value);
                 formCubit.onFieldChanged();
               },
-              iconBtn: IconButton( // <-- Ganti nama prop
+              iconBtn: IconButton(
+                  // <-- Ganti nama prop
                   onPressed: () {
                     formCubit.technician3Changed('');
                     formCubit.toggleTechnician3(false);
@@ -862,6 +874,23 @@ class _ServiceCallDetailBodyMobileState
       ServiceCallHeader header,
       ServiceCallUnitDetail detail,
       Map<String, ValidationStatus> validationStatuses) {
+    final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+    final existingEntry = box.values.firstWhereOrNull((e) =>
+        e.serialNo.trim().toUpperCase() ==
+            detail.serialNo.trim().toUpperCase() &&
+        e.transNo == header.transNo);
+
+    // Tentukan serial number mana yang akan ditampilkan
+    String displaySerial = detail.serialNo;
+    bool isSwapped = false;
+
+    if (existingEntry != null &&
+        existingEntry.correctSerialNo != null &&
+        existingEntry.correctSerialNo!.isNotEmpty) {
+      displaySerial = existingEntry.correctSerialNo!;
+      isSwapped = true;
+    }
+
     final isRemote = detail.articleNameUnit.toUpperCase().contains('REMOTE');
     final String serialKey = detail.serialNo.trim().toUpperCase();
     final status = validationStatuses[serialKey] ?? ValidationStatus.notStarted;
@@ -893,8 +922,30 @@ class _ServiceCallDetailBodyMobileState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text('Serial No: ${detail.serialNo}',
-                style: const TextStyle(fontWeight: FontWeight.w500)),
+            Row(
+              children: [
+                Text('Serial No: ',
+                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                if (isSwapped) ...[
+                  Text(displaySerial,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepOrange)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.swap_horiz,
+                      size: 16, color: Colors.deepOrange),
+                ] else
+                  Text(displaySerial,
+                      style: const TextStyle(fontWeight: FontWeight.w500)),
+              ],
+            ),
+            if (isSwapped)
+              const Text('(Unit Hasil Koreksi)',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.deepOrange,
+                      fontStyle: FontStyle.italic)),
+
             Text('Keluhan: ${detail.complaintDetails}',
                 style: const TextStyle(fontSize: 12)),
           ],
@@ -913,6 +964,13 @@ class _ServiceCallDetailBodyMobileState
           final outdoorSerials =
               detailState.data.outdoor.map((unit) => unit.serialNo).toList();
           final problemSources = detailState.data.problems;
+
+          String serialForDisplay = detail.serialNo; // Default Lama
+          if (existingEntry != null &&
+              existingEntry.correctSerialNo != null &&
+              existingEntry.correctSerialNo!.isNotEmpty) {
+            serialForDisplay = existingEntry.correctSerialNo!; // Serial Baru
+          }
 
           if (isRemote) {
             await Navigator.push(
@@ -934,14 +992,6 @@ class _ServiceCallDetailBodyMobileState
 
             if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // ScaffoldMessenger.of(context).showSnackBar(
-              //   const SnackBar(
-              //     content: Text('Validasi berhasil disimpan!'),
-              //     backgroundColor: Colors.green,
-              //     behavior: SnackBarBehavior.floating,
-              //   ),
-              // );
-
               _refreshSerials();
             }
           } else {
@@ -954,6 +1004,7 @@ class _ServiceCallDetailBodyMobileState
               MaterialPageRoute(
                 builder: (_) => ServiceCallValidationScreen(
                   serialNo: detail.serialNo,
+                  displaySerialNo: serialForDisplay,
                   lineNo: detail.lineNo,
                   transNo: header.transNo,
                   initialData: existingEntry,
@@ -987,7 +1038,8 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildFinalTempSection(BuildContext context, ScFormState formState, List<NoteOption> noteOptions) {
+  Widget _buildFinalTempSection(BuildContext context, ScFormState formState,
+      List<NoteOption> noteOptions) {
     final formCubit = context.read<ScFormCubit>();
     final baseLimits = _scFinalTempBaseLimits;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
@@ -1001,7 +1053,6 @@ class _ServiceCallDetailBodyMobileState
       normalMin: baseLimits.normalMin,
       normalMax: baseLimits.normalMax,
     );
-
 
     return _buildSection(
       title: 'Suhu Dalam Ruangan Setelah Service (*Wajib)',
@@ -1158,7 +1209,8 @@ class _ServiceCallDetailBodyMobileState
     final filteredOptions = options.where((opt) {
       return !opt.isSystemOnly || opt.label == selectedValue;
     }).toList();
-    final selectedOptionObj = filteredOptions.where((opt) => opt.label == selectedValue).firstOrNull;
+    final selectedOptionObj =
+        filteredOptions.where((opt) => opt.label == selectedValue).firstOrNull;
     final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
 
     // ... (Sisa kode _buildNoteDropdown persis sama seperti
@@ -1185,7 +1237,8 @@ class _ServiceCallDetailBodyMobileState
                     alignment: Alignment.topLeft,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(item.label, style: const TextStyle(fontSize: 14)),
+                      child: Text(item.label,
+                          style: const TextStyle(fontSize: 14)),
                     ),
                   ),
                 ))

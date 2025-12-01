@@ -1,24 +1,26 @@
-import 'dart:io';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import '../../../../../blocs/auth/auth_storage.dart';
+import 'package:salsa/models/service_call/service_call_detail_model.dart';
+
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
-import '../../../../../components/services/watermark_service.dart';
-import '../../../../../models/common/captured_image_detail.dart';
 
 class ScInvalidUnitScreen extends StatefulWidget {
   final String transNo;
-  final String serialNo;
+  final String ticketSerialNo;
+  final String currentSerialNo;
+
+  // Data List Unit Pengganti dari API
+  final List<String> swapOptions;
 
   const ScInvalidUnitScreen({
     super.key,
     required this.transNo,
-    required this.serialNo,
+    required this.ticketSerialNo,
+    required this.currentSerialNo,
+    required this.swapOptions,
   });
 
   @override
@@ -26,97 +28,48 @@ class ScInvalidUnitScreen extends StatefulWidget {
 }
 
 class _ScInvalidUnitScreenState extends State<ScInvalidUnitScreen> {
-  final List<CapturedImageDetail> _proofPhotos = [];
-  bool _isTakingPhoto = false;
+  final TextEditingController _reasonController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
-  // Fungsi ambil foto (Copy-Paste logic dari yang sudah ada)
-  Future<void> _takePhoto() async {
-    setState(() => _isTakingPhoto = true);
-    try {
-      // Bersihkan memori gambar sebelum membuka kamera berat
-      PaintingBinding.instance.imageCache.clear();
-      PaintingBinding.instance.imageCache.clearLiveImages();
+  String? _selectedNewSerial; // Menyimpan serial yang dipilih
 
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1080,
-        maxHeight: 1920,
-        imageQuality: 80,
-      );
-
-      if (image != null) {
-        final userData = await AuthStorage.getUser();
-        final technicianName = userData['name'] ?? 'Unknown';
-        final deviceModel = userData['device_model'] ?? 'Unknown Device';
-        final timestamp = DateTime.now();
-
-        final appDir = await getApplicationDocumentsDirectory();
-        final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
-        if (!await imagesDir.exists()) await imagesDir.create();
-
-        final targetPath = p.join(imagesDir.path,
-            'WM_INVALID_${timestamp.millisecondsSinceEpoch}.jpg');
-
-        final request = WatermarkRequest(
-          originalPath: image.path,
-          targetPath: targetPath,
-          transNo: widget.transNo,
-          timestamp: timestamp,
-          technicianName: technicianName,
-          deviceModel: deviceModel,
-        );
-
-        final String? finalPath = await WatermarkService.processImage(request);
-
-        if (finalPath != null) {
-          setState(() {
-            _proofPhotos.add(CapturedImageDetail(
-              imagePath: finalPath,
-              timestamp: timestamp,
-              latitude: 0, longitude: 0, address: "",
-              technicianName: technicianName,
-              deviceModel: deviceModel,
-              transNo: widget.transNo,
-            ));
-          });
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gagal mengambil foto: $e")),
-      );
-    } finally {
-      setState(() => _isTakingPhoto = false);
-    }
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<ValidationDropdownBloc, ValidationDropdownState>(
-      listenWhen: (prev, current) =>
-      prev is ValidationDropdownLoaded &&
-          current is ValidationDropdownLoaded &&
-          prev.saveStatus != current.saveStatus,
       listener: (context, state) {
         if (state is ValidationDropdownLoaded) {
-          if (state.saveStatus == ValidationSaveStatus.successFinal) {
-
-            Navigator.of(context).pop();
+          // Jika sukses disimpan (sebagai draft koreksi)
+          if (state.saveStatus == ValidationSaveStatus.successDraft ||
+              state.saveStatus == ValidationSaveStatus.successSilent) {
+            Navigator.of(context).pop(true);
 
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Unit berhasil di batalkan"), backgroundColor: Colors.green),
+              const SnackBar(
+                  content: Text(
+                      "Unit berhasil ditukar. Silakan kerjakan unit yang baru."),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating),
             );
           } else if (state.saveStatus == ValidationSaveStatus.error) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.saveMessage ?? "Gagal"), backgroundColor: Colors.red),
+              SnackBar(
+                  content: Text(state.saveMessage ?? "Gagal"),
+                  backgroundColor: Colors.red),
             );
           }
         }
       },
       child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
         builder: (context, state) {
-          // Cek status saving untuk loading overlay
+          // Cek status loading
           bool isSaving = false;
           if (state is ValidationDropdownLoaded) {
             isSaving = state.saveStatus == ValidationSaveStatus.saving;
@@ -126,156 +79,231 @@ class _ScInvalidUnitScreenState extends State<ScInvalidUnitScreen> {
             children: [
               Scaffold(
                 appBar: AppBar(
-                  title: const Text("Batalkan Pengerjaan Unit"),
-                  backgroundColor: Colors.red.shade50,
-                  foregroundColor: Colors.red.shade900,
+                  title: const Text("Tukar / Koreksi Unit"),
+                  backgroundColor: Colors.orange.shade50,
+                  foregroundColor: Colors.orange.shade900,
                 ),
                 body: SingleChildScrollView(
                   padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. WARNING CARD
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red.shade200),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. INFO UNIT LAMA
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Unit yang sedang dikerjakan saat ini:",
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey)),
+                              const SizedBox(height: 4),
+                              Text(widget.currentSerialNo,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 32),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Perhatian!",
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900, fontSize: 16),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text("Anda akan menandai unit ini sebagai 'Unit Tidak Sesuai'.\n\n"
-                                      "• Semua data pengukuran untuk unit ini akan di lewati.\n"
-                                      "• Alasan: 'Unit AC yang di komplain tidak sesuai'."),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                        const SizedBox(height: 24),
 
-                      const SizedBox(height: 24),
+                        // 2. DROPDOWN UNIT PENGGANTI
+                        const Text("Ganti Menjadi Unit: (*Wajib)",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 8),
 
-                      // 2. PHOTO SECTION
-                      const Text("Foto Bukti Unit", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 12),
-
-                      if (_proofPhotos.isEmpty)
-                        InkWell(
-                          onTap: isSaving ? null : _takePhoto,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            height: 150,
-                            width: double.infinity,
+                        if (widget.swapOptions.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            child: const Row(
                               children: [
-                                Icon(Icons.camera_alt_outlined, size: 40, color: Colors.grey.shade600),
-                                const SizedBox(height: 8),
-                                Text("Ketuk untuk ambil foto", style: TextStyle(color: Colors.grey.shade600)),
+                                Icon(Icons.error_outline, color: Colors.red),
+                                SizedBox(width: 8),
+                                Expanded(
+                                    child: Text(
+                                        "Tidak ada data unit lain yang tersedia di toko ini.",
+                                        style: TextStyle(color: Colors.red))),
                               ],
                             ),
-                          ),
-                        )
-                      else
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
-                          ),
-                          itemCount: _proofPhotos.length < 2 ? _proofPhotos.length + 1 : _proofPhotos.length,
-                          itemBuilder: (context, index) {
-                            // Tombol tambah foto (jika slot masih ada)
-                            if (index == _proofPhotos.length) {
-                              return InkWell(
-                                onTap: isSaving ? null : _takePhoto,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.grey.shade300),
-                                  ),
-                                  child: const Center(child: Icon(Icons.add, size: 32)),
+                          )
+                        else
+                          DropdownButtonFormField2<String>(
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 16),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            hint: const Text('Pilih Serial No.',
+                                style: TextStyle(fontSize: 14)),
+
+                            // --- ITEM BUILDER ---
+                            items: widget.swapOptions.map((serial) {
+                              // Logic Tampilan Revert
+                              final isOriginal = serial == widget.ticketSerialNo;
+
+                              return DropdownMenuItem<String>(
+                                value: serial,
+                                child: Text(
+                                    serial + (isOriginal ? " (Kembali ke Asal)" : ""),
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: isOriginal ? FontWeight.bold : FontWeight.normal,
+                                        color: isOriginal ? Colors.blue : Colors.black
+                                    )
                                 ),
                               );
-                            }
+                            }).toList(),
 
-                            // Preview Foto
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(File(_proofPhotos[index].imagePath), fit: BoxFit.cover),
-                                ),
-                                Positioned(
-                                  top: 4, right: 4,
-                                  child: GestureDetector(
-                                    onTap: isSaving ? null : () => setState(() => _proofPhotos.removeAt(index)),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                      child: const Icon(Icons.delete, color: Colors.red, size: 16),
-                                    ),
+                            validator: (value) {
+                              if (value == null) {
+                                return 'Harap pilih unit pengganti.';
+                              }
+                              return null;
+                            },
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedNewSerial = value;
+                              });
+                            },
+
+                            // --- FITUR SEARCH ---
+                            dropdownSearchData: DropdownSearchData(
+                              searchController: _searchController,
+                              searchInnerWidgetHeight: 50,
+                              searchInnerWidget: Container(
+                                height: 50,
+                                padding: const EdgeInsets.all(8),
+                                child: TextFormField(
+                                  expands: true,
+                                  maxLines: null,
+                                  controller: _searchController,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                    hintText: 'Cari serial number...',
+                                    border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8)),
                                   ),
                                 ),
-                              ],
-                            );
+                              ),
+                              searchMatchFn: (item, searchValue) {
+                                // Cari berdasarkan value (Serial No)
+                                return item.value
+                                    .toString()
+                                    .toLowerCase()
+                                    .contains(searchValue.toLowerCase());
+                              },
+                            ),
+                            onMenuStateChange: (isOpen) {
+                              if (!isOpen) _searchController.clear();
+                            },
+                            dropdownStyleData: DropdownStyleData(
+                              maxHeight: 400,
+                              decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(15)),
+                            ),
+                          ),
+
+                        const SizedBox(height: 16),
+
+                        // 3. ALASAN KOREKSI
+                        TextFormField(
+                          controller: _reasonController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Alasan (*Wajib)',
+                            hintText: 'Jelaskan kenapa unit ini diganti...',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return "Wajib diisi";
+                            }
+                            return null;
                           },
                         ),
-                    ],
+
+                        const SizedBox(height: 24),
+
+                        // 4. INFO WARNING
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  color: Colors.orange.shade800),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  "Perhatian: Setelah disimpan, Anda wajib melakukan pengukuran ulang untuk unit yang baru dipilih ini.",
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 bottomNavigationBar: SafeArea(
                   minimum: const EdgeInsets.all(16),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
+                      backgroundColor: Colors.orange,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    onPressed: (_proofPhotos.isNotEmpty && !isSaving && !_isTakingPhoto)
-                        ? () {
-                      // KIRIM EVENT KE BLOC
-                      context.read<ValidationDropdownBloc>().add(
-                        MarkUnitAsInvalid(
-                          transNo: widget.transNo,
-                          serialNo: widget.serialNo,
-                          proofPhotos: _proofPhotos,
-                          reason: "Unit AC yang di komplain tidak sesuai",
-                        ),
-                      );
-                    }
-                        : null,
-                    child: const Text("Konfirmasi Salah Unit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    onPressed: isSaving
+                        ? null
+                        : () {
+                            if (_formKey.currentState!.validate()) {
+                              // KIRIM EVENT KOREKSI UNIT
+                              context.read<ValidationDropdownBloc>().add(
+                                    CorrectUnitSerial(
+                                      transNo: widget.transNo,
+                                      oldSerialNo: widget.ticketSerialNo,
+                                      newSerialNo: _selectedNewSerial!,
+                                      // Pasti ada krn validator
+                                      reason: _reasonController.text.trim(),
+                                    ),
+                                  );
+                            }
+                          },
+                    child: const Text("Simpan Perubahan",
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
 
               // LOADING OVERLAY
-              if (isSaving || _isTakingPhoto)
+              if (isSaving)
                 Container(
                   color: Colors.black.withOpacity(0.5),
-                  child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white)),
                 ),
             ],
           );

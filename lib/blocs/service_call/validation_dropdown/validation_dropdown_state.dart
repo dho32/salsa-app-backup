@@ -82,6 +82,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final ValidationSaveStatus saveStatus;
   final String? saveMessage;
 
+  final String? correctSerialNo;
+
   const ValidationDropdownLoaded({
     required this.data,
     this.selectedUnitType,
@@ -111,12 +113,11 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.selectedOutdoorPSINoteAfter,
     this.saveStatus = ValidationSaveStatus.initial,
     this.saveMessage,
+    this.correctSerialNo,
   });
 
   ValidationDropdownLoaded copyWith({
     List<ProblemSourceModel>? data,
-    // Gunakan Object() sebagai penanda "tidak diubah" vs "diubah jadi null"
-    // Ini adalah trik umum untuk copyWith nullable fields
     Object? selectedUnitType = const Object(),
     List<CapturedImageDetail>? capturedPhotosBefore,
     List<MeasurementEntry>? capturedMeasurementsBefore,
@@ -143,9 +144,10 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     Object? saveMessage = const Object(),
     Map<String, MeasurementLimits>? limitsScBefore,
     Map<String, MeasurementLimits>? limitsScAfter,
+    Object? correctSerialNo = const Object(),
   }) {
     // Helper untuk menangani nullable copyWith
-    T _handleNullable<T>(Object? newValue, T currentValue) {
+    T handleNullable<T>(Object? newValue, T currentValue) {
       // Jika newValue adalah penanda Object(), berarti field ini tidak diubah
       if (newValue is Object && identical(newValue, const Object())) {
         return currentValue;
@@ -156,8 +158,7 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
 
     return ValidationDropdownLoaded(
       data: data ?? this.data,
-      selectedUnitType:
-          _handleNullable(selectedUnitType, this.selectedUnitType),
+      selectedUnitType: handleNullable(selectedUnitType, this.selectedUnitType),
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
       capturedMeasurementsBefore:
           capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
@@ -168,8 +169,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
       currentStep: currentStep ?? this.currentStep,
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
-      selectedOutdoorSerialNo: _handleNullable(
-          selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
+      selectedOutdoorSerialNo:
+          handleNullable(selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
       limitsScBefore: limitsScBefore ?? this.limitsScBefore,
       limitsScAfter: limitsScAfter ?? this.limitsScAfter,
       noteIndoorBeforeOptions:
@@ -184,20 +185,21 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
           noteOutdoorPsiBeforeOptions ?? this.noteOutdoorPsiBeforeOptions,
       noteOutdoorPsiAfterOptions:
           noteOutdoorPsiAfterOptions ?? this.noteOutdoorPsiAfterOptions,
-      selectedIndoorNoteBefore: _handleNullable(
+      selectedIndoorNoteBefore: handleNullable(
           selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
-      selectedOutdoorNoteBefore: _handleNullable(
+      selectedOutdoorNoteBefore: handleNullable(
           selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
-      selectedIndoorNoteAfter: _handleNullable(
-          selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
-      selectedOutdoorNoteAfter: _handleNullable(
+      selectedIndoorNoteAfter:
+          handleNullable(selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
+      selectedOutdoorNoteAfter: handleNullable(
           selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
-      selectedOutdoorPSINoteBefore: _handleNullable(
+      selectedOutdoorPSINoteBefore: handleNullable(
           selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
-      selectedOutdoorPSINoteAfter: _handleNullable(
+      selectedOutdoorPSINoteAfter: handleNullable(
           selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
       saveStatus: saveStatus ?? this.saveStatus,
-      saveMessage: _handleNullable(saveMessage, this.saveMessage),
+      saveMessage: handleNullable(saveMessage, this.saveMessage),
+      correctSerialNo: handleNullable(correctSerialNo, this.correctSerialNo),
     );
   }
 
@@ -230,6 +232,7 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
         limitsScAfter,
         saveStatus,
         saveMessage,
+        correctSerialNo,
       ];
 }
 
