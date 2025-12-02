@@ -130,51 +130,71 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     }
   }
 
-  void _onAddPhotoBefore(
-      AddPhotoBefore event, Emitter<PosValidationState> emit) {
+  Future<void> _onAddPhotoBefore(
+      AddPhotoBefore event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
           List<CapturedImageDetail>.from(currentState.photosBefore)
             ..add(event.imageDetail);
-      emit(currentState.copyWith(photosBefore: updatedPhotos));
+
+      final newState = currentState.copyWith(photosBefore: updatedPhotos);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
     }
   }
 
-  void _onRemovePhotoBefore(
-      RemovePhotoBefore event, Emitter<PosValidationState> emit) {
+  Future<void> _onRemovePhotoBefore(
+      RemovePhotoBefore event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos = currentState.photosBefore
           .where((p) => p.imagePath != event.imagePath)
           .toList();
-      emit(currentState.copyWith(photosBefore: updatedPhotos));
+
+      final newState = currentState.copyWith(photosBefore: updatedPhotos);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
     }
   }
 
-  void _onAddPhotoAfter(AddPhotoAfter event, Emitter<PosValidationState> emit) {
+  Future<void> _onAddPhotoAfter(AddPhotoAfter event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
           List<CapturedImageDetail>.from(currentState.photosAfter)
             ..add(event.imageDetail);
-      emit(currentState.copyWith(photosAfter: updatedPhotos));
+
+      final newState = currentState.copyWith(photosAfter: updatedPhotos);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
     }
   }
 
-  void _onRemovePhotoAfter(
-      RemovePhotoAfter event, Emitter<PosValidationState> emit) {
+  Future<void> _onRemovePhotoAfter(
+      RemovePhotoAfter event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos = currentState.photosAfter
           .where((p) => p.imagePath != event.imagePath)
           .toList();
-      emit(currentState.copyWith(photosAfter: updatedPhotos));
+
+      final newState = currentState.copyWith(photosAfter: updatedPhotos);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
     }
   }
 
-  void _onUpdateMeasurementAfter(
-      UpdateMeasurementAfter event, Emitter<PosValidationState> emit) {
+  Future<void> _onUpdateMeasurementAfter(
+      UpdateMeasurementAfter event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedMeasurements =
@@ -184,7 +204,12 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       if (index != -1) {
         updatedMeasurements[index] = event.measurement;
       }
-      emit(currentState.copyWith(measurementsAfter: updatedMeasurements));
+
+      final newState = currentState.copyWith(measurementsAfter: updatedMeasurements);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
     }
   }
 

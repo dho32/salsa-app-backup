@@ -42,7 +42,9 @@ class ValidationDropdownError extends ValidationDropdownState {
 }
 
 class ValidationDropdownLoaded extends ValidationDropdownState {
-  final List<ProblemSourceModel> data; // Ini List<ProblemSourceModel>
+  final String transNo;
+  final String serialNo;
+  final List<ProblemSourceModel> data;
   final String? selectedUnitType;
   final List<String> outdoorSerialNumbers;
   final String unitLocation;
@@ -85,6 +87,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final String? correctSerialNo;
 
   const ValidationDropdownLoaded({
+    required this.transNo,
+    required this.serialNo,
     required this.data,
     this.selectedUnitType,
     this.capturedPhotosBefore = const [],
@@ -117,6 +121,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   });
 
   ValidationDropdownLoaded copyWith({
+    String? transNo,
+    String? serialNo,
     List<ProblemSourceModel>? data,
     Object? selectedUnitType = const Object(),
     List<CapturedImageDetail>? capturedPhotosBefore,
@@ -157,6 +163,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     }
 
     return ValidationDropdownLoaded(
+      transNo: transNo ?? this.transNo,
+      serialNo: serialNo ?? this.serialNo,
       data: data ?? this.data,
       selectedUnitType: handleNullable(selectedUnitType, this.selectedUnitType),
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
@@ -205,6 +213,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
 
   @override
   List<Object?> get props => [
+        transNo,
+        serialNo,
         data,
         selectedUnitType,
         selectedProblemCards,

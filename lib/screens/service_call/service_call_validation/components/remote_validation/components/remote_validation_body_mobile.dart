@@ -49,6 +49,8 @@ class RemoteValidationBodyMobile extends StatelessWidget {
               context: context,
               state: ValidationDropdownLoaded(
                 // Beri data dummy yg dibutuhkan
+                transNo: '',
+                serialNo: '',
                 data: [],
                 selectedProblemCards: selectedProblemCards,
                 limitsScBefore: {},

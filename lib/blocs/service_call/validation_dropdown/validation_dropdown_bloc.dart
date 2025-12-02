@@ -61,6 +61,100 @@ class ValidationDropdownBloc
     }).toList();
   }
 
+  Future<void> _saveToHive(ValidationDropdownLoaded state) async {
+    try {
+      final box = await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+
+      // 1. Logic Ekstrak Remark (Sama seperti onSaveData)
+      String? getRemarkFromList(List<MeasurementEntry> list, Set<String> ids) {
+        return list.firstWhereOrNull(
+                (m) => ids.contains(m.measurementId) && (m.isSkipped ?? false)
+        )?.remark;
+      }
+      const indoorIds = {'temperature'};
+      const outdoorElecIds = {'volt', 'ampere'};
+      const outdoorPsiIds = {'psi'};
+
+      final listToCheck = state.capturedMeasurementsAfter;
+      final remarkIndoor = getRemarkFromList(listToCheck, indoorIds);
+      final remarkOutdoor = getRemarkFromList(listToCheck, outdoorElecIds);
+      final remarkPSI = getRemarkFromList(listToCheck, outdoorPsiIds);
+
+      // 2. Cari Data Lama (Untuk Swap & Remark)
+      final searchSerial = state.serialNo.trim().toUpperCase();
+      final searchTransNo = state.transNo.trim().toUpperCase();
+
+      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull((key) {
+        final entry = box.get(key);
+        return entry?.serialNo.trim().toUpperCase() == searchSerial &&
+            entry?.transNo.trim().toUpperCase() == searchTransNo;
+      });
+
+      String? existingCorrectSerial;
+      String? existingNoteRemark;
+
+      if (existingKey != null) {
+        final oldData = box.get(existingKey);
+        existingCorrectSerial = oldData?.correctSerialNo;
+        existingNoteRemark = oldData?.noteRemark;
+      }
+
+      // 3. Buat Model (IS COMPLETED = FALSE karena ini auto-save/draft)
+      final validationEntry = ServiceCallValidationEntryModel(
+        unitType: state.selectedUnitType ?? '',
+        serialNo: state.serialNo,
+        transNo: state.transNo,
+
+        imagePathsBefore: state.capturedPhotosBefore,
+        measurementsBefore: state.capturedMeasurementsBefore,
+        imagePathsAfter: state.capturedPhotosAfter,
+        measurementsAfter: state.capturedMeasurementsAfter,
+
+        problems: state.selectedProblemCards
+            .map((card) => ValidationProblem(
+            problemId: card.selectedProblemId!,
+            solutionIds: card.selectedSolutionIds))
+            .toList(),
+
+        isCompleted: false, // Draft
+        outdoorSerialNo: state.selectedOutdoorSerialNo,
+
+        selectedIndoorNoteBefore: state.selectedIndoorNoteBefore,
+        selectedOutdoorNoteBefore: state.selectedOutdoorNoteBefore,
+        selectedIndoorNoteAfter: state.selectedIndoorNoteAfter,
+        selectedOutdoorNoteAfter: state.selectedOutdoorNoteAfter,
+        selectedOutdoorPSINoteBefore: state.selectedOutdoorPSINoteBefore,
+        selectedOutdoorPSINoteAfter: state.selectedOutdoorPSINoteAfter,
+
+        noteRemarkIndoor: remarkIndoor,
+        noteRemarkOutdoor: remarkOutdoor,
+        noteRemarkPSI: remarkPSI,
+
+        correctSerialNo: existingCorrectSerial,
+        noteRemark: existingNoteRemark,
+      );
+
+      if (existingKey != null) {
+        await box.put(existingKey, validationEntry);
+      } else {
+        await box.add(validationEntry);
+      }
+
+      // (Opsional) Simpan juga outdoor assignment
+      final assignmentBox = Hive.box(kOutdoorUnitAssignmentsBox);
+      final Map<dynamic, dynamic> currentAssignments = assignmentBox.get(state.transNo) ?? {};
+      if (state.selectedOutdoorSerialNo != null && state.selectedOutdoorSerialNo!.isNotEmpty) {
+        currentAssignments[state.serialNo] = state.selectedOutdoorSerialNo;
+      } else {
+        currentAssignments.remove(state.serialNo);
+      }
+      await assignmentBox.put(state.transNo, currentAssignments);
+
+    } catch (e) {
+      print("Gagal auto-save SC: $e");
+    }
+  }
+
   Future<void> _onFetchData(FetchValidationDropdownData event,
       Emitter<ValidationDropdownState> emit) async {
     emit(ValidationDropdownLoading());
@@ -96,6 +190,8 @@ class ValidationDropdownBloc
 
       emit(
         ValidationDropdownLoaded(
+          transNo: event.transNo,
+          serialNo: event.currentIndoorSerial,
           data: data,
           selectedUnitType: initialData?.unitType,
           capturedPhotosBefore: initialData?.imagePathsBefore ?? [],
@@ -230,52 +326,44 @@ class ValidationDropdownBloc
       NoteChanged event, Emitter<ValidationDropdownState> emit) {
     if (state is ValidationDropdownLoaded) {
       final currentState = state as ValidationDropdownLoaded;
+      ValidationDropdownLoaded newState = currentState;
 
       if (event.isBefore) {
         switch (event.noteType) {
-          case NoteType.indoor:
-            emit(currentState.copyWith(selectedIndoorNoteBefore: event.note));
-            break;
-          case NoteType.outdoor:
-            emit(currentState.copyWith(selectedOutdoorNoteBefore: event.note));
-            break;
-          case NoteType.outdoorPsi:
-            emit(currentState.copyWith(
-                selectedOutdoorPSINoteBefore: event.note));
-            break;
+          case NoteType.indoor: newState = currentState.copyWith(selectedIndoorNoteBefore: event.note); break;
+          case NoteType.outdoor: newState = currentState.copyWith(selectedOutdoorNoteBefore: event.note); break;
+          case NoteType.outdoorPsi: newState = currentState.copyWith(selectedOutdoorPSINoteBefore: event.note); break;
         }
       } else {
         switch (event.noteType) {
-          case NoteType.indoor:
-            emit(currentState.copyWith(selectedIndoorNoteAfter: event.note));
-            break;
-          case NoteType.outdoor:
-            emit(currentState.copyWith(selectedOutdoorNoteAfter: event.note));
-            break;
-          case NoteType.outdoorPsi:
-            emit(
-                currentState.copyWith(selectedOutdoorPSINoteAfter: event.note));
-            break;
+          case NoteType.indoor: newState = currentState.copyWith(selectedIndoorNoteAfter: event.note); break;
+          case NoteType.outdoor: newState = currentState.copyWith(selectedOutdoorNoteAfter: event.note); break;
+          case NoteType.outdoorPsi: newState = currentState.copyWith(selectedOutdoorPSINoteAfter: event.note); break;
         }
       }
+      emit(newState);
+      _saveToHive(newState); // Auto Save
     }
   }
 
   void _onSelectOutdoorSerial(
       SelectOutdoorSerial event, Emitter<ValidationDropdownState> emit) {
     if (state is ValidationDropdownLoaded) {
-      final currentState = state as ValidationDropdownLoaded;
-      emit(currentState.copyWith(selectedOutdoorSerialNo: event.serialNo));
+      final newState = (state as ValidationDropdownLoaded).copyWith(selectedOutdoorSerialNo: event.serialNo);
+      emit(newState);
+      _saveToHive(newState); // Auto Save
     }
   }
 
   void _onSelectUnitType(
       SelectUnitType event, Emitter<ValidationDropdownState> emit) {
     final currentState = state as ValidationDropdownLoaded;
-    emit(currentState.copyWith(
+    final newState = currentState.copyWith(
       selectedUnitType: event.unitType,
       selectedProblemCards: [],
-    ));
+    );
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onAddProblemCard(
@@ -290,7 +378,9 @@ class ValidationDropdownBloc
           ..add(SelectedProblemCard(
               selectedProblemId: event.problemId,
               selectedSolutionIds: event.solutionIds));
-    emit(currentState.copyWith(selectedProblemCards: updated));
+    final newState = currentState.copyWith(selectedProblemCards: updated);
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onRemoveProblemCard(
@@ -299,7 +389,9 @@ class ValidationDropdownBloc
     final updated = currentState.selectedProblemCards
         .where((card) => card.selectedProblemId != event.problemId)
         .toList();
-    emit(currentState.copyWith(selectedProblemCards: updated));
+    final newState = currentState.copyWith(selectedProblemCards: updated);
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onSelectProblemForCard(
@@ -311,7 +403,9 @@ class ValidationDropdownBloc
       targetList[event.index] = targetList[event.index].copyWith(
           selectedProblemId: event.problemId, selectedSolutionIds: []);
     }
-    emit(currentState.copyWith(selectedProblemCards: targetList));
+    final newState = currentState.copyWith(selectedProblemCards: targetList);
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onSelectSolutionsForCard(
@@ -323,73 +417,87 @@ class ValidationDropdownBloc
       targetList[event.index] = targetList[event.index]
           .copyWith(selectedSolutionIds: event.solutionIds);
     }
-    emit(currentState.copyWith(selectedProblemCards: targetList));
+    final newState = currentState.copyWith(selectedProblemCards: targetList);
+    emit(newState);
+    _saveToHive(newState);
   }
 
-  void _onAddCapturedPhotoBefore(
-      AddCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<CapturedImageDetail>.from(currentState.capturedPhotosBefore)
-          ..add(event.imageDetail);
-    emit(currentState.copyWith(capturedPhotosBefore: updated));
-  }
-
-  void _onRemoveCapturedPhotoBefore(
-      RemoveCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated = currentState.capturedPhotosBefore
-        .where((img) => img.imagePath != event.imagePath)
-        .toList();
-    emit(currentState.copyWith(capturedPhotosBefore: updated));
-  }
-
-  void _onUpdateMeasurementBefore(
-      UpdateMeasurementBefore event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<MeasurementEntry>.from(currentState.capturedMeasurementsBefore);
-    final index = updated
-        .indexWhere((m) => m.measurementId == event.measurement.measurementId);
-    if (index != -1) {
-      updated[index] = event.measurement;
-    } else {
-      updated.add(event.measurement);
+  Future<void> _onAddCapturedPhotoBefore(
+      AddCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<CapturedImageDetail>.from(currentState.capturedPhotosBefore)..add(event.imageDetail);
+      final newState = currentState.copyWith(capturedPhotosBefore: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
     }
-    emit(currentState.copyWith(capturedMeasurementsBefore: updated));
   }
 
-  void _onAddCapturedPhotoAfter(
-      AddCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<CapturedImageDetail>.from(currentState.capturedPhotosAfter)
-          ..add(event.imageDetail);
-    emit(currentState.copyWith(capturedPhotosAfter: updated));
-  }
-
-  void _onRemoveCapturedPhotoAfter(
-      RemoveCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated = currentState.capturedPhotosAfter
-        .where((img) => img.imagePath != event.imagePath)
-        .toList();
-    emit(currentState.copyWith(capturedPhotosAfter: updated));
-  }
-
-  void _onUpdateMeasurementAfter(
-      UpdateMeasurementAfter event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<MeasurementEntry>.from(currentState.capturedMeasurementsAfter);
-    final index = updated
-        .indexWhere((m) => m.measurementId == event.measurement.measurementId);
-    if (index != -1) {
-      updated[index] = event.measurement;
-    } else {
-      updated.add(event.measurement);
+  Future<void> _onRemoveCapturedPhotoBefore(
+      RemoveCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = currentState.capturedPhotosBefore.where((p) => p.imagePath != event.imagePath).toList();
+      final newState = currentState.copyWith(capturedPhotosBefore: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
     }
-    emit(currentState.copyWith(capturedMeasurementsAfter: updated));
+  }
+
+  Future<void> _onUpdateMeasurementBefore(
+      UpdateMeasurementBefore event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<MeasurementEntry>.from(currentState.capturedMeasurementsBefore);
+      final index = updated.indexWhere((m) => m.measurementId == event.measurement.measurementId);
+      if (index != -1) {
+        updated[index] = event.measurement;
+      } else {
+        updated.add(event.measurement);
+      }
+      final newState = currentState.copyWith(capturedMeasurementsBefore: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
+  }
+
+  Future<void> _onAddCapturedPhotoAfter(
+      AddCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<CapturedImageDetail>.from(currentState.capturedPhotosAfter)..add(event.imageDetail);
+      final newState = currentState.copyWith(capturedPhotosAfter: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
+  }
+
+  Future<void> _onRemoveCapturedPhotoAfter(
+      RemoveCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = currentState.capturedPhotosAfter.where((p) => p.imagePath != event.imagePath).toList();
+      final newState = currentState.copyWith(capturedPhotosAfter: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
+  }
+
+  Future<void> _onUpdateMeasurementAfter(
+      UpdateMeasurementAfter event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<MeasurementEntry>.from(currentState.capturedMeasurementsAfter);
+      final index = updated.indexWhere((m) => m.measurementId == event.measurement.measurementId);
+      if (index != -1) {
+        updated[index] = event.measurement;
+      } else {
+        updated.add(event.measurement);
+      }
+      final newState = currentState.copyWith(capturedMeasurementsAfter: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
   }
 
   void _onChangeValidationStep(
