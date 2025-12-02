@@ -104,7 +104,7 @@ class _ScInvalidUnitScreenState extends State<ScInvalidUnitScreen> {
                             children: [
                               const Text("Unit yang sedang dikerjakan saat ini:",
                                   style: TextStyle(
-                                      fontSize: 12, color: Colors.grey)),
+                                      fontSize: 12, color: Colors.black87)),
                               const SizedBox(height: 4),
                               Text(widget.currentSerialNo,
                                   style: const TextStyle(
@@ -227,7 +227,7 @@ class _ScInvalidUnitScreenState extends State<ScInvalidUnitScreen> {
                           controller: _reasonController,
                           maxLines: 3,
                           decoration: const InputDecoration(
-                            labelText: 'Alasan (*Wajib)',
+                            labelText: 'Alasan pergantian unit (*Wajib)',
                             hintText: 'Jelaskan kenapa unit ini diganti...',
                             border: OutlineInputBorder(),
                           ),
@@ -256,7 +256,7 @@ class _ScInvalidUnitScreenState extends State<ScInvalidUnitScreen> {
                               const SizedBox(width: 12),
                               const Expanded(
                                 child: Text(
-                                  "Perhatian: Setelah disimpan, Anda wajib melakukan pengukuran ulang untuk unit yang baru dipilih ini.",
+                                  "Pastikan serial number yang dipilih sudah sesuai dengan unit bermasalah sebelum melanjutkan proses.",
                                   style: TextStyle(fontSize: 13),
                                 ),
                               ),

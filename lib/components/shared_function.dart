@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:bloc/bloc.dart';
@@ -37,7 +38,7 @@ class JwtHelper {
       if (parts.length != 3) return null;
 
       final payload =
-      utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+          utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
       return json.decode(payload);
     } catch (e) {
       return null;
@@ -96,8 +97,8 @@ class ChipBarDelegate extends SliverPersistentHeaderDelegate {
   ChipBarDelegate(this.child);
 
   @override
-  Widget build(BuildContext context, double shrinkOffset,
-      bool overlapsContent) =>
+  Widget build(
+          BuildContext context, double shrinkOffset, bool overlapsContent) =>
       child;
 
   @override
@@ -175,8 +176,10 @@ class NumericRangeFormatter extends TextInputFormatter {
   NumericRangeFormatter({required this.max});
 
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue,
-      TextEditingValue newValue,) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     // Jika field dikosongkan, izinkan.
     if (newValue.text.isEmpty) {
       return newValue;
@@ -284,3 +287,24 @@ class _DashedRectPainter extends CustomPainter {
   bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
 
+class ImageHelper {
+  static Widget safeFile(
+    String path, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+    int? cacheWidth,
+    int? cacheHeight,
+  }) {
+    return Image.file(
+      File(path),
+      width: width,
+      height: height,
+      cacheWidth: cacheWidth,
+      cacheHeight: cacheHeight,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) =>
+          const Icon(Icons.broken_image, color: Colors.grey),
+    );
+  }
+}

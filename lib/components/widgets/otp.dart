@@ -317,7 +317,15 @@ class _OtpDialogState extends State<OtpDialog> {
               if (state is LocationValidationLoading)
                 const CircularProgressIndicator()
               else if (photoToShow != null) ...[
-                Image.file(File(photoToShow.imagePath), height: 180),
+                Image.file(
+                  File(photoToShow.imagePath),
+                  cacheWidth: 800,
+                  cacheHeight: 800,
+                  height: 180,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                ),
                 const SizedBox(height: 8),
                 if (distanceToShow != null && distanceToShow > kDistance)
                   Padding(

@@ -6,11 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-// Ganti import ini dengan path yang sesuai di proyek Anda
 import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../../models/common/measurement_limits.dart';
-import '../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import '../services/watermark_service.dart';
 import '../shared_function.dart';
 import 'full_screen_image_viewer.dart';
@@ -60,7 +58,6 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   void initState() {
     super.initState();
     _currentImage = widget.initialImage;
-    // _updateSliderFromText(widget.controller.text); // Inisialisasi awal tanpa rebuild
     _updateSliderAndValidate(widget.controller.text, widget.limits);
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
@@ -75,38 +72,11 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   void _onFocusChange() {
     if (!_focusNode.hasFocus) {
-      // Saat fokus hilang, lakukan SEMUA update dalam satu setState
       final text = widget.controller.text;
-      print(
-          '1. MeasurementInputWidget (_onFocusChange): Nilai akhir adalah "$text"');
-
       setState(() {
-        // 1. Lakukan validasi dan tampilkan error
         _errorText = _getValidationError(widget.controller.text, widget.limits);
-        // 2. Update posisi slider sesuai teks final
         _updateSliderFromText(text);
         widget.onEditingComplete?.call(text);
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant MeasurementInputWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Jika batas (limits) berubah, kita harus mengevaluasi ulang semuanya.
-    if (widget.limits != oldWidget.limits) {
-      // Panggil helper method baru kita dengan batas yang BARU.
-      _updateSliderAndValidate(widget.controller.text, widget.limits);
-    }
-
-    // Logika ini untuk sinkronisasi dari BLoC (jika ada)
-    if (widget.controller.text != oldWidget.controller.text) {
-      _updateSliderFromText(widget.controller.text);
-    }
-
-    if (widget.initialImage != oldWidget.initialImage) {
-      setState(() {
-        _currentImage = widget.initialImage;
       });
     }
   }
@@ -129,12 +99,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   void _updateSliderAndValidate(String text, MeasurementLimits limits) {
     double value = double.tryParse(text) ?? limits.min;
-
-    // Jika nilai saat ini di bawah batas minimum baru, paksa perbarui.
     if (value < limits.min) {
       value = limits.min;
-      // Perbarui juga controller agar UI sinkron.
-      // `addPostFrameCallback` memastikan ini berjalan setelah build selesai.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           final newText = _formatValue(value);
@@ -143,7 +109,6 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         }
       });
     }
-
     setState(() {
       _currentSliderValue = value.clamp(limits.min, limits.max);
     });
@@ -155,27 +120,11 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         .clamp(widget.limits.min, widget.limits.max);
   }
 
-  void _onSliderChanged(double newValue) {
-    final newText = _formatValue(newValue);
-    setState(() {
-      _currentSliderValue = newValue;
-      widget.controller.value = TextEditingValue(
-        text: newText,
-        selection: TextSelection.collapsed(offset: newText.length),
-      );
-      // Jika diubah via slider, pasti valid. Hapus error.
-      _errorText = null;
-      widget.onChanged?.call(newText);
-      widget.onEditingComplete?.call(newText);
-    });
-  }
-
   Future<void> _takePhoto() async {
     if (_currentImage != null) return;
     setState(() => _isLoading = true);
 
     try {
-      // Bersihkan memori gambar sebelum membuka kamera berat
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
 
@@ -188,25 +137,19 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
       );
 
       if (image != null) {
-        // 1. Siapkan Data (User & Waktu)
         final userData = await AuthStorage.getUser();
         final technicianName = userData['name'] ?? 'Unknown';
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
-        // 2. Siapkan Folder Permanen
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
         if (!await imagesDir.exists()) {
           await imagesDir.create();
         }
-
-        // 3. Buat nama file unik
-        // final cleanLabel = widget.label.replaceAll(RegExp(r'[^\w]'), '_');
         final targetPath = p.join(
             imagesDir.path, 'WM_${timestamp.millisecondsSinceEpoch}.jpg');
 
-        // 4. PROSES WATERMARK (Background Transparan + Teks)
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
@@ -218,27 +161,22 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
         final String? finalImagePath = await WatermarkService.processImage(request);
 
-        if (finalImagePath == null) {
-          // Gagal watermark, batalkan
-          return;
+        if (finalImagePath != null) {
+          _currentImage = CapturedImageDetail(
+            imagePath: finalImagePath,
+            timestamp: timestamp,
+            latitude: 0,
+            longitude: 0,
+            address: "",
+            technicianName: technicianName,
+            deviceModel: deviceModel,
+            transNo: widget.transNo,
+          );
+          widget.onImageChanged?.call(_currentImage);
         }
-
-        // 5. Update State
-        _currentImage = CapturedImageDetail(
-          imagePath: finalImagePath, // Path hasil watermark
-          timestamp: timestamp,
-          latitude: 0,
-          longitude: 0,
-          address: "",
-          technicianName: technicianName,
-          deviceModel: deviceModel,
-          transNo: widget.transNo,
-        );
-
-        widget.onImageChanged?.call(_currentImage);
       }
     } catch (e) {
-      print("Error taking photo: $e");
+      debugPrint("Error taking photo: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -287,8 +225,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
                         fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
-          const Divider(
-              height: 1, indent: 16, endIndent: 16, color: Colors.grey),
+          const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey),
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -296,9 +233,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               absorbing: !isEnabled,
               child: Opacity(
                 opacity: isEnabled ? 1.0 : 0.4,
-                child: !isEnabled
-                    ? const SizedBox(height: 16)
-                    : _buildInputContent(primary),
+                child: !isEnabled ? const SizedBox(height: 16) : _buildInputContent(primary),
               ),
             ),
           ),
@@ -315,12 +250,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         children: [
           _isLoading
               ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
               : _currentImage != null
-                  ? _buildPhotoPreview()
-                  : _buildPhotoButton(primary),
+              ? _buildPhotoPreview()
+              : _buildPhotoButton(primary),
           const SizedBox(height: 16),
           _buildSliderAndTextfield(),
           const Padding(
@@ -358,22 +293,25 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (_) =>
-                    FullScreenImageViewer(imageDetail: _currentImage!)),
+              builder: (_) => FullScreenImageViewer(imageDetail: _currentImage!),
+            ),
           ),
           child: Hero(
             tag: _currentImage!.imagePath,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: FadeInImage(
-                placeholder:
-                    const AssetImage('assets/images/placeholder_image.jpeg'),
-                image: FileImage(File(_currentImage!.imagePath)),
-                width: double.maxFinite,
+              child: Image.file(
+                File(_currentImage!.imagePath),
+                cacheWidth: 800,
+                cacheHeight: 800,
+                width: 500,
                 height: 80,
                 fit: BoxFit.cover,
-                imageErrorBuilder: (c, e, st) => const Icon(Icons.broken_image,
-                    size: 40, color: Colors.grey),
+                errorBuilder: (c, e, st) => const Icon(
+                  Icons.broken_image,
+                  size: 40,
+                  color: Colors.grey,
+                ),
               ),
             ),
           ),
@@ -382,7 +320,9 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
           onTap: removePhoto,
           child: Container(
             decoration: BoxDecoration(
-                color: Colors.black54, borderRadius: BorderRadius.circular(10)),
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(10),
+            ),
             padding: const EdgeInsets.all(2),
             child: const Icon(Icons.close, color: Colors.white, size: 16),
           ),
@@ -411,7 +351,19 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               min: widget.limits.min,
               max: widget.limits.max,
               label: _currentSliderValue.toStringAsFixed(2),
-              onChanged: _onSliderChanged,
+              onChanged: (newValue) {
+                final newText = _formatValue(newValue);
+                setState(() {
+                  _currentSliderValue = newValue;
+                  widget.controller.value = TextEditingValue(
+                    text: newText,
+                    selection: TextSelection.collapsed(offset: newText.length),
+                  );
+                  _errorText = null;
+                  widget.onChanged?.call(newText);
+                  widget.onEditingComplete?.call(newText);
+                });
+              },
             ),
           ),
         ),
@@ -422,20 +374,16 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             child: TextFormField(
               focusNode: _focusNode,
               controller: widget.controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
-              onChanged: (text) {
-                // HANYA meneruskan event, tidak ada setState di sini.
-                widget.onChanged?.call(text);
-              },
+              onChanged: widget.onChanged,
               decoration: InputDecoration(
                 labelText: widget.limits.unit,
                 isDense: true,
                 errorText: _errorText,
               ),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*'))
+                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*')),
               ],
             ),
           ),
