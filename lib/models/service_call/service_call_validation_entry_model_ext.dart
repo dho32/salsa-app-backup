@@ -47,6 +47,11 @@ extension ServiceCallValidationEntryModelJson
           isOutdoorBeforeSkipped ? selectedOutdoorPSINoteBefore : "",
       'note_outdoor_psi_after':
           isOutdoorAfterSkipped ? selectedOutdoorPSINoteAfter : "",
+      'correct_serial_no': correctSerialNo ?? '',
+      'note_remark': noteRemark ?? '',
+      'note_remark_indoor': noteRemarkIndoor ?? '',
+      'note_remark_outdoor': noteRemarkOutdoor ?? '',
+      'note_remark_psi': noteRemarkPSI ?? '',
     };
   }
 }

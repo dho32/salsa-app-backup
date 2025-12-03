@@ -101,7 +101,8 @@ class _OtpDialogState extends State<OtpDialog> {
                 if (state is OtpError) {
                   if (!_isErrorDialogShowing) {
                     _isErrorDialogShowing = true; // Set flag sebelum tampilkan
-                    if (_pinController.length >= 6) { // Cek panjang >= 6 lebih aman
+                    if (_pinController.length >= 6) {
+                      // Cek panjang >= 6 lebih aman
                       _pinController.clear();
                       // Minta fokus kembali setelah clear agar user bisa langsung ketik
                       _focusNode.requestFocus();
@@ -109,14 +110,16 @@ class _OtpDialogState extends State<OtpDialog> {
                     showFailureDialog(context, "OTP salah, coba lagi.")
                         .then((_) {
                       // ✅ RESET FLAG SETELAH DIALOG DITUTUP
-                      if(mounted){ // Pastikan widget masih ada
+                      if (mounted) {
+                        // Pastikan widget masih ada
                         setState(() {
                           _isErrorDialogShowing = false;
                         });
                       }
                     });
                   } else {
-                    print("ℹ️ OtpError received, but dialog already showing. Ignoring."); // Optional log
+                    print(
+                        "ℹ️ OtpError received, but dialog already showing. Ignoring."); // Optional log
                   }
                 }
               },
@@ -232,6 +235,54 @@ class _OtpDialogState extends State<OtpDialog> {
     return const SizedBox.shrink();
   }
 
+  Widget _buildPhotoInstructionCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                "Panduan Foto PIC",
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.blue.shade800),
+              ),
+            ],
+          ),
+          const Divider(height: 12),
+          _buildInstructionItem(
+              "Wajah PIC terlihat jelas (Lepas Masker/Helm) dan menghadap kamera "),
+          _buildInstructionItem("Wajib berlatar belakang TOKO"),
+          _buildInstructionItem("Pencahayaan cukup & tidak buram"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("• ", style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLocationValidationUI() {
     return BlocConsumer<LocationValidationBloc, LocationValidationState>(
       listener: (context, state) {
@@ -266,7 +317,15 @@ class _OtpDialogState extends State<OtpDialog> {
               if (state is LocationValidationLoading)
                 const CircularProgressIndicator()
               else if (photoToShow != null) ...[
-                Image.file(File(photoToShow.imagePath), height: 180),
+                Image.file(
+                  File(photoToShow.imagePath),
+                  cacheWidth: 800,
+                  cacheHeight: 800,
+                  height: 180,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                ),
                 const SizedBox(height: 8),
                 if (distanceToShow != null && distanceToShow > kDistance)
                   Padding(
@@ -319,6 +378,7 @@ class _OtpDialogState extends State<OtpDialog> {
                   child: const Text("Submit Validasi Lokasi"),
                 ),
               ] else ...[
+                _buildPhotoInstructionCard(),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.camera_alt),
                   label: const Text("Ambil Foto"),

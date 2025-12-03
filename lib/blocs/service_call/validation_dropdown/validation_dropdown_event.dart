@@ -6,6 +6,7 @@ import '../../../models/common/measurement_entry.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk SaveValidationData
 import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 
+import '../../../models/common/measurement_limits.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart'; // BARU: Import ValidationViewMode
 
@@ -25,6 +26,8 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
   final List<String> allAvailableOutdoorSerials;
   final List<ProblemSourceModel> problemSources;
   final ServiceCallDetailModel detailData;
+  final Map<String, MeasurementLimits> limitsScBefore;
+  final Map<String, MeasurementLimits> limitsScAfter;
 
   const FetchValidationDropdownData({
     this.initialData,
@@ -33,6 +36,8 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
     required this.allAvailableOutdoorSerials,
     required this.problemSources,
     required this.detailData,
+    required this.limitsScBefore,
+    required this.limitsScAfter,
   });
 
   @override
@@ -42,6 +47,8 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
     currentIndoorSerial,
     allAvailableOutdoorSerials,
     detailData,
+    limitsScBefore,
+    limitsScAfter,
   ];
 }
 
@@ -107,6 +114,23 @@ class SelectSolutionsForCard extends ValidationDropdownEvent {
 
   @override
   List<Object?> get props => [index, solutionIds];
+}
+
+class MarkUnitAsInvalid extends ValidationDropdownEvent {
+  final String transNo;
+  final String serialNo;
+  final List<CapturedImageDetail> proofPhotos;
+  final String reason;
+
+  const MarkUnitAsInvalid({
+    required this.transNo,
+    required this.serialNo,
+    required this.proofPhotos,
+    required this.reason,
+  });
+
+  @override
+  List<Object?> get props => [transNo, serialNo, proofPhotos, reason];
 }
 
 // ============= Event untuk Data SEBELUM =============
@@ -193,4 +217,21 @@ class SaveValidationData extends ValidationDropdownEvent {
 
   @override
   List<Object?> get props => [transNo, serialNo, markAsCompleted, showNotification];
+}
+
+class CorrectUnitSerial extends ValidationDropdownEvent {
+  final String transNo;
+  final String oldSerialNo;
+  final String newSerialNo;
+  final String reason;
+
+  const CorrectUnitSerial({
+    required this.transNo,
+    required this.oldSerialNo,
+    required this.newSerialNo,
+    required this.reason,
+  });
+
+  @override
+  List<Object?> get props => [transNo, oldSerialNo, newSerialNo, reason];
 }

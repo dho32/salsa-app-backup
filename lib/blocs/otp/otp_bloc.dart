@@ -28,7 +28,6 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
 
   // ───────────────────────── Constructor ────────────────────────────
   OtpBloc({required this.repository}) : super(const OtpInitial()) {
-    // Restore state dari Hive saat bloc dibuat
     final box = Hive.box('otp_state');
     for (var entry in box.toMap().entries) {
       final k = entry.key.toString();
@@ -122,7 +121,6 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
     }
   }
 
-
   /// Resend OTP — aturan sama seperti request, tapi menambah retryUsed
   Future<void> _onResendOtp(ResendOtp e, Emitter<OtpState> emit) async {
     final key = _getCompositeKey(e.shipTo, e.transNo);
@@ -144,7 +142,8 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
     if ((_retryUsed[key] ?? 0) >= _maxResend) {
       final lockedUntil = DateTime.now().add(_lockDuration);
       _lockedUntil[key] = lockedUntil;
-      Hive.box('otp_state').put('lockedUntil_$key', lockedUntil.toIso8601String());
+      Hive.box('otp_state')
+          .put('lockedUntil_$key', lockedUntil.toIso8601String());
       return emit(OtpLocked(_lockDuration));
     }
 
@@ -169,7 +168,8 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
       return;
     }
 
-    if (_expiredAt.containsKey(key) && DateTime.now().isAfter(_expiredAt[key]!)) {
+    if (_expiredAt.containsKey(key) &&
+        DateTime.now().isAfter(_expiredAt[key]!)) {
       emit(const OtpExpired());
       return;
     }
@@ -192,7 +192,8 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
           hasOtp: currentState.hasOtp,
         ));
       } else {
-        emit(const OtpError('Kode OTP salah, silahkan masukan ulang menggunakan kode yang benar'));
+        emit(const OtpError(
+            'Kode OTP salah, silahkan masukan ulang menggunakan kode yang benar'));
       }
     }
   }
@@ -219,8 +220,10 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
     if (state is OtpError) {
       final currentMessage = (state as OtpError).message;
       final now = DateTime.now();
-      final secondsRemaining = max(0, (_expiredAt[key] ?? now).difference(now).inSeconds);
-      final resendCooldown = max(0, (_resendAvailableAt[key] ?? now).difference(now).inSeconds);
+      final secondsRemaining =
+          max(0, (_expiredAt[key] ?? now).difference(now).inSeconds);
+      final resendCooldown =
+          max(0, (_resendAvailableAt[key] ?? now).difference(now).inSeconds);
       final retryLeft = max(0, _maxResend - (_retryUsed[key] ?? 0));
       final hasOtp = _latestOtp[key]?.isNotEmpty ?? false;
 
@@ -236,7 +239,8 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
 
   // ─────────────────────── Helper methods ───────────────────────────
 
-  void _hydrateFromServer(String key, Map<String, dynamic> res, {required bool resetCooldown}) {
+  void _hydrateFromServer(String key, Map<String, dynamic> res,
+      {required bool resetCooldown}) {
     final otpStr = (res['otp'] as String).trim();
     final expiredAt = res['expired_date'] as DateTime;
     final retryCount = res['retry_count'] as int;
@@ -265,16 +269,18 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
     }
   }
 
-  bool _isLocked(String key) => DateTime.now().isBefore(_lockedUntil[key] ?? DateTime(1970));
+  bool _isLocked(String key) =>
+      DateTime.now().isBefore(_lockedUntil[key] ?? DateTime(1970));
 
   bool _canResend(String key) =>
       DateTime.now().isAfter(_resendAvailableAt[key] ?? DateTime(1970)) &&
-          (_retryUsed[key] ?? 0) < _maxResend;
+      (_retryUsed[key] ?? 0) < _maxResend;
 
   OtpSent _buildSentState(String key) {
     final now = DateTime.now();
     final secondsRemaining = max(0, _expiredAt[key]!.difference(now).inSeconds);
-    final resendCooldown = max(0, _resendAvailableAt[key]!.difference(now).inSeconds);
+    final resendCooldown =
+        max(0, _resendAvailableAt[key]!.difference(now).inSeconds);
     final retryLeft = max(0, _maxResend - (_retryUsed[key] ?? 0));
     final hasOtp = _latestOtp[key]?.isNotEmpty ?? false;
 

@@ -55,25 +55,8 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       return;
     }
 
-    // Logika untuk mendeteksi tipe transaksi
-    late MaintenanceType taskType;
-    if (transNo.toUpperCase().contains('SC')) {
-      taskType = MaintenanceType.service;
-    } else if (transNo.toUpperCase().contains('PO') ||
-        transNo.toUpperCase().contains('SRO')) {
-      taskType = MaintenanceType.cuci;
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Format nomor transaksi tidak dikenali.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating),
-      );
-      return;
-    }
-
     context.read<TaskMaintenanceBloc>().add(
-          SearchPO(transNo, widget.userData['maintenance_by']!, taskType),
+          SearchPO(transNo, widget.userData['maintenance_by']!),
         );
   }
 
@@ -391,17 +374,32 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
 
   void _navigateToDetail(TransactionSuggestion suggestion) {
     _transNoController.text = suggestion.transNo;
+    Widget? destinationScreen;
+
     // Tentukan halaman tujuan
-    final Widget destinationScreen = suggestion.type == 'service_call'
-        ? ServiceCallDetailScreen(
-      transNo: suggestion.transNo,
-      maintenanceBy: widget.userData['maintenance_by']!,
-    )
-        : ProofOfServiceDetailScreen(transNo: suggestion.transNo);
+    if (suggestion.type == 'SERVICE') {
+      destinationScreen = ServiceCallDetailScreen(
+        transNo: suggestion.transNo,
+        maintenanceBy: widget.userData['maintenance_by']!,
+      );
+    } else if (suggestion.type == 'CUCI') {
+      destinationScreen = ProofOfServiceDetailScreen(transNo: suggestion.transNo);
+    } else if (suggestion.type == 'PASANG') {
+      // TODO: Ganti dengan Screen Pasang AC nanti
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Modul Pasang AC segera hadir!")),
+      );
+      return;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Tipe transaksi tidak dikenali: ${suggestion.type}")),
+      );
+      return;
+    }
 
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => destinationScreen),
+      MaterialPageRoute(builder: (_) => destinationScreen!),
     ).then((_) {
       print('✅ Kembali ke Task Maintenance, memuat ulang daftar gagal...');
       context.read<FailedUploadsBloc>().add(LoadFailedUploads());
@@ -477,12 +475,10 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                 ),
               ),
               actions: <Widget>[
-                // Tombol Batal (nonaktif jika loading)
                 TextButton(
                   onPressed: isLoading ? null : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Batal'),
                 ),
-                // Tombol Update (nonaktif jika loading)
                 ElevatedButton(
                   onPressed: isLoading ? null : () async {
                     // Validasi form dulu
@@ -571,7 +567,6 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     // When we reach here, permissions are granted and we can
     // continue accessing the position of the device.
     try {
-      // Tingkatkan akurasi dan tambahkan timeout
       return await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.best,
       );
@@ -604,7 +599,7 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
         longitude: longitude,
       );
     } catch (e) {
-      throw Exception(e.toString()); // Lempar pesan error asli
+      throw Exception(e.toString());
     }
   }
 }

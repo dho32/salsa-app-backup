@@ -6,6 +6,7 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk save Hive
 import '../../../components/constants.dart';
+import '../../../models/common/measurement_limits.dart';
 import 'validation_dropdown_event.dart';
 import 'validation_dropdown_state.dart';
 import 'package:hive/hive.dart'; // Untuk Hive.box
@@ -30,18 +31,128 @@ class ValidationDropdownBloc
     on<SaveValidationData>(_onSaveValidationData);
     on<SelectOutdoorSerial>(_onSelectOutdoorSerial);
     on<NoteChanged>(_onNoteChanged);
+    on<CorrectUnitSerial>(_onCorrectUnitSerial);
   }
 
-  List<MeasurementEntry> _getDefaultMeasurements() {
-    return kMeasurementLimits.values
-        .where((limits) => limits.id != 'final_temp_in_sc')
-        .map((limits) => MeasurementEntry(
-              measurementId: limits.id,
-              value: 0.0,
-              unit: limits.unit,
-              isSkipped: false,
-            ))
-        .toList();
+  List<MeasurementEntry> _generateMeasurementsFromLimits(
+      Map<String, MeasurementLimits> limitsMap) {
+    final List<MeasurementEntry> list = [];
+    for (final limits in limitsMap.values) {
+      list.add(MeasurementEntry(
+        measurementId: limits.id,
+        value: 0.0,
+        unit: limits.unit,
+        isSkipped: false,
+      ));
+    }
+    return list;
+  }
+
+  List<MeasurementEntry> _generateSkippedMeasurements(
+      Map<String, dynamic> limitsMap) {
+    return limitsMap.keys.map((key) {
+      return MeasurementEntry(
+        measurementId: key,
+        value: 0.0,
+        unit: '',
+        isSkipped: true,
+        capturedImage: null,
+      );
+    }).toList();
+  }
+
+  Future<void> _saveToHive(ValidationDropdownLoaded state) async {
+    try {
+      final box = await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+
+      // 1. Logic Ekstrak Remark (Sama seperti onSaveData)
+      String? getRemarkFromList(List<MeasurementEntry> list, Set<String> ids) {
+        return list.firstWhereOrNull(
+                (m) => ids.contains(m.measurementId) && (m.isSkipped ?? false)
+        )?.remark;
+      }
+      const indoorIds = {'temperature'};
+      const outdoorElecIds = {'volt', 'ampere'};
+      const outdoorPsiIds = {'psi'};
+
+      final listToCheck = state.capturedMeasurementsAfter;
+      final remarkIndoor = getRemarkFromList(listToCheck, indoorIds);
+      final remarkOutdoor = getRemarkFromList(listToCheck, outdoorElecIds);
+      final remarkPSI = getRemarkFromList(listToCheck, outdoorPsiIds);
+
+      // 2. Cari Data Lama (Untuk Swap & Remark)
+      final searchSerial = state.serialNo.trim().toUpperCase();
+      final searchTransNo = state.transNo.trim().toUpperCase();
+
+      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull((key) {
+        final entry = box.get(key);
+        return entry?.serialNo.trim().toUpperCase() == searchSerial &&
+            entry?.transNo.trim().toUpperCase() == searchTransNo;
+      });
+
+      String? existingCorrectSerial;
+      String? existingNoteRemark;
+
+      if (existingKey != null) {
+        final oldData = box.get(existingKey);
+        existingCorrectSerial = oldData?.correctSerialNo;
+        existingNoteRemark = oldData?.noteRemark;
+      }
+
+      // 3. Buat Model (IS COMPLETED = FALSE karena ini auto-save/draft)
+      final validationEntry = ServiceCallValidationEntryModel(
+        unitType: state.selectedUnitType ?? '',
+        serialNo: state.serialNo,
+        transNo: state.transNo,
+
+        imagePathsBefore: state.capturedPhotosBefore,
+        measurementsBefore: state.capturedMeasurementsBefore,
+        imagePathsAfter: state.capturedPhotosAfter,
+        measurementsAfter: state.capturedMeasurementsAfter,
+
+        problems: state.selectedProblemCards
+            .map((card) => ValidationProblem(
+            problemId: card.selectedProblemId!,
+            solutionIds: card.selectedSolutionIds))
+            .toList(),
+
+        isCompleted: false, // Draft
+        outdoorSerialNo: state.selectedOutdoorSerialNo,
+
+        selectedIndoorNoteBefore: state.selectedIndoorNoteBefore,
+        selectedOutdoorNoteBefore: state.selectedOutdoorNoteBefore,
+        selectedIndoorNoteAfter: state.selectedIndoorNoteAfter,
+        selectedOutdoorNoteAfter: state.selectedOutdoorNoteAfter,
+        selectedOutdoorPSINoteBefore: state.selectedOutdoorPSINoteBefore,
+        selectedOutdoorPSINoteAfter: state.selectedOutdoorPSINoteAfter,
+
+        noteRemarkIndoor: remarkIndoor,
+        noteRemarkOutdoor: remarkOutdoor,
+        noteRemarkPSI: remarkPSI,
+
+        correctSerialNo: existingCorrectSerial,
+        noteRemark: existingNoteRemark,
+      );
+
+      if (existingKey != null) {
+        await box.put(existingKey, validationEntry);
+      } else {
+        await box.add(validationEntry);
+      }
+
+      // (Opsional) Simpan juga outdoor assignment
+      final assignmentBox = Hive.box(kOutdoorUnitAssignmentsBox);
+      final Map<dynamic, dynamic> currentAssignments = assignmentBox.get(state.transNo) ?? {};
+      if (state.selectedOutdoorSerialNo != null && state.selectedOutdoorSerialNo!.isNotEmpty) {
+        currentAssignments[state.serialNo] = state.selectedOutdoorSerialNo;
+      } else {
+        currentAssignments.remove(state.serialNo);
+      }
+      await assignmentBox.put(state.transNo, currentAssignments);
+
+    } catch (e) {
+      print("Gagal auto-save SC: $e");
+    }
   }
 
   Future<void> _onFetchData(FetchValidationDropdownData event,
@@ -70,14 +181,17 @@ class ValidationDropdownBloc
       List<MeasurementEntry> measurementsBefore =
           initialData?.measurementsBefore.isNotEmpty == true
               ? initialData!.measurementsBefore
-              : _getDefaultMeasurements();
+              : _generateMeasurementsFromLimits(event.limitsScBefore);
+
       List<MeasurementEntry> measurementsAfter =
           initialData?.measurementsAfter.isNotEmpty == true
               ? initialData!.measurementsAfter
-              : _getDefaultMeasurements();
+              : _generateMeasurementsFromLimits(event.limitsScAfter);
 
       emit(
         ValidationDropdownLoaded(
+          transNo: event.transNo,
+          serialNo: event.currentIndoorSerial,
           data: data,
           selectedUnitType: initialData?.unitType,
           capturedPhotosBefore: initialData?.imagePathsBefore ?? [],
@@ -94,16 +208,29 @@ class ValidationDropdownBloc
           currentViewMode: ValidationViewMode.before,
           outdoorSerialNumbers: availableSerialsForDropdown,
           selectedOutdoorSerialNo: initialData?.outdoorSerialNo,
+          limitsScBefore: event.limitsScBefore,
+          limitsScAfter: event.limitsScAfter,
+
+          // --- PASS THROUGH NOTE OPTIONS (TANPA FILTER) ---
           noteIndoorBeforeOptions: event.detailData.noteIndoorBeforeOptions,
           noteIndoorAfterOptions: event.detailData.noteIndoorAfterOptions,
           noteOutdoorBeforeOptions: event.detailData.noteOutdoorBeforeOptions,
           noteOutdoorAfterOptions: event.detailData.noteOutdoorAfterOptions,
-          noteOutdoorPsiBeforeOptions: event.detailData.noteOutdoorPsiBeforeOptions,
-          noteOutdoorPsiAfterOptions: event.detailData.noteOutdoorPsiAfterOptions,
+          noteOutdoorPsiBeforeOptions:
+              event.detailData.noteOutdoorPsiBeforeOptions,
+          noteOutdoorPsiAfterOptions:
+              event.detailData.noteOutdoorPsiAfterOptions,
+          // ------------------------------------------------
+
           selectedIndoorNoteBefore: initialData?.selectedIndoorNoteBefore,
           selectedOutdoorNoteBefore: initialData?.selectedOutdoorNoteBefore,
           selectedIndoorNoteAfter: initialData?.selectedIndoorNoteAfter,
           selectedOutdoorNoteAfter: initialData?.selectedOutdoorNoteAfter,
+          selectedOutdoorPSINoteBefore:
+              initialData?.selectedOutdoorPSINoteBefore,
+          selectedOutdoorPSINoteAfter: initialData?.selectedOutdoorPSINoteAfter,
+
+          correctSerialNo: initialData?.correctSerialNo,
         ),
       );
     } catch (e) {
@@ -111,54 +238,132 @@ class ValidationDropdownBloc
     }
   }
 
+  Future<void> _onCorrectUnitSerial(
+      CorrectUnitSerial event, Emitter<ValidationDropdownState> emit) async {
+    if (state is! ValidationDropdownLoaded) return;
+    final currentState = state as ValidationDropdownLoaded;
+
+    emit(currentState.copyWith(saveStatus: ValidationSaveStatus.saving));
+
+    try {
+      final box = await Hive.openBox<ServiceCallValidationEntryModel>(
+          kServiceCallHiveBox);
+
+      // Cari data draft yang sudah ada (berdasarkan serial LAMA/TIKET)
+      // Kunci utama di Hive tetap menggunakan serial dari tiket
+      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull(
+            (key) =>
+                box.get(key, defaultValue: null)?.serialNo ==
+                    event.oldSerialNo &&
+                box.get(key, defaultValue: null)?.transNo == event.transNo,
+          );
+
+      // LOGIC REVERT:
+      // Jika user memilih serial yang SAMA dengan serial tiket, berarti dia membatalkan swap.
+      // Kita set correctSerialNo jadi NULL.
+      final isRevert = event.newSerialNo == event.oldSerialNo;
+      final String? valueToSave = isRevert ? null : event.newSerialNo;
+      String newNoteRemark = event.reason;
+
+      if (existingKey != null) {
+        // 1. UPDATE DRAFT YANG ADA
+        final entry = box.get(existingKey)!;
+        entry.correctSerialNo = valueToSave;
+
+        // Append alasan ke noteRemark agar tercatat di history lokal
+        if (!isRevert) {
+          entry.noteRemark = newNoteRemark;
+        }
+
+        await entry.save();
+      } else {
+        // 2. BUAT DRAFT BARU
+        final newEntry = ServiceCallValidationEntryModel(
+          transNo: event.transNo,
+          serialNo: event.oldSerialNo,
+          // ID Tetap Serial Lama
+          unitType: currentState.selectedUnitType ?? 'UNIT',
+
+          // Simpan Data Koreksi
+          correctSerialNo: valueToSave,
+          noteRemark: newNoteRemark,
+
+          // Default kosong
+          imagePathsBefore: [],
+          measurementsBefore: [],
+          imagePathsAfter: [],
+          measurementsAfter: [],
+          problems: [],
+          isCompleted: false,
+          outdoorSerialNo: null,
+          device: null,
+        );
+        await box.add(newEntry);
+      }
+
+      // Update State agar UI Header bisa langsung berubah
+      emit(currentState.copyWith(
+        saveStatus: ValidationSaveStatus.successDraft,
+        saveMessage: isRevert
+            ? "Unit dikembalikan ke original."
+            : "Unit berhasil ditukar.",
+        correctSerialNo: valueToSave, // Update state header
+      ));
+
+      // Reset status
+      await Future.delayed(const Duration(milliseconds: 100));
+      emit(currentState.copyWith(saveStatus: ValidationSaveStatus.initial));
+    } catch (e) {
+      print('Error correcting serial: $e');
+      emit(currentState.copyWith(
+        saveStatus: ValidationSaveStatus.error,
+        saveMessage: "Gagal update serial: $e",
+      ));
+    }
+  }
+
   void _onNoteChanged(
       NoteChanged event, Emitter<ValidationDropdownState> emit) {
     if (state is ValidationDropdownLoaded) {
       final currentState = state as ValidationDropdownLoaded;
+      ValidationDropdownLoaded newState = currentState;
 
       if (event.isBefore) {
         switch (event.noteType) {
-          case NoteType.indoor:
-            emit(currentState.copyWith(selectedIndoorNoteBefore: event.note));
-            break;
-          case NoteType.outdoor:
-            emit(currentState.copyWith(selectedOutdoorNoteBefore: event.note));
-            break;
-          case NoteType.outdoorPsi:
-            emit(currentState.copyWith(selectedOutdoorPSINoteBefore: event.note));
-            break;
+          case NoteType.indoor: newState = currentState.copyWith(selectedIndoorNoteBefore: event.note); break;
+          case NoteType.outdoor: newState = currentState.copyWith(selectedOutdoorNoteBefore: event.note); break;
+          case NoteType.outdoorPsi: newState = currentState.copyWith(selectedOutdoorPSINoteBefore: event.note); break;
         }
       } else {
         switch (event.noteType) {
-          case NoteType.indoor:
-            emit(currentState.copyWith(selectedIndoorNoteAfter: event.note));
-            break;
-          case NoteType.outdoor:
-            emit(currentState.copyWith(selectedOutdoorNoteAfter: event.note));
-            break;
-          case NoteType.outdoorPsi:
-            emit(currentState.copyWith(selectedOutdoorPSINoteAfter: event.note));
-            break;
+          case NoteType.indoor: newState = currentState.copyWith(selectedIndoorNoteAfter: event.note); break;
+          case NoteType.outdoor: newState = currentState.copyWith(selectedOutdoorNoteAfter: event.note); break;
+          case NoteType.outdoorPsi: newState = currentState.copyWith(selectedOutdoorPSINoteAfter: event.note); break;
         }
       }
+      emit(newState);
+      _saveToHive(newState); // Auto Save
     }
   }
 
   void _onSelectOutdoorSerial(
       SelectOutdoorSerial event, Emitter<ValidationDropdownState> emit) {
     if (state is ValidationDropdownLoaded) {
-      final currentState = state as ValidationDropdownLoaded;
-      emit(currentState.copyWith(selectedOutdoorSerialNo: event.serialNo));
+      final newState = (state as ValidationDropdownLoaded).copyWith(selectedOutdoorSerialNo: event.serialNo);
+      emit(newState);
+      _saveToHive(newState); // Auto Save
     }
   }
 
   void _onSelectUnitType(
       SelectUnitType event, Emitter<ValidationDropdownState> emit) {
     final currentState = state as ValidationDropdownLoaded;
-    emit(currentState.copyWith(
+    final newState = currentState.copyWith(
       selectedUnitType: event.unitType,
       selectedProblemCards: [],
-    ));
+    );
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onAddProblemCard(
@@ -173,7 +378,9 @@ class ValidationDropdownBloc
           ..add(SelectedProblemCard(
               selectedProblemId: event.problemId,
               selectedSolutionIds: event.solutionIds));
-    emit(currentState.copyWith(selectedProblemCards: updated));
+    final newState = currentState.copyWith(selectedProblemCards: updated);
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onRemoveProblemCard(
@@ -182,7 +389,9 @@ class ValidationDropdownBloc
     final updated = currentState.selectedProblemCards
         .where((card) => card.selectedProblemId != event.problemId)
         .toList();
-    emit(currentState.copyWith(selectedProblemCards: updated));
+    final newState = currentState.copyWith(selectedProblemCards: updated);
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onSelectProblemForCard(
@@ -194,7 +403,9 @@ class ValidationDropdownBloc
       targetList[event.index] = targetList[event.index].copyWith(
           selectedProblemId: event.problemId, selectedSolutionIds: []);
     }
-    emit(currentState.copyWith(selectedProblemCards: targetList));
+    final newState = currentState.copyWith(selectedProblemCards: targetList);
+    emit(newState);
+    _saveToHive(newState);
   }
 
   void _onSelectSolutionsForCard(
@@ -206,73 +417,87 @@ class ValidationDropdownBloc
       targetList[event.index] = targetList[event.index]
           .copyWith(selectedSolutionIds: event.solutionIds);
     }
-    emit(currentState.copyWith(selectedProblemCards: targetList));
+    final newState = currentState.copyWith(selectedProblemCards: targetList);
+    emit(newState);
+    _saveToHive(newState);
   }
 
-  void _onAddCapturedPhotoBefore(
-      AddCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<CapturedImageDetail>.from(currentState.capturedPhotosBefore)
-          ..add(event.imageDetail);
-    emit(currentState.copyWith(capturedPhotosBefore: updated));
-  }
-
-  void _onRemoveCapturedPhotoBefore(
-      RemoveCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated = currentState.capturedPhotosBefore
-        .where((img) => img.imagePath != event.imagePath)
-        .toList();
-    emit(currentState.copyWith(capturedPhotosBefore: updated));
-  }
-
-  void _onUpdateMeasurementBefore(
-      UpdateMeasurementBefore event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<MeasurementEntry>.from(currentState.capturedMeasurementsBefore);
-    final index = updated
-        .indexWhere((m) => m.measurementId == event.measurement.measurementId);
-    if (index != -1) {
-      updated[index] = event.measurement;
-    } else {
-      updated.add(event.measurement);
+  Future<void> _onAddCapturedPhotoBefore(
+      AddCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<CapturedImageDetail>.from(currentState.capturedPhotosBefore)..add(event.imageDetail);
+      final newState = currentState.copyWith(capturedPhotosBefore: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
     }
-    emit(currentState.copyWith(capturedMeasurementsBefore: updated));
   }
 
-  void _onAddCapturedPhotoAfter(
-      AddCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<CapturedImageDetail>.from(currentState.capturedPhotosAfter)
-          ..add(event.imageDetail);
-    emit(currentState.copyWith(capturedPhotosAfter: updated));
-  }
-
-  void _onRemoveCapturedPhotoAfter(
-      RemoveCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated = currentState.capturedPhotosAfter
-        .where((img) => img.imagePath != event.imagePath)
-        .toList();
-    emit(currentState.copyWith(capturedPhotosAfter: updated));
-  }
-
-  void _onUpdateMeasurementAfter(
-      UpdateMeasurementAfter event, Emitter<ValidationDropdownState> emit) {
-    final currentState = state as ValidationDropdownLoaded;
-    final updated =
-        List<MeasurementEntry>.from(currentState.capturedMeasurementsAfter);
-    final index = updated
-        .indexWhere((m) => m.measurementId == event.measurement.measurementId);
-    if (index != -1) {
-      updated[index] = event.measurement;
-    } else {
-      updated.add(event.measurement);
+  Future<void> _onRemoveCapturedPhotoBefore(
+      RemoveCapturedPhotoBefore event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = currentState.capturedPhotosBefore.where((p) => p.imagePath != event.imagePath).toList();
+      final newState = currentState.copyWith(capturedPhotosBefore: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
     }
-    emit(currentState.copyWith(capturedMeasurementsAfter: updated));
+  }
+
+  Future<void> _onUpdateMeasurementBefore(
+      UpdateMeasurementBefore event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<MeasurementEntry>.from(currentState.capturedMeasurementsBefore);
+      final index = updated.indexWhere((m) => m.measurementId == event.measurement.measurementId);
+      if (index != -1) {
+        updated[index] = event.measurement;
+      } else {
+        updated.add(event.measurement);
+      }
+      final newState = currentState.copyWith(capturedMeasurementsBefore: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
+  }
+
+  Future<void> _onAddCapturedPhotoAfter(
+      AddCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<CapturedImageDetail>.from(currentState.capturedPhotosAfter)..add(event.imageDetail);
+      final newState = currentState.copyWith(capturedPhotosAfter: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
+  }
+
+  Future<void> _onRemoveCapturedPhotoAfter(
+      RemoveCapturedPhotoAfter event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = currentState.capturedPhotosAfter.where((p) => p.imagePath != event.imagePath).toList();
+      final newState = currentState.copyWith(capturedPhotosAfter: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
+  }
+
+  Future<void> _onUpdateMeasurementAfter(
+      UpdateMeasurementAfter event, Emitter<ValidationDropdownState> emit) async {
+    if (state is ValidationDropdownLoaded) {
+      final currentState = state as ValidationDropdownLoaded;
+      final updated = List<MeasurementEntry>.from(currentState.capturedMeasurementsAfter);
+      final index = updated.indexWhere((m) => m.measurementId == event.measurement.measurementId);
+      if (index != -1) {
+        updated[index] = event.measurement;
+      } else {
+        updated.add(event.measurement);
+      }
+      final newState = currentState.copyWith(capturedMeasurementsAfter: updated);
+      emit(newState);
+      await _saveToHive(newState); // Auto Save
+    }
   }
 
   void _onChangeValidationStep(
@@ -282,7 +507,7 @@ class ValidationDropdownBloc
     emit(currentState.copyWith(currentStep: event.step));
   }
 
-  // BARU: Handler untuk mengubah mode tampilan
+  // Handler untuk mengubah mode tampilan
   void _onChangeValidationViewMode(
       ChangeValidationViewMode event, Emitter<ValidationDropdownState> emit) {
     if (state is ValidationDropdownLoaded) {
@@ -291,47 +516,85 @@ class ValidationDropdownBloc
     }
   }
 
-  // BARU: Handler untuk menyimpan data validasi ke Hive
   Future<void> _onSaveValidationData(
       SaveValidationData event, Emitter<ValidationDropdownState> emit) async {
 
     if (state is! ValidationDropdownLoaded) return;
-
     final stateSaatEventMulai = state as ValidationDropdownLoaded;
 
     emit(stateSaatEventMulai.copyWith(saveStatus: ValidationSaveStatus.saving));
 
     try {
-      // 4. Buat objek data yang akan disimpan (menggunakan stateSaatEventMulai)
+      // 1. LOGIC EKSTRAK REMARK DARI MEASUREMENTS
+
+      String? getRemarkFromList(List<MeasurementEntry> list, Set<String> ids) {
+        return list.firstWhereOrNull(
+                (m) => ids.contains(m.measurementId) && (m.isSkipped ?? false)
+        )?.remark;
+      }
+
+      const indoorIds = {'temperature'};
+      const outdoorElecIds = {'volt', 'ampere'};
+      const outdoorPsiIds = {'psi'};
+
+      final listToCheck = stateSaatEventMulai.capturedMeasurementsAfter;
+
+      final remarkIndoor = getRemarkFromList(listToCheck, indoorIds);
+      final remarkOutdoor = getRemarkFromList(listToCheck, outdoorElecIds);
+      final remarkPSI = getRemarkFromList(listToCheck, outdoorPsiIds);
+
+      // 2. Ambil data lama (untuk swap)
+      final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull(
+            (key) =>
+        box.get(key, defaultValue: null)?.serialNo == event.serialNo &&
+            box.get(key, defaultValue: null)?.transNo == event.transNo,
+      );
+
+      String? existingCorrectSerial;
+      String? existingNoteRemark; // Remark Swap Unit
+
+      if (existingKey != null) {
+        final oldData = box.get(existingKey);
+        existingCorrectSerial = oldData?.correctSerialNo;
+        existingNoteRemark = oldData?.noteRemark;
+
+        print("🔍 DEBUG SAVE: Serial=$existingCorrectSerial, Remark=$existingNoteRemark");
+      }
+
+      // 3. Buat Model Baru dengan Data Lengkap
       final validationEntry = ServiceCallValidationEntryModel(
         unitType: stateSaatEventMulai.selectedUnitType ?? '',
         serialNo: event.serialNo,
         transNo: event.transNo,
+
+        // Data List
         imagePathsBefore: stateSaatEventMulai.capturedPhotosBefore,
         measurementsBefore: stateSaatEventMulai.capturedMeasurementsBefore,
+        imagePathsAfter: stateSaatEventMulai.capturedPhotosAfter,
+        measurementsAfter: stateSaatEventMulai.capturedMeasurementsAfter,
+
         problems: stateSaatEventMulai.selectedProblemCards
             .map((card) => ValidationProblem(
             problemId: card.selectedProblemId!,
             solutionIds: card.selectedSolutionIds))
             .toList(),
-        imagePathsAfter: stateSaatEventMulai.capturedPhotosAfter,
-        measurementsAfter: stateSaatEventMulai.capturedMeasurementsAfter,
+
         isCompleted: event.markAsCompleted,
         outdoorSerialNo: stateSaatEventMulai.selectedOutdoorSerialNo,
+
+        // Note Pilihan Dropdown
         selectedIndoorNoteBefore: stateSaatEventMulai.selectedIndoorNoteBefore,
         selectedOutdoorNoteBefore: stateSaatEventMulai.selectedOutdoorNoteBefore,
         selectedIndoorNoteAfter: stateSaatEventMulai.selectedIndoorNoteAfter,
         selectedOutdoorNoteAfter: stateSaatEventMulai.selectedOutdoorNoteAfter,
         selectedOutdoorPSINoteBefore: stateSaatEventMulai.selectedOutdoorPSINoteBefore,
         selectedOutdoorPSINoteAfter: stateSaatEventMulai.selectedOutdoorPSINoteAfter,
-      );
-
-      // 5. Lakukan proses async (menyimpan ke Hive)
-      final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-      final existingKey = box.keys.cast<dynamic>().firstWhereOrNull(
-            (key) =>
-        box.get(key, defaultValue: null)?.serialNo == event.serialNo &&
-            box.get(key, defaultValue: null)?.transNo == event.transNo,
+        noteRemarkIndoor: remarkIndoor,
+        noteRemarkOutdoor: remarkOutdoor,
+        noteRemarkPSI: remarkPSI,
+        correctSerialNo: existingCorrectSerial,
+        noteRemark: existingNoteRemark,
       );
 
       if (existingKey != null) {
@@ -341,12 +604,9 @@ class ValidationDropdownBloc
       }
 
       final assignmentBox = Hive.box(kOutdoorUnitAssignmentsBox);
-      final Map<dynamic, dynamic> currentAssignments =
-          assignmentBox.get(event.transNo) ?? {};
-      if (stateSaatEventMulai.selectedOutdoorSerialNo != null &&
-          stateSaatEventMulai.selectedOutdoorSerialNo!.isNotEmpty) {
-        currentAssignments[event.serialNo] =
-            stateSaatEventMulai.selectedOutdoorSerialNo;
+      final Map<dynamic, dynamic> currentAssignments = assignmentBox.get(event.transNo) ?? {};
+      if (stateSaatEventMulai.selectedOutdoorSerialNo != null && stateSaatEventMulai.selectedOutdoorSerialNo!.isNotEmpty) {
+        currentAssignments[event.serialNo] = stateSaatEventMulai.selectedOutdoorSerialNo;
       } else {
         currentAssignments.remove(event.serialNo);
       }
@@ -360,7 +620,7 @@ class ValidationDropdownBloc
       } else {
         if (event.showNotification) {
           emit((state as ValidationDropdownLoaded).copyWith(
-            saveStatus: ValidationSaveStatus.successDraft, // Tetap 'Draft'
+            saveStatus: ValidationSaveStatus.successDraft,
             saveMessage: "Draft berhasil disimpan",
           ));
         } else {
@@ -369,7 +629,6 @@ class ValidationDropdownBloc
           ));
         }
       }
-
     } catch (e) {
       print('Error saving validation data to Hive: $e');
       emit((state as ValidationDropdownLoaded).copyWith(

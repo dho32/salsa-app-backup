@@ -7,6 +7,7 @@ class AuthStorage {
   static const _userIdKey = 'user_id';
   static const _userNameKey = 'user_name';
   static const _userEmailKey = 'user_email';
+  static const _maintenanceType = 'maintenance_type';
   static const _maintenanceBy = 'maintenance_by';
   static const _maintenanceByName = 'maintenance_by_name';
   static const _userRole = 'role';
@@ -65,6 +66,7 @@ class AuthStorage {
     required String userId,
     required String name,
     required String email,
+    required String maintenanceType,
     required maintenanceBy,
     required maintenanceByName,
     required role,
@@ -75,6 +77,7 @@ class AuthStorage {
     await prefs.setString(_userIdKey, userId);
     await prefs.setString(_userNameKey, name);
     await prefs.setString(_userEmailKey, email);
+    await prefs.setString(_maintenanceType, maintenanceType);
     await prefs.setString(_maintenanceBy, maintenanceBy);
     await prefs.setString(_maintenanceByName, maintenanceByName);
     await prefs.setString(_userRole, role);
@@ -89,6 +92,7 @@ class AuthStorage {
       'user_id': prefs.getString(_userIdKey),
       'name': prefs.getString(_userNameKey),
       'email': prefs.getString(_userEmailKey),
+      'maintenance_type': prefs.getString(_maintenanceType),
       'maintenance_by': prefs.getString(_maintenanceBy),
       'maintenance_by_name': prefs.getString(_maintenanceByName),
       'role': prefs.getString(_userRole),
@@ -104,6 +108,7 @@ class AuthStorage {
     await prefs.remove(_userIdKey);
     await prefs.remove(_userNameKey);
     await prefs.remove(_userEmailKey);
+    await prefs.remove(_maintenanceType);
     await prefs.remove(_maintenanceBy);
     await prefs.remove(_maintenanceByName);
     await prefs.remove(_userRole);

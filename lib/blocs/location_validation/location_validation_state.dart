@@ -30,10 +30,10 @@ class LocationValidationFailure extends LocationValidationState {
   final double? distance;
 
   const LocationValidationFailure(
-      this.message, {
-        this.photo,
-        this.distance,
-      });
+    this.message, {
+    this.photo,
+    this.distance,
+  });
 
   @override
   List<Object?> get props => [message, photo, distance];

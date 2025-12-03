@@ -25,6 +25,7 @@ import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/service_call/validation_status.dart';
 import '../../../components/shared_function.dart';
 import '../../../components/widgets/otp.dart';
+import '../../../models/common/note_option.dart';
 import '../../common/services/confirmation_service.dart';
 import '../proof_of_service_report_issue/pos_report_issue_screen.dart';
 import 'components/proof_of_service_detail_body_mobile.dart';
@@ -169,8 +170,12 @@ class _ProofOfServiceDetailScreenState
                                 visualDensity: VisualDensity.compact,
                               ),
                               onPressed: () {
-                                final List<String> reasons =
+                                final List<NoteOption> rawReasons =
                                     detailState.data.unserviceableReasons ?? [];
+
+                                final List<String> reasons =
+                                rawReasons.map((e) => e.label).toList();
+
                                 final String transNo =
                                     detailState.data.header.transNo;
 
@@ -336,7 +341,6 @@ class _ProofOfServiceDetailScreenState
               child: SafeArea(
                 child: ProofOfServiceDetailBodyMobile(
                   transNo: widget.transNo,
-                  technician1Name: _technician1Name!,
                 ),
               ),
             ),

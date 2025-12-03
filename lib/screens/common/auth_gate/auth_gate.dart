@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
 import 'package:salsa/screens/common/login/login_screen.dart';
 import 'package:salsa/screens/common/main_navigation/main_navigation.dart';
 // Hapus 'package:upgrader/upgrader.dart';
@@ -24,6 +25,7 @@ class AuthGate extends StatelessWidget {
             context: context,
             barrierDismissible: false, // Wajibkan pengguna berinteraksi
             builder: (BuildContext dialogContext) {
+              Hive.deleteFromDisk();
               return AlertDialog(
                 title: const Text('Versi Aplikasi Usang'),
                 content: const Text(

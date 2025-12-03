@@ -21,6 +21,8 @@ import 'components/salsa_theme.dart';
 import 'firebase_options.dart';
 import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
+import 'models/common/measurement_limits.dart';
+import 'models/common/note_option.dart';
 import 'models/proof_of_service/pos_transaction_info_model.dart';
 import 'models/proof_of_service/pos_unserviceable_model.dart';
 import 'models/proof_of_service/pos_validation_entry_model.dart';
@@ -88,6 +90,8 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(ProofOfServiceItemDetailAdapter());
     Hive.registerAdapter(PosUnserviceableModelAdapter());
     Hive.registerAdapter(SCUnserviceableModelAdapter());
+    Hive.registerAdapter(MeasurementLimitsAdapter());
+    Hive.registerAdapter(NoteOptionAdapter());
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -98,15 +102,24 @@ class _AppInitializerState extends State<AppInitializer> {
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
   Future<void> _loadRetryableData() async {
-    // Hanya berisi hal-hal yang bisa gagal & di-retry
-    await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-    await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
-    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-    await Hive.openBox('otp_state');
-    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-    await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+    try {
+      // Coba buka semua box
+      await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
+      await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+      await Hive.openBox('otp_state');
+      await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+      await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+      await Hive.openBox(kAppConfigBox);
+    } catch (e) {
+      print("🔴 Hive Error detected (Schema Mismatch?). Resetting all data...");
+      // JIKA GAGAL (Data Korup), HAPUS SEMUA DATA LAMA
+      await Hive.deleteFromDisk();
+      // Restart app mandiri atau lempar error biar user tekan 'Coba Lagi'
+      throw Exception("Data aplikasi diperbarui. Silakan tekan 'Coba Lagi'.");
+    }
 
     ConfirmationService().processQueue();
   }

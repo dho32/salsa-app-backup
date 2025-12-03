@@ -3,10 +3,13 @@ import 'package:http/http.dart' as http;
 import '../../components/shared_function.dart';
 
 class OtpRepository {
-  Future<Map<String, dynamic>?> sendOtp(String transNo, String shipTo, String isFirst) async {
+  Future<Map<String, dynamic>?> sendOtp(
+      String transNo, String shipTo, String isFirst) async {
     final params = {
       'trans_no': transNo,
-      'ship_to': shipTo, 'is_first': isFirst};
+      'ship_to': shipTo,
+      'is_first': isFirst
+    };
     Uri uri = getUrl(pathUrl: 'otp/request', params: params);
     final response = await http.get(uri);
 

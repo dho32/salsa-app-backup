@@ -19,13 +19,12 @@ class TaskMaintenanceModel {
   }
 }
 
-// Hapus model lama dan ganti dengan ini
 class TransactionSuggestion {
   final String transNo;
   final String customerName;
   final String customerCode;
   final String type;
-  final String status; // 'service' atau 'cuci'
+  final String status;
 
   TransactionSuggestion({
     required this.transNo,

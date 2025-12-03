@@ -9,15 +9,14 @@ import '../../models/task_maintenance/task_maintenance_model.dart';
 
 class TaskMaintenanceRepository {
   Future<List<TransactionSuggestion>> searchTransactions(
-      String transNo, String maintenanceBy, MaintenanceType taskType) async {
+      String transNo, String maintenanceBy) async {
     try {
       final params = {
         'trans_no': transNo,
-        'maintenance_by': maintenanceBy,
-        'task_type': taskType.toString().split('.').last,
+        'maintenance_by': maintenanceBy
       };
 
-      Uri uri = getUrl(pathUrl: 'task_maintenance', params: params);
+      Uri uri = getUrl(pathUrl: 'task_maintenance/v2', params: params);
       final response = await http.get(uri);
 
       print(uri);
@@ -103,3 +102,4 @@ class TaskMaintenanceRepository {
     }
   }
 }
+

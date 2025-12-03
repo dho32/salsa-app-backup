@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'package:http/http.dart' as http;
 
 import '../../../components/shared_function.dart';
@@ -11,8 +12,29 @@ class ServiceCallDetailRepository {
       'trans_no': transNo,
       'vendor_id': vendorId,
     };
-    Uri uri = getUrl(pathUrl: 'service_call/detail', params: params);
+    Uri uri = getUrl(pathUrl: 'service_call/detail/v2', params: params);
     final response = await http.get(uri);
+
+    print("=================================");
+    print(uri);
+
+    try {
+      // 1. Decode string JSON mentah menjadi Map/List dinamis
+      final dynamic decodedBody = jsonDecode(response.body);
+
+      // 2. Encode ulang menjadi format yang rapi (Pretty Print)
+      JsonEncoder encoder = const JsonEncoder.withIndent('  ');
+      String prettyJson = encoder.convert(decodedBody);
+
+      log("====== RESPONSE BODY LENGKAP ======");
+      log(prettyJson);
+      log("================================");
+    } catch (e) {
+      // Jika gagal decode (misal server error HTML), print body mentah saja
+      print("Gagal pretty print response: $e");
+      log("RAW BODY: ${response.body}");
+    }
+
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
       if (body['status'] == 'OK') {

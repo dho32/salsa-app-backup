@@ -13,6 +13,9 @@ abstract class PosValidationEvent extends Equatable {
 class FetchPosValidationData extends PosValidationEvent {
   final PosValidationEntryModel? initialData;
   final String unitType;
+  final String articleNo;
+  final String articleDesc;
+  final String articleUnitDesc;
   final String transNo;
   final String serialNo;
   final List<String> allIndoorSerials;
@@ -20,10 +23,20 @@ class FetchPosValidationData extends PosValidationEvent {
   const FetchPosValidationData({
     this.initialData,
     required this.unitType,
+    required this.articleNo,
+    required this.articleDesc,
+    required this.articleUnitDesc,
     required this.transNo,
     required this.serialNo,
     required this.allIndoorSerials,
   });
+
+  @override
+  List<Object?> get props => [
+        transNo, serialNo, unitType,
+        articleNo, articleDesc, articleUnitDesc, // Masukkan ke props
+        initialData, allIndoorSerials
+      ];
 }
 
 class ChangePosValidationStep extends PosValidationEvent {
@@ -151,4 +164,13 @@ class UpdateNoteAfter extends PosValidationEvent {
 
   @override
   List<Object?> get props => [note];
+}
+
+class UpdateNoteRemark extends PosValidationEvent {
+  final String remark;
+
+  const UpdateNoteRemark(this.remark);
+
+  @override
+  List<Object> get props => [remark];
 }

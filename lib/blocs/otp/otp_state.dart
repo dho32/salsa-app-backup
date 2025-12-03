@@ -8,7 +8,7 @@ abstract class OtpState extends Equatable {
   List<Object?> get props => const [];
 }
 
-/// ---  VARIAN STATE  ---------------------------------------------------------
+/// ---  VARIANT STATE  ---------------------------------------------------------
 
 /// Awal ― belum ada aksi apa-apa
 class OtpInitial extends OtpState {
@@ -26,14 +26,13 @@ class OtpSent extends OtpState {
   final int resendCooldown;
   final int retryLeft;
 
-  /// --- baru ---
-  final bool hasOtp;          // true kalau OTP non-kosong
+  final bool hasOtp;
 
   const OtpSent({
     required this.secondsRemaining,
     required this.resendCooldown,
     required this.retryLeft,
-    required this.hasOtp,     // ← tambahkan
+    required this.hasOtp, // ← tambahkan
   });
 
   /// Tombol “Kirim Ulang” aktif jika cooldown habis, masih ada retry,
@@ -57,22 +56,18 @@ class OtpError extends OtpState {
   final int? resendCooldown;
   final int? retryLeft;
   final bool? hasOtp;
+
   const OtpError(
-      this.message, {
-        this.secondsRemaining,
-        this.resendCooldown,
-        this.retryLeft,
-        this.hasOtp,
-      });
+    this.message, {
+    this.secondsRemaining,
+    this.resendCooldown,
+    this.retryLeft,
+    this.hasOtp,
+  });
 
   @override
-  List<Object?> get props => [
-    message,
-    secondsRemaining,
-    resendCooldown,
-    retryLeft,
-    hasOtp
-  ];
+  List<Object?> get props =>
+      [message, secondsRemaining, resendCooldown, retryLeft, hasOtp];
 }
 
 /// Masa berlaku OTP habis
@@ -84,6 +79,7 @@ class OtpExpired extends OtpState {
 class OtpLocked extends OtpState {
   final Duration lockedFor;
   final String? temporaryError;
+
   const OtpLocked(this.lockedFor, {this.temporaryError});
 
   @override

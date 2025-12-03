@@ -2,6 +2,8 @@
 import 'package:equatable/equatable.dart';
 import '../../../models/common/captured_image_detail.dart';
 import '../../../models/common/measurement_entry.dart';
+import '../../../models/common/measurement_limits.dart';
+import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
 
 // BARU: Enum untuk mode tampilan
@@ -40,7 +42,9 @@ class ValidationDropdownError extends ValidationDropdownState {
 }
 
 class ValidationDropdownLoaded extends ValidationDropdownState {
-  final List<ProblemSourceModel> data; // Ini List<ProblemSourceModel>
+  final String transNo;
+  final String serialNo;
+  final List<ProblemSourceModel> data;
   final String? selectedUnitType;
   final List<String> outdoorSerialNumbers;
   final String unitLocation;
@@ -56,12 +60,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final List<MeasurementEntry> capturedMeasurementsAfter;
 
   // Daftar Opsi Catatan (dari API)
-  final List<String> noteIndoorBeforeOptions;
-  final List<String> noteIndoorAfterOptions;
-  final List<String> noteOutdoorBeforeOptions;
-  final List<String> noteOutdoorAfterOptions;
-  final List<String> noteOutdoorPsiBeforeOptions;
-  final List<String> noteOutdoorPsiAfterOptions;
+  final List<NoteOption> noteIndoorBeforeOptions;
+  final List<NoteOption> noteIndoorAfterOptions;
+  final List<NoteOption> noteOutdoorBeforeOptions;
+  final List<NoteOption> noteOutdoorAfterOptions;
+  final List<NoteOption> noteOutdoorPsiBeforeOptions;
+  final List<NoteOption> noteOutdoorPsiAfterOptions;
 
   //selected note
   final String? selectedIndoorNoteBefore;
@@ -71,13 +75,20 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final String? selectedOutdoorPSINoteBefore;
   final String? selectedOutdoorPSINoteAfter;
 
+  final Map<String, MeasurementLimits> limitsScBefore;
+  final Map<String, MeasurementLimits> limitsScAfter;
+
   final int currentStep;
   final ValidationViewMode currentViewMode;
 
   final ValidationSaveStatus saveStatus;
   final String? saveMessage;
 
+  final String? correctSerialNo;
+
   const ValidationDropdownLoaded({
+    required this.transNo,
+    required this.serialNo,
     required this.data,
     this.selectedUnitType,
     this.capturedPhotosBefore = const [],
@@ -90,6 +101,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.outdoorSerialNumbers = const [],
     this.unitLocation = 'INDOOR',
     this.selectedOutdoorSerialNo,
+    required this.limitsScBefore,
+    required this.limitsScAfter,
     this.noteIndoorBeforeOptions = const [],
     this.noteIndoorAfterOptions = const [],
     this.noteOutdoorBeforeOptions = const [],
@@ -104,12 +117,13 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.selectedOutdoorPSINoteAfter,
     this.saveStatus = ValidationSaveStatus.initial,
     this.saveMessage,
+    this.correctSerialNo,
   });
 
   ValidationDropdownLoaded copyWith({
+    String? transNo,
+    String? serialNo,
     List<ProblemSourceModel>? data,
-    // Gunakan Object() sebagai penanda "tidak diubah" vs "diubah jadi null"
-    // Ini adalah trik umum untuk copyWith nullable fields
     Object? selectedUnitType = const Object(),
     List<CapturedImageDetail>? capturedPhotosBefore,
     List<MeasurementEntry>? capturedMeasurementsBefore,
@@ -120,12 +134,12 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     ValidationViewMode? currentViewMode,
     List<String>? outdoorSerialNumbers,
     Object? selectedOutdoorSerialNo = const Object(),
-    List<String>? noteIndoorBeforeOptions,
-    List<String>? noteIndoorAfterOptions,
-    List<String>? noteOutdoorBeforeOptions,
-    List<String>? noteOutdoorAfterOptions,
-    List<String>? noteOutdoorPsiBeforeOptions,
-    List<String>? noteOutdoorPsiAfterOptions,
+    List<NoteOption>? noteIndoorBeforeOptions,
+    List<NoteOption>? noteIndoorAfterOptions,
+    List<NoteOption>? noteOutdoorBeforeOptions,
+    List<NoteOption>? noteOutdoorAfterOptions,
+    List<NoteOption>? noteOutdoorPsiBeforeOptions,
+    List<NoteOption>? noteOutdoorPsiAfterOptions,
     Object? selectedIndoorNoteBefore = const Object(),
     Object? selectedOutdoorNoteBefore = const Object(),
     Object? selectedIndoorNoteAfter = const Object(),
@@ -133,10 +147,13 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     Object? selectedOutdoorPSINoteBefore = const Object(),
     Object? selectedOutdoorPSINoteAfter = const Object(),
     ValidationSaveStatus? saveStatus,
-    Object? saveMessage = const Object(), // saveMessage juga bisa null
+    Object? saveMessage = const Object(),
+    Map<String, MeasurementLimits>? limitsScBefore,
+    Map<String, MeasurementLimits>? limitsScAfter,
+    Object? correctSerialNo = const Object(),
   }) {
     // Helper untuk menangani nullable copyWith
-    T _handleNullable<T>(Object? newValue, T currentValue) {
+    T handleNullable<T>(Object? newValue, T currentValue) {
       // Jika newValue adalah penanda Object(), berarti field ini tidak diubah
       if (newValue is Object && identical(newValue, const Object())) {
         return currentValue;
@@ -146,39 +163,58 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     }
 
     return ValidationDropdownLoaded(
+      transNo: transNo ?? this.transNo,
+      serialNo: serialNo ?? this.serialNo,
       data: data ?? this.data,
-      selectedUnitType: _handleNullable(selectedUnitType, this.selectedUnitType),
+      selectedUnitType: handleNullable(selectedUnitType, this.selectedUnitType),
       capturedPhotosBefore: capturedPhotosBefore ?? this.capturedPhotosBefore,
-      capturedMeasurementsBefore: capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
+      capturedMeasurementsBefore:
+          capturedMeasurementsBefore ?? this.capturedMeasurementsBefore,
       selectedProblemCards: selectedProblemCards ?? this.selectedProblemCards,
       capturedPhotosAfter: capturedPhotosAfter ?? this.capturedPhotosAfter,
-      capturedMeasurementsAfter: capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
+      capturedMeasurementsAfter:
+          capturedMeasurementsAfter ?? this.capturedMeasurementsAfter,
       currentStep: currentStep ?? this.currentStep,
       currentViewMode: currentViewMode ?? this.currentViewMode,
       outdoorSerialNumbers: outdoorSerialNumbers ?? this.outdoorSerialNumbers,
-      selectedOutdoorSerialNo: _handleNullable(selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
-
-      noteIndoorBeforeOptions: noteIndoorBeforeOptions ?? this.noteIndoorBeforeOptions,
-      noteIndoorAfterOptions: noteIndoorAfterOptions ?? this.noteIndoorAfterOptions,
-      noteOutdoorBeforeOptions: noteOutdoorBeforeOptions ?? this.noteOutdoorBeforeOptions,
-      noteOutdoorAfterOptions: noteOutdoorAfterOptions ?? this.noteOutdoorAfterOptions,
-      noteOutdoorPsiBeforeOptions: noteOutdoorPsiBeforeOptions ?? this.noteOutdoorPsiBeforeOptions,
-      noteOutdoorPsiAfterOptions: noteOutdoorPsiAfterOptions ?? this.noteOutdoorPsiAfterOptions,
-      selectedIndoorNoteBefore: _handleNullable(selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
-      selectedOutdoorNoteBefore: _handleNullable(selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
-      selectedIndoorNoteAfter: _handleNullable(selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
-      selectedOutdoorNoteAfter: _handleNullable(selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
-      selectedOutdoorPSINoteBefore: _handleNullable(selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
-      selectedOutdoorPSINoteAfter: _handleNullable(selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
-
-
+      selectedOutdoorSerialNo:
+          handleNullable(selectedOutdoorSerialNo, this.selectedOutdoorSerialNo),
+      limitsScBefore: limitsScBefore ?? this.limitsScBefore,
+      limitsScAfter: limitsScAfter ?? this.limitsScAfter,
+      noteIndoorBeforeOptions:
+          noteIndoorBeforeOptions ?? this.noteIndoorBeforeOptions,
+      noteIndoorAfterOptions:
+          noteIndoorAfterOptions ?? this.noteIndoorAfterOptions,
+      noteOutdoorBeforeOptions:
+          noteOutdoorBeforeOptions ?? this.noteOutdoorBeforeOptions,
+      noteOutdoorAfterOptions:
+          noteOutdoorAfterOptions ?? this.noteOutdoorAfterOptions,
+      noteOutdoorPsiBeforeOptions:
+          noteOutdoorPsiBeforeOptions ?? this.noteOutdoorPsiBeforeOptions,
+      noteOutdoorPsiAfterOptions:
+          noteOutdoorPsiAfterOptions ?? this.noteOutdoorPsiAfterOptions,
+      selectedIndoorNoteBefore: handleNullable(
+          selectedIndoorNoteBefore, this.selectedIndoorNoteBefore),
+      selectedOutdoorNoteBefore: handleNullable(
+          selectedOutdoorNoteBefore, this.selectedOutdoorNoteBefore),
+      selectedIndoorNoteAfter:
+          handleNullable(selectedIndoorNoteAfter, this.selectedIndoorNoteAfter),
+      selectedOutdoorNoteAfter: handleNullable(
+          selectedOutdoorNoteAfter, this.selectedOutdoorNoteAfter),
+      selectedOutdoorPSINoteBefore: handleNullable(
+          selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
+      selectedOutdoorPSINoteAfter: handleNullable(
+          selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
       saveStatus: saveStatus ?? this.saveStatus,
-      saveMessage: _handleNullable(saveMessage, this.saveMessage),
+      saveMessage: handleNullable(saveMessage, this.saveMessage),
+      correctSerialNo: handleNullable(correctSerialNo, this.correctSerialNo),
     );
   }
 
   @override
   List<Object?> get props => [
+        transNo,
+        serialNo,
         data,
         selectedUnitType,
         selectedProblemCards,
@@ -202,8 +238,11 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
         selectedOutdoorNoteAfter,
         selectedOutdoorPSINoteBefore,
         selectedOutdoorPSINoteAfter,
+        limitsScBefore,
+        limitsScAfter,
         saveStatus,
         saveMessage,
+        correctSerialNo,
       ];
 }
 

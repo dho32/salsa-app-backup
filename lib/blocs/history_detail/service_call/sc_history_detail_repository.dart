@@ -10,7 +10,6 @@ class ScHistoryDetailRepository {
   Future<ScHistoryDetailModel> fetchScHistoryDetail(String transNo) async {
     final params = {'trans_no': transNo};
 
-    // Ganti dengan endpoint API detail riwayat SC Anda
     Uri uri = getUrl(pathUrl: '/history/service_call/detail', params: params);
     final response = await http.get(uri);
 

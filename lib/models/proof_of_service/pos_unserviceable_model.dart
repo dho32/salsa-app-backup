@@ -28,6 +28,9 @@ class PosUnserviceableModel extends HiveObject {
   @HiveField(6)
   String reportedById;
 
+  @HiveField(7)
+  String technicianName;
+
   PosUnserviceableModel({
     required this.transNo,
     required this.reason,
@@ -36,5 +39,6 @@ class PosUnserviceableModel extends HiveObject {
     required this.reportedAt,
     required this.reportedBy,
     required this.reportedById,
+    required this.technicianName,
   });
 }

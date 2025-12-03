@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../components/shared_function.dart';
 import '../../models/auth/maintenance_info_model.dart';
@@ -83,6 +84,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthAuthenticated());
       }
     } catch (e) {
+      await Hive.deleteFromDisk();
       final message = e.toString().replaceAll(RegExp(r'Exception:\s*'), '');
       emit(AuthFailure(message));
     }
@@ -92,7 +94,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       MaintenanceSelected event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      // BARU: Ambil versi aplikasi di sini juga
       final packageInfo = await PackageInfo.fromPlatform();
       final appVersion = packageInfo.version;
 

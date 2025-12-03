@@ -20,9 +20,9 @@ class ProofOfServiceDetailModelAdapter
     return ProofOfServiceDetailModel(
       header: fields[0] as ProofOfServiceHeader,
       detail: (fields[1] as List).cast<ProofOfServiceItemDetail>(),
-      noteIndoorOptions: (fields[2] as List?)?.cast<String>(),
-      noteOutdoorOptions: (fields[3] as List?)?.cast<String>(),
-      unserviceableReasons: (fields[4] as List?)?.cast<String>(),
+      noteIndoorOptions: (fields[5] as List?)?.cast<NoteOption>(),
+      noteOutdoorOptions: (fields[6] as List?)?.cast<NoteOption>(),
+      unserviceableReasons: (fields[7] as List?)?.cast<NoteOption>(),
     );
   }
 
@@ -34,11 +34,11 @@ class ProofOfServiceDetailModelAdapter
       ..write(obj.header)
       ..writeByte(1)
       ..write(obj.detail)
-      ..writeByte(2)
+      ..writeByte(5)
       ..write(obj.noteIndoorOptions)
-      ..writeByte(3)
+      ..writeByte(6)
       ..write(obj.noteOutdoorOptions)
-      ..writeByte(4)
+      ..writeByte(7)
       ..write(obj.unserviceableReasons);
   }
 

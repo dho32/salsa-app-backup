@@ -1,6 +1,8 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
+import 'package:salsa/models/common/note_option.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
 import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_bloc.dart';
@@ -20,7 +22,7 @@ class PosValidationScreen extends StatefulWidget {
   final int capacity;
   final double? indoorTemp;
   final List<String> allIndoorSerials;
-  final List<String> noteOptions;
+  final List<NoteOption> noteOptions;
 
   const PosValidationScreen({
     super.key,
@@ -47,10 +49,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   /// Fungsi debug yang mencetak status setiap elemen
   /// DAN mengembalikan 'true' HANYA JIKA semua elemen lolos.
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
-    print('--- MEMULAI DEBUGGING _areAllMeasurementsFilled ---');
-    print('Total elemen: ${measurements.length}');
-
-    // 1. Kita mulai dengan asumsi semuanya LOLOS
     bool allItemsPassed = true;
 
     for (int i = 0; i < measurements.length; i++) {
@@ -61,23 +59,17 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       bool isFilledCheck = (m.capturedImage != null && m.value != 0);
       bool didPass = isSkippedCheck || isFilledCheck;
 
-      print('\n--- Memeriksa Item ke-$i ---');
-      print('isSkipped: ${m.isSkipped} (Evaluasi: $isSkippedCheck)');
-      print('capturedImage != null: ${m.capturedImage != null}');
-      print('value: ${m.value} (Evaluasi: ${m.value != 0})');
-
       if (didPass) {
         print('>>> Status: LOLOS');
       } else {
         print('>>> !!! STATUS: GAGAL !!! <<<');
-        print('Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
+        print(
+            'Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
 
         // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
         allItemsPassed = false;
       }
     }
-
-    print('\n--- DEBUGGING SELESAI ---');
 
     // 3. Kembalikan hasil akhir
     return allItemsPassed;
@@ -87,8 +79,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   void initState() {
     super.initState();
     _noteController.text = widget.initialData?.note ?? '';
-
-
   }
 
   @override
@@ -115,8 +105,11 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
         ..add(FetchPosValidationData(
           initialData: widget.initialData,
           unitType: widget.unitType,
-          allIndoorSerials: widget.allIndoorSerials, // <-- Kirim daftar
-          serialNo: widget.serialNo, // <-- Kirim SN unit ini
+          articleNo: widget.articleNo,
+          articleDesc: widget.articleDesc,
+          articleUnitDesc: widget.articleUnitDesc,
+          allIndoorSerials: widget.allIndoorSerials,
+          serialNo: widget.serialNo,
           transNo: widget.transNo,
         )),
       child: BlocListener<PosValidationBloc, PosValidationState>(
@@ -130,8 +123,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 behavior: SnackBarBehavior.floating,
               ),
             );
-          }
-          else if (state is PosValidationSaveSuccess) {
+          } else if (state is PosValidationSaveSuccess) {
             Navigator.of(context).pop(true); // Kembali ke halaman sebelumnya
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Data berhasil disimpan'),
@@ -184,7 +176,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       child: Row(
         children: [
           if (state.currentStep == 1) ...[
-            // Tombol di Step 2 (Sesudah)
             Expanded(
               child: OutlinedButton.icon(
                 label: const Text('Kembali'),
@@ -200,13 +191,14 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 child: const Text('Simpan'),
                 onPressed: () async {
                   FocusScope.of(context).unfocus();
-                  // Menunggu sesaat agar event unfocus selesai diproses
-                  await Future.delayed(const Duration(milliseconds: 150));
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   final latestState = context.read<PosValidationBloc>().state;
                   if (latestState is! PosValidationLoaded) return;
 
-                  final bool isAnyMeasurementSkipped =
-                  latestState.measurementsAfter.any((m) => m.isSkipped ?? false);
+                  final bool isAnyMeasurementSkipped = latestState
+                      .measurementsAfter
+                      .any((m) => m.isSkipped ?? false);
 
                   if (latestState.photosAfter.isEmpty) {
                     _showValidationErrorSnackbar(
@@ -220,22 +212,49 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     return;
                   }
 
-                  if (isAnyMeasurementSkipped &&
-                      _noteController.text.trim().isEmpty) {
-                    _showValidationErrorSnackbar(
-                        'Catatan wajib diisi, jika unit tidak bisa diukur.');
-                    return;
+                  if (isAnyMeasurementSkipped) {
+                    // 1. Cek Note Dropdown
+                    if (_noteController.text.trim().isEmpty) {
+                      _showValidationErrorSnackbar(
+                          'Catatan wajib diisi, jika unit tidak bisa diukur.');
+                      return;
+                    }
+
+                    // 2. Cek Remark Manual (Logic Baru)
+                    final selectedOption = widget.noteOptions.firstWhereOrNull(
+                        (o) => o.label == _noteController.text);
+
+                    // Jika opsi tersebut mewajibkan remark
+                    if (selectedOption?.requireRemark == true) {
+                      final remark = latestState.noteRemark ?? '';
+
+                      // A. Cek Kosong
+                      if (remark.trim().isEmpty) {
+                        _showValidationErrorSnackbar(
+                            'Keterangan Tambahan wajib diisi.');
+                        return;
+                      }
+
+                      // B. Cek Panjang Karakter (Tanpa Spasi)
+                      if (remark.replaceAll(' ', '').length < 20) {
+                        _showValidationErrorSnackbar(
+                            'Keterangan Tambahan minimal 20 huruf (tanpa spasi).');
+                        return;
+                      }
+                    }
                   }
 
                   for (final measurement in latestState.measurementsAfter) {
                     if (measurement.isSkipped ?? false) continue;
 
-                    final limits = kPOSMeasurementLimits[measurement.measurementId];
+                    final limits =
+                        kPOSMeasurementLimits[measurement.measurementId];
                     if (limits != null) {
                       // Tentukan batas atas dinamis untuk suhu
                       double maxLimit = limits.max;
                       double minLimit = limits.min;
-                      if (measurement.measurementId == 'temperature' && widget.indoorTemp != null) {
+                      if (measurement.measurementId == 'temperature' &&
+                          widget.indoorTemp != null) {
                         maxLimit = widget.indoorTemp!;
                       }
 
@@ -266,12 +285,6 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     articleType: widget.unitType,
                     indoorTemp: widget.indoorTemp,
                   ));
-                  // Navigator.of(context).pop(true);
-                  // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  //   content: Text('Data berhasil disimpan'),
-                  //   backgroundColor: Colors.green,
-                  //   behavior: SnackBarBehavior.floating,
-                  // ));
                 },
               ),
             ),

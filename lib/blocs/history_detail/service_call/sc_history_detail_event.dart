@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 
 abstract class ScHistoryDetailEvent extends Equatable {
   const ScHistoryDetailEvent();
+
   @override
   List<Object> get props => [];
 }

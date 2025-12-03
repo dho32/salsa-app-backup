@@ -33,6 +33,8 @@ import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
+import '../../../../models/common/measurement_limits.dart';
+import '../../../../models/common/note_option.dart';
 import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
 import '../../../../models/service_call/problem_source_model.dart';
 import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
@@ -76,18 +78,35 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _technician2Controller;
   late final TextEditingController _technician3Controller;
   late final TextEditingController _finalTempController;
-  final TextEditingController _finalTempNoteSearchController = TextEditingController();
+  final TextEditingController _finalTempNoteSearchController =
+      TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
   String technicianName = '';
   String maintenanceBy = '';
   String maintenanceByIP = '';
+  late final MeasurementLimits _scFinalTempBaseLimits;
 
   @override
   void initState() {
     super.initState();
     _loadUserInfoAndIP();
+
+    final configBox = Hive.box(kAppConfigBox);
+    final Map<String, MeasurementLimits> headerLimits =
+        Map<String, MeasurementLimits>.from(
+            configBox.get('limits_temp_header') ?? {});
+
+    _scFinalTempBaseLimits = headerLimits['sc_final_temp_in'] ??
+        const MeasurementLimits(
+            id: 'sc_final_temp_in',
+            label: 'Suhu Dalam Ruangan (SC)',
+            min: 4,
+            max: 30,
+            unit: '°C',
+            normalMin: 5,
+            normalMax: 18);
 
     final initialFormState = context.read<ScFormCubit>().state;
 
@@ -97,7 +116,7 @@ class _ServiceCallDetailBodyMobileState
         TextEditingController(text: initialFormState.picPhone);
     _picNikController = TextEditingController(text: initialFormState.picNik);
     _technician1Controller =
-        TextEditingController(); // Diisi oleh _loadUserInfo
+        TextEditingController(text: initialFormState.technician1);
     _technician2Controller =
         TextEditingController(text: initialFormState.technician2);
     _technician3Controller =
@@ -128,6 +147,12 @@ class _ServiceCallDetailBodyMobileState
     _picNikController.addListener(() {
       if (formCubit.state.picNik != _picNikController.text) {
         formCubit.picNikChanged(_picNikController.text);
+        formCubit.onFieldChanged();
+      }
+    });
+    _technician1Controller.addListener(() {
+      if (formCubit.state.technician1 != _technician1Controller.text) {
+        formCubit.technician1Changed(_technician1Controller.text);
         formCubit.onFieldChanged();
       }
     });
@@ -163,9 +188,7 @@ class _ServiceCallDetailBodyMobileState
     final ip = await getPublicIpAddress();
     if (mounted) {
       setState(() {
-        technicianName = user['name'] ?? '';
         maintenanceBy = user['user_id'] ?? '';
-        _technician1Controller.text = technicianName;
         maintenanceByIP = ip;
       });
     }
@@ -246,6 +269,7 @@ class _ServiceCallDetailBodyMobileState
           prev.picPhone != current.picPhone ||
           prev.picNik != current.picNik ||
           prev.picPosition != current.picPosition ||
+          prev.technician1 != current.technician1 ||
           prev.technician2 != current.technician2 ||
           prev.technician3 != current.technician3 ||
           prev.finalTempIn != current.finalTempIn ||
@@ -259,6 +283,9 @@ class _ServiceCallDetailBodyMobileState
         }
         if (_picNikController.text != state.picNik) {
           _picNikController.text = state.picNik;
+        }
+        if (_technician1Controller.text != state.technician1) {
+          _technician1Controller.text = state.technician1;
         }
         if (_technician2Controller.text != state.technician2) {
           _technician2Controller.text = state.technician2;
@@ -321,6 +348,9 @@ class _ServiceCallDetailBodyMobileState
                 return a.serialNo.compareTo(b.serialNo);
               }
             });
+
+            final List<NoteOption> noteOptions =
+                detailState.data.noteIndoorAfterOptions;
 
             return BlocBuilder<ScFormCubit, ScFormState>(
               builder: (context, formState) {
@@ -409,11 +439,13 @@ class _ServiceCallDetailBodyMobileState
                                   BlocProvider(
                                     create: (context) {
                                       // 1. Ambil box yang SUDAH DIBUKA oleh ScFormCubit
-                                      final Box scBox = Hive.box<TransactionInfoModel>(
-                                          kTransactionInfoHiveBox);
+                                      final Box scBox =
+                                          Hive.box<TransactionInfoModel>(
+                                              kTransactionInfoHiveBox);
 
                                       // 2. Inject box tersebut ke dalam BLoC
-                                      return LocationValidationBloc(transactionBox: scBox);
+                                      return LocationValidationBloc(
+                                          transactionBox: scBox);
                                     },
                                   ),
                                   BlocProvider.value(
@@ -438,7 +470,8 @@ class _ServiceCallDetailBodyMobileState
                                           SubmitValidation(
                                             transNo: header.transNo,
                                             createdBy: maintenanceBy,
-                                            createdByName: technicianName,
+                                            createdByName:
+                                                formState.technician1,
                                             createdByIP: maintenanceByIP,
                                             pathAttachment:
                                                 header.pathAttachment,
@@ -510,9 +543,15 @@ class _ServiceCallDetailBodyMobileState
                                   // Widget Suhu Akhir (Kondisional)
                                   BlocBuilder<ScFormCubit, ScFormState>(
                                     buildWhen: (prev, current) {
-                                      return prev.allUnitsValidated != current.allUnitsValidated || // (status aktif/nonaktif berubah)
-                                          prev.isFinalTempSkipped != current.isFinalTempSkipped || // (status skip berubah)
-                                          prev.finalTempNote != current.finalTempNote; // (note berubah)
+                                      return prev.allUnitsValidated !=
+                                              current
+                                                  .allUnitsValidated || // (status aktif/nonaktif berubah)
+                                          prev.isFinalTempSkipped !=
+                                              current
+                                                  .isFinalTempSkipped || // (status skip berubah)
+                                          prev.finalTempNote !=
+                                              current
+                                                  .finalTempNote; // (note berubah)
                                     },
                                     builder: (context, formStateForTemp) {
                                       final bool isEnabled =
@@ -527,7 +566,9 @@ class _ServiceCallDetailBodyMobileState
                                               child: AbsorbPointer(
                                                 absorbing: !isEnabled,
                                                 child: _buildFinalTempSection(
-                                                    context, formStateForTemp),
+                                                    context,
+                                                    formStateForTemp,
+                                                    noteOptions),
                                               ),
                                             ),
                                             if (!isEnabled)
@@ -700,25 +741,48 @@ class _ServiceCallDetailBodyMobileState
       child: Column(
         children: [
           _buildCustomTextField(
-              controller: _technician1Controller,
-              hintText: 'Teknisi 1',
-              icon: Icons.engineering,
-              readOnly: true),
+            controller: _technician1Controller,
+            hintText: 'Teknisi 1',
+            icon: Icons.engineering,
+            readOnly: false,
+            onTap: () {},
+            onChanged: (value) {
+              formCubit.technician1Changed(value);
+              formCubit.onFieldChanged();
+            },
+          ),
           const SizedBox(height: 12),
           _buildCustomTextField(
               controller: _technician2Controller,
               hintText: 'Teknisi 2',
-              icon: Icons.engineering),
+              icon: Icons.engineering,
+              onTap: () {},
+              // Kosongkan onTap
+              onChanged: (value) {
+                // <-- Tambahkan onChanged
+                formCubit.technician2Changed(value);
+                formCubit.onFieldChanged();
+              }),
           const SizedBox(height: 8),
-          if (_showTechnician3)
+          if (formState.showTechnician3) // <-- Gunakan state dari Cubit
             _buildCustomTextField(
               controller: _technician3Controller,
+              // <-- Gunakan Controller
               hintText: 'Teknisi 3',
               icon: Icons.engineering,
+              onTap: () {},
+              // Kosongkan onTap
+              onChanged: (value) {
+                // <-- Tambahkan onChanged
+                formCubit.technician3Changed(value);
+                formCubit.onFieldChanged();
+              },
               iconBtn: IconButton(
+                  // <-- Ganti nama prop
                   onPressed: () {
                     formCubit.technician3Changed('');
                     formCubit.toggleTechnician3(false);
+                    formCubit.onFieldChanged(); // <-- Tambahkan
                   },
                   icon: const Icon(Icons.cancel, color: Colors.red)),
             )
@@ -810,6 +874,23 @@ class _ServiceCallDetailBodyMobileState
       ServiceCallHeader header,
       ServiceCallUnitDetail detail,
       Map<String, ValidationStatus> validationStatuses) {
+    final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+    final existingEntry = box.values.firstWhereOrNull((e) =>
+        e.serialNo.trim().toUpperCase() ==
+            detail.serialNo.trim().toUpperCase() &&
+        e.transNo == header.transNo);
+
+    // Tentukan serial number mana yang akan ditampilkan
+    String displaySerial = detail.serialNo;
+    bool isSwapped = false;
+
+    if (existingEntry != null &&
+        existingEntry.correctSerialNo != null &&
+        existingEntry.correctSerialNo!.isNotEmpty) {
+      displaySerial = existingEntry.correctSerialNo!;
+      isSwapped = true;
+    }
+
     final isRemote = detail.articleNameUnit.toUpperCase().contains('REMOTE');
     final String serialKey = detail.serialNo.trim().toUpperCase();
     final status = validationStatuses[serialKey] ?? ValidationStatus.notStarted;
@@ -841,8 +922,30 @@ class _ServiceCallDetailBodyMobileState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text('Serial No: ${detail.serialNo}',
-                style: const TextStyle(fontWeight: FontWeight.w500)),
+            Row(
+              children: [
+                Text('Serial No: ',
+                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                if (isSwapped) ...[
+                  Text(displaySerial,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepOrange)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.swap_horiz,
+                      size: 16, color: Colors.deepOrange),
+                ] else
+                  Text(displaySerial,
+                      style: const TextStyle(fontWeight: FontWeight.w500)),
+              ],
+            ),
+            if (isSwapped)
+              const Text('(Unit Hasil Koreksi)',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.deepOrange,
+                      fontStyle: FontStyle.italic)),
+
             Text('Keluhan: ${detail.complaintDetails}',
                 style: const TextStyle(fontSize: 12)),
           ],
@@ -861,6 +964,13 @@ class _ServiceCallDetailBodyMobileState
           final outdoorSerials =
               detailState.data.outdoor.map((unit) => unit.serialNo).toList();
           final problemSources = detailState.data.problems;
+
+          String serialForDisplay = detail.serialNo; // Default Lama
+          if (existingEntry != null &&
+              existingEntry.correctSerialNo != null &&
+              existingEntry.correctSerialNo!.isNotEmpty) {
+            serialForDisplay = existingEntry.correctSerialNo!; // Serial Baru
+          }
 
           if (isRemote) {
             await Navigator.push(
@@ -882,14 +992,6 @@ class _ServiceCallDetailBodyMobileState
 
             if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // ScaffoldMessenger.of(context).showSnackBar(
-              //   const SnackBar(
-              //     content: Text('Validasi berhasil disimpan!'),
-              //     backgroundColor: Colors.green,
-              //     behavior: SnackBarBehavior.floating,
-              //   ),
-              // );
-
               _refreshSerials();
             }
           } else {
@@ -902,6 +1004,7 @@ class _ServiceCallDetailBodyMobileState
               MaterialPageRoute(
                 builder: (_) => ServiceCallValidationScreen(
                   serialNo: detail.serialNo,
+                  displaySerialNo: serialForDisplay,
                   lineNo: detail.lineNo,
                   transNo: header.transNo,
                   initialData: existingEntry,
@@ -935,9 +1038,10 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  Widget _buildFinalTempSection(BuildContext context, ScFormState formState) {
+  Widget _buildFinalTempSection(BuildContext context, ScFormState formState,
+      List<NoteOption> noteOptions) {
     final formCubit = context.read<ScFormCubit>();
-    final baseLimits = kMeasurementLimits['final_temp_in_sc']!;
+    final baseLimits = _scFinalTempBaseLimits;
     final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
     final String label = baseLimits.label;
     final finalTempLimits = MeasurementLimits(
@@ -949,11 +1053,6 @@ class _ServiceCallDetailBodyMobileState
       normalMin: baseLimits.normalMin,
       normalMax: baseLimits.normalMax,
     );
-    final detailState = context.read<ServiceCallDetailBloc>().state;
-    List<String> noteOptions = [];
-    if (detailState is ServiceCallDetailLoaded) {
-      noteOptions = detailState.data.noteIndoorAfterOptions;
-    }
 
     return _buildSection(
       title: 'Suhu Dalam Ruangan Setelah Service (*Wajib)',
@@ -1019,6 +1118,7 @@ class _ServiceCallDetailBodyMobileState
               scFormCubit.picNameChanged(_picNameController.text);
               scFormCubit.picPhoneChanged(_picPhoneController.text);
               scFormCubit.picNikChanged(_picNikController.text);
+              scFormCubit.technician1Changed(_technician1Controller.text);
               scFormCubit.technician2Changed(_technician2Controller.text);
               scFormCubit.technician3Changed(_technician3Controller.text);
               scFormCubit.finalTempInChanged(_finalTempController.text);
@@ -1037,6 +1137,8 @@ class _ServiceCallDetailBodyMobileState
                 // Tampilkan pesan error spesifik
                 if (!latestFormState.isPicStoreValid) {
                   _showValidationSnackbar(context, 'Lengkapi info PIC.');
+                } else if (latestFormState.technician1.isEmpty) {
+                  _showValidationSnackbar(context, 'Harap isi nama Teknisi 1.');
                 } else if (!latestFormState.allUnitsValidated) {
                   _showValidationSnackbar(
                       context, 'Lengkapi validasi semua unit.');
@@ -1063,12 +1165,14 @@ class _ServiceCallDetailBodyMobileState
     bool readOnly = false,
     VoidCallback? onTap,
     IconButton? iconBtn,
+    Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       readOnly: readOnly,
       onTap: onTap,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: hintText,
         hintText: hintText,
@@ -1094,44 +1198,58 @@ class _ServiceCallDetailBodyMobileState
 
   Widget _buildNoteDropdown({
     required BuildContext context,
-    required List<String> options,
+    required List<NoteOption> options,
     required String? selectedValue,
     required TextEditingController searchController,
     required String label,
     required ValueChanged<String?> onChanged,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
+
+    final filteredOptions = options.where((opt) {
+      return !opt.isSystemOnly || opt.label == selectedValue;
+    }).toList();
+    final selectedOptionObj =
+        filteredOptions.where((opt) => opt.label == selectedValue).firstOrNull;
+    final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
+
     // ... (Sisa kode _buildNoteDropdown persis sama seperti
     //      yang ada di ScMeasurementInputSection: Padding, DropdownButtonFormField2, dll.)
 
     // Pastikan Anda menyalin seluruh method _buildNoteDropdown ke sini
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0), // Sesuaikan padding
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0),
+      // Sesuaikan padding
       child: DropdownButtonFormField2<String>(
         value: selectedValue,
         isExpanded: true,
         decoration: InputDecoration(
           labelText: '$label (*Wajib)',
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         ),
         hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
-        items: options.map((item) => DropdownMenuItem<String>(
-          value: item,
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Text(item, style: const TextStyle(fontSize: 14)),
-            ),
-          ),
-        )).toList(),
+        items: options
+            .map((item) => DropdownMenuItem<String>(
+                  value: item.label,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(item.label,
+                          style: const TextStyle(fontSize: 14)),
+                    ),
+                  ),
+                ))
+            .toList(),
         onChanged: onChanged,
         selectedItemBuilder: (context) {
           return options.map((item) {
             return Text(
-              item,
-              style: const TextStyle(fontSize: 14, overflow: TextOverflow.ellipsis),
+              item.label,
+              style: const TextStyle(
+                  fontSize: 14, overflow: TextOverflow.ellipsis),
               maxLines: 1,
             );
           }).toList();
@@ -1155,14 +1273,18 @@ class _ServiceCallDetailBodyMobileState
               controller: searchController,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 hintText: 'Cari alasan...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
-          searchMatchFn: (item, searchValue) =>
-              item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+          searchMatchFn: (item, searchValue) => item.value
+              .toString()
+              .toLowerCase()
+              .contains(searchValue.toLowerCase()),
         ),
         onMenuStateChange: (isOpen) {
           if (!isOpen) searchController.clear();

@@ -24,6 +24,7 @@ class PosSubmittedRepository {
         'pic_name': transactionInfo?.picName ?? '',
         'pic_posision': transactionInfo?.picPosition ?? '',
         'pic_phone': transactionInfo?.picPhone ?? '',
+        'technician_1_name': transactionInfo?.technician1 ?? '',
         'technician_2_name': transactionInfo?.technician2 ?? '',
         'technician_3_name': transactionInfo?.technician3 ?? '',
         'temperature_in_before':

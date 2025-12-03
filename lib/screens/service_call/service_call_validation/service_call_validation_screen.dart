@@ -1,11 +1,21 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:salsa/models/common/captured_image_detail.dart';
+import 'package:salsa/models/common/measurement_limits.dart';
+import 'package:salsa/screens/service_call/service_call_validation/components/invalid_unit_screen/sc_invalid_unit_screen.dart';
+import '../../../blocs/auth/auth_storage.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import '../../../components/constants.dart';
+import '../../../components/services/watermark_service.dart';
 import '../../../models/common/measurement_entry.dart';
-import '../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart';
+import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
@@ -14,6 +24,7 @@ import 'components/service_call_validation_body_mobile.dart';
 class ServiceCallValidationScreen extends StatefulWidget {
   final String transNo;
   final String serialNo;
+  final String? displaySerialNo;
   final String lineNo;
   final String assetAge;
   final String rentDate;
@@ -29,6 +40,7 @@ class ServiceCallValidationScreen extends StatefulWidget {
     super.key,
     required this.transNo,
     required this.serialNo,
+    this.displaySerialNo,
     required this.lineNo,
     required this.assetAge,
     required this.rentDate,
@@ -48,32 +60,52 @@ class ServiceCallValidationScreen extends StatefulWidget {
 
 class _ServiceCallValidationScreenState
     extends State<ServiceCallValidationScreen> {
-  bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
-    // 1. Kita mulai dengan asumsi semuanya LOLOS
-    bool allItemsPassed = true;
+  late final Map<String, MeasurementLimits> _limitsScBefore;
+  late final Map<String, MeasurementLimits> _limitsScAfter;
 
+  bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
+    bool allItemsPassed = true;
     for (int i = 0; i < measurements.length; i++) {
       var m = measurements[i];
-
-      // Evaluasi logika
       bool isSkippedCheck = m.isSkipped ?? false;
       bool isFilledCheck = (m.capturedImage != null && m.value != 0);
       bool didPass = isSkippedCheck || isFilledCheck;
-
-      if (didPass) {
-        print('>>> Status: LOLOS');
-      } else {
-        print('>>> !!! STATUS: GAGAL !!! <<<');
-        print(
-            'Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
-
-        // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
+      if (!didPass) {
         allItemsPassed = false;
       }
     }
-
-    // 3. Kembalikan hasil akhir
     return allItemsPassed;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final configBox = Hive.box(kAppConfigBox);
+
+    final rawBefore = configBox.get('limits_sc_before');
+    final Map<String, MeasurementLimits> limitsBeforeMap = {};
+    if (rawBefore is Map) {
+      rawBefore.forEach((key, value) {
+        if (key is String && value is MeasurementLimits) {
+          limitsBeforeMap[key] = value;
+        }
+      });
+    }
+    _limitsScBefore = limitsBeforeMap.isNotEmpty
+        ? limitsBeforeMap
+        : kSCMeasurementLimitsBefore;
+
+    final rawAfter = configBox.get('limits_sc_after');
+    final Map<String, MeasurementLimits> limitsAfterMap = {};
+    if (rawAfter is Map) {
+      rawAfter.forEach((key, value) {
+        if (key is String && value is MeasurementLimits) {
+          limitsAfterMap[key] = value;
+        }
+      });
+    }
+    _limitsScAfter =
+        limitsAfterMap.isNotEmpty ? limitsAfterMap : kMeasurementLimits;
   }
 
   @override
@@ -87,6 +119,8 @@ class _ServiceCallValidationScreenState
           allAvailableOutdoorSerials: widget.allAvailableOutdoorSerials,
           problemSources: widget.problemSources,
           detailData: widget.detailData,
+          limitsScBefore: _limitsScBefore,
+          limitsScAfter: _limitsScAfter,
         )),
       child: BlocListener<ValidationDropdownBloc, ValidationDropdownState>(
         listenWhen: (prev, current) =>
@@ -119,27 +153,142 @@ class _ServiceCallValidationScreenState
         },
         child: BlocBuilder<ValidationDropdownBloc, ValidationDropdownState>(
           builder: (context, state) {
-            return Scaffold(
-              appBar: AppBar(
-                title: const Text("Validasi Service Call"),
-              ),
-              body: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: ServiceCallValidationBodyMobile(
-                  transNo: widget.transNo,
-                  serialNo: widget.serialNo,
-                  lineNo: widget.lineNo,
-                  assetAge: widget.assetAge,
-                  rentDate: widget.rentDate,
-                  leasesEndingDate: widget.leasesEndingDate,
-                  initialData: widget.initialData,
-                  complaintDetails: widget.complaintDetails,
-                  imageFile: widget.imageFile,
+            bool isSaving = false;
+            if (state is ValidationDropdownLoaded) {
+              isSaving = state.saveStatus == ValidationSaveStatus.saving;
+            }
+
+            final currentSerial = (state is ValidationDropdownLoaded &&
+                    state.correctSerialNo != null)
+                ? state.correctSerialNo!
+                : (widget.displaySerialNo ?? widget.serialNo);
+
+            return Stack(
+              children: [
+                Scaffold(
+                  appBar: AppBar(
+                    title: const Text(" "),
+                    actions: [
+                      if (state is ValidationDropdownLoaded)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                              right: 12.0, top: 8, bottom: 8),
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.block, size: 16),
+                            label: const Text(
+                              "Tukar Unit",
+                              style: TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.red.shade900,
+                              backgroundColor: Colors.white,
+                              elevation: 2,
+                              shape: const StadiumBorder(),
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: const Size(0, 35),
+                            ),
+                            // Disable jika sedang saving
+                            onPressed: isSaving
+                                ? null
+                                : () async {
+                                    final bloc =
+                                        context.read<ValidationDropdownBloc>();
+                                    List<String> swapOptions = widget
+                                        .detailData.indoorAvailable
+                                        .map((e) => e.serialNo)
+                                        .toList();
+
+                                    swapOptions.remove(currentSerial);
+
+                                    // --- 3. FILTER SERIAL YANG DIPAKAI UNIT LAIN YANG SUDAH DIPAKAI ------
+                                    final box = Hive.box<
+                                            ServiceCallValidationEntryModel>(
+                                        kServiceCallHiveBox);
+
+                                    // Ambil semua serial number yang SUDAH diambil oleh unit lain sebagai 'correctSerialNo'
+                                    final usedByOthers = box.values
+                                        .where((e) =>
+                                            e.transNo ==
+                                                widget
+                                                    .transNo && // Transaksi sama
+                                            e.serialNo !=
+                                                widget
+                                                    .serialNo && // Unit lain (bukan unit ini)
+                                            e.correctSerialNo !=
+                                                null && // Ada data swap
+                                            e.correctSerialNo!.isNotEmpty)
+                                        .map((e) => e.correctSerialNo!)
+                                        .toSet();
+
+                                    // Hapus dari opsi jika sudah dipakai tetangga
+                                    swapOptions.removeWhere((serial) =>
+                                        usedByOthers.contains(serial));
+
+                                    if (currentSerial != widget.serialNo) {
+                                      if (!swapOptions
+                                          .contains(widget.serialNo)) {
+                                        swapOptions.add(widget.serialNo);
+                                      }
+                                    }
+
+                                    swapOptions.sort();
+
+                                    final result = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => BlocProvider.value(
+                                          value: bloc,
+                                          child: ScInvalidUnitScreen(
+                                            transNo: widget.transNo,
+                                            ticketSerialNo: widget.serialNo,
+                                            currentSerialNo: currentSerial,
+                                            swapOptions: swapOptions,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+
+                                    // 3. Cek hasil kembalian
+                                    // Jika result == true (berarti sukses swap), tutup halaman Validasi ini juga
+                                    if (result == true && context.mounted) {
+                                      Navigator.of(context).pop(true);
+                                    }
+                                  },
+                          ),
+                        ),
+                    ],
+                  ),
+                  body: GestureDetector(
+                    onTap: () => FocusScope.of(context).unfocus(),
+                    child: AbsorbPointer(
+                      absorbing: isSaving,
+                      child: ServiceCallValidationBodyMobile(
+                        transNo: widget.transNo,
+                        serialNo: widget.serialNo,
+                        displaySerialNo: currentSerial,
+                        lineNo: widget.lineNo,
+                        assetAge: widget.assetAge,
+                        rentDate: widget.rentDate,
+                        leasesEndingDate: widget.leasesEndingDate,
+                        initialData: widget.initialData,
+                        complaintDetails: widget.complaintDetails,
+                        imageFile: widget.imageFile,
+                      ),
+                    ),
+                  ),
+                  bottomNavigationBar: (state is ValidationDropdownLoaded)
+                      ? AbsorbPointer(
+                          // Disable tombol bawah saat saving
+                          absorbing: isSaving,
+                          child: _buildFloatingButtons(context, state),
+                        )
+                      : null,
                 ),
-              ),
-              bottomNavigationBar: (state is ValidationDropdownLoaded)
-                  ? _buildFloatingButtons(context, state)
-                  : null,
+              ],
             );
           },
         ),
@@ -155,21 +304,19 @@ class _ServiceCallValidationScreenState
     return Container(
       padding: const EdgeInsets.all(16.0)
           .copyWith(bottom: MediaQuery.of(context).padding.bottom + 8),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.transparent,
       ),
       child: Row(
         children: [
-          // Tampilan saat di Step 2 (Sesudah)
           if (state.currentStep == 1) ...[
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => bloc.add(ChangeValidationStep(0)),
-                label: Text('Kembali'),
+                onPressed: () => bloc.add(const ChangeValidationStep(0)),
+                label: const Text('Kembali'),
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: primary), // warna border
-                  foregroundColor:
-                      primary, // ini juga bisa bantu untuk label/icon
+                  side: BorderSide(color: primary),
+                  foregroundColor: primary,
                 ),
               ),
             ),
@@ -177,10 +324,15 @@ class _ServiceCallValidationScreenState
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: () {
-                  // --- Validasi "Sesudah" ---
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   final measurementError = _validateMeasurements(
-                      state.capturedMeasurementsAfter, kMeasurementLimits);
+                    state.capturedMeasurementsAfter,
+                    state.limitsScAfter,
+                  );
+
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -194,7 +346,6 @@ class _ServiceCallValidationScreenState
                     return;
                   }
 
-                  // Validasi Note "Sesudah"
                   final noteError = _validateNotes(state, isBefore: false);
                   if (noteError != null) {
                     _showErrorSnackbar(noteError);
@@ -216,13 +367,13 @@ class _ServiceCallValidationScreenState
                 child: const Text('Simpan'),
               ),
             ),
-          ]
-
-          // Tampilan saat di Step 1 (Sebelum)
-          else if (state.currentStep == 0) ...[
+          ] else if (state.currentStep == 0) ...[
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () {
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   bool hasDataToSave = state.capturedPhotosBefore.isNotEmpty ||
                       state.capturedMeasurementsBefore
                           .any((m) => m.value != 0.0);
@@ -239,32 +390,34 @@ class _ServiceCallValidationScreenState
                   }
 
                   final measurementError = _validateMeasurements(
-                      state.capturedMeasurementsBefore,
-                      kSCMeasurementLimitsBefore);
+                    state.capturedMeasurementsBefore,
+                    state.limitsScBefore,
+                  );
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
                   }
 
-                  // Kirim event untuk menyimpan, tapi JANGAN pindah step
                   bloc.add(SaveValidationData(
                     transNo: widget.transNo,
                     serialNo: widget.serialNo,
                     showNotification: true,
                   ));
                 },
-                label: Text('Simpan Draft'),
+                label: const Text('Simpan Draft'),
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: primary), // warna border
-                  foregroundColor:
-                      primary, // ini juga bisa bantu untuk label/icon
+                  side: BorderSide(color: primary),
+                  foregroundColor: primary,
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 200));
+
                   if (state.capturedPhotosBefore.isEmpty) {
                     _showErrorSnackbar('Lengkapi semua foto unit (Sebelum).');
                     return;
@@ -273,7 +426,7 @@ class _ServiceCallValidationScreenState
                     _showErrorSnackbar('Pilih Serial No Outdoor.');
                     return;
                   }
-                  // Validasi Note "Sebelum"
+
                   final noteError = _validateNotes(state, isBefore: true);
                   if (noteError != null) {
                     _showErrorSnackbar(noteError);
@@ -281,8 +434,10 @@ class _ServiceCallValidationScreenState
                   }
 
                   final measurementError = _validateMeasurements(
-                      state.capturedMeasurementsBefore,
-                      kSCMeasurementLimitsBefore);
+                    state.capturedMeasurementsBefore,
+                    state.limitsScBefore,
+                  );
+
                   if (measurementError != null) {
                     _showErrorSnackbar(measurementError);
                     return;
@@ -293,7 +448,7 @@ class _ServiceCallValidationScreenState
                     serialNo: widget.serialNo,
                     showNotification: false,
                   ));
-                  bloc.add(ChangeValidationStep(1));
+                  bloc.add(const ChangeValidationStep(1));
                 },
                 child: const Text('Lanjut'),
               ),
@@ -310,42 +465,92 @@ class _ServiceCallValidationScreenState
         ? state.capturedMeasurementsBefore
         : state.capturedMeasurementsAfter;
 
+    // Definisi Group ID
     const indoorIds = {'temperature'};
     const outdoorElecIds = {'volt', 'ampere'};
     const outdoorPsiIds = {'psi'};
 
-    // Cek Indoor
-    final bool isAnyIndoorSkipped = measurements.any(
-        (m) => indoorIds.contains(m.measurementId) && (m.isSkipped ?? false));
-    final String? indoorNote = isBefore
-        ? state.selectedIndoorNoteBefore
-        : state.selectedIndoorNoteAfter;
-    if (isAnyIndoorSkipped && (indoorNote == null || indoorNote.isEmpty)) {
-      return 'Catatan indoor wajib diisi jika ada pengukuran yang di-skip.';
+    // Helper Validasi Per Grup
+    String? checkGroup({
+      required Set<String> ids,
+      required List<NoteOption> options,
+      required String? selectedNoteLabel,
+      required String groupName,
+    }) {
+      // 1. Cek apakah ada item di grup ini yang di-skip
+      final skippedItems = measurements
+          .where((m) => ids.contains(m.measurementId) && (m.isSkipped ?? false))
+          .toList();
+
+      if (skippedItems.isNotEmpty) {
+        // 2. Cek apakah Note sudah dipilih
+        if (selectedNoteLabel == null || selectedNoteLabel.isEmpty) {
+          return 'Catatan $groupName wajib diisi jika ada pengukuran yang di-skip.';
+        }
+
+        // 3. Cek apakah Note ini butuh Remark (Keterangan Tambahan)
+        if (!isBefore) {
+          final selectedOptionObj = options.firstWhere(
+              (o) => o.label == selectedNoteLabel,
+              orElse: () => NoteOption(label: '', requireRemark: false));
+
+          if (selectedOptionObj.requireRemark) {
+            final firstSkipped = skippedItems.first;
+            final remarkText = firstSkipped.remark ?? '';
+            if (firstSkipped.remark == null ||
+                firstSkipped.remark!.trim().isEmpty) {
+              return 'Keterangan Tambahan untuk $groupName wajib diisi.';
+            }
+            final int charCount = remarkText.replaceAll(' ', '').length;
+            if (charCount < 20) {
+              return 'Keterangan $groupName minimal 20 huruf (tanpa spasi). Saat ini: $charCount.';
+            }
+          }
+        }
+      }
+      return null;
     }
 
-    // Cek Outdoor Elektrikal
-    final bool isAnyOutdoorSkipped = measurements.any((m) =>
-        outdoorElecIds.contains(m.measurementId) && (m.isSkipped ?? false));
-    final String? outdoorNote = isBefore
-        ? state.selectedOutdoorNoteBefore
-        : state.selectedOutdoorNoteAfter;
-    if (isAnyOutdoorSkipped && (outdoorNote == null || outdoorNote.isEmpty)) {
-      return 'Catatan outdoor (Volt/Ampere) wajib diisi.';
-    }
+    // Validasi Indoor
+    final indoorError = checkGroup(
+      ids: indoorIds,
+      options: isBefore
+          ? state.noteIndoorBeforeOptions
+          : state.noteIndoorAfterOptions,
+      selectedNoteLabel: isBefore
+          ? state.selectedIndoorNoteBefore
+          : state.selectedIndoorNoteAfter,
+      groupName: 'Indoor',
+    );
+    if (indoorError != null) return indoorError;
 
-    // Cek Outdoor PSI
-    final bool isAnyOutdoorPsiSkipped = measurements.any((m) =>
-        outdoorPsiIds.contains(m.measurementId) && (m.isSkipped ?? false));
-    final String? outdoorPsiNote = isBefore
-        ? state.selectedOutdoorPSINoteBefore
-        : state.selectedOutdoorPSINoteAfter;
-    if (isAnyOutdoorPsiSkipped &&
-        (outdoorPsiNote == null || outdoorPsiNote.isEmpty)) {
-      return 'Catatan outdoor (PSI) wajib diisi.';
-    }
+    // Validasi Outdoor
+    final outdoorError = checkGroup(
+      ids: outdoorElecIds,
+      options: isBefore
+          ? state.noteOutdoorBeforeOptions
+          : state.noteOutdoorAfterOptions,
+      selectedNoteLabel: isBefore
+          ? state.selectedOutdoorNoteBefore
+          : state.selectedOutdoorNoteAfter,
+      groupName: 'Outdoor (Volt/Ampere)',
+    );
+    if (outdoorError != null) return outdoorError;
 
-    return null; // Semua valid
+    // Validasi PSI
+    final psiError = checkGroup(
+      ids: outdoorPsiIds,
+      options: isBefore
+          ? state.noteOutdoorPsiBeforeOptions
+          : state.noteOutdoorPsiAfterOptions,
+      selectedNoteLabel: isBefore
+          ? state.selectedOutdoorPSINoteBefore
+          : state.selectedOutdoorPSINoteAfter,
+      groupName: 'Outdoor (Tekanan)',
+    );
+    if (psiError != null) return psiError;
+
+    return null; // Lolos Semua
   }
 
   String? _validateMeasurements(
@@ -353,31 +558,22 @@ class _ServiceCallValidationScreenState
     Map<String, MeasurementLimits> limitsMap,
   ) {
     for (final mEntry in measurements) {
-      // 1. Jika di-skip, lewati ke pengukuran berikutnya (dianggap valid)
       if (mEntry.isSkipped ?? false) continue;
-
-      // 2. Jika tidak di-skip, periksa kelengkapan
+      final label =
+          limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
       if (mEntry.capturedImage == null) {
-        final label =
-            limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
         return 'Foto untuk "$label" wajib diisi.';
       }
-      // Kita anggap 0.0 adalah default (kosong)
       if (mEntry.value == 0.0) {
-        final label =
-            limitsMap[mEntry.measurementId]?.label ?? mEntry.measurementId;
         return 'Nilai untuk "$label" wajib diisi.';
       }
-
-      // 3. Jika lengkap, periksa rentang nilainya
       final limits = limitsMap[mEntry.measurementId];
       if (limits == null) continue;
-
       if (mEntry.value < limits.min || mEntry.value > limits.max) {
-        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar.';
+        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar (Min: ${limits.min}, Maks: ${limits.max}).';
       }
     }
-    return null; // Semua valid
+    return null;
   }
 
   void _showErrorSnackbar(String message) {

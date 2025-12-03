@@ -1,26 +1,37 @@
 /// File: models/proof_of_service/proof_of_service_detail_model.dart
+library;
 
 import 'package:hive/hive.dart';
 
-// Tambahkan baris 'part' ini. Nama file harus sesuai.
+import '../common/note_option.dart';
+
 part 'proof_of_service_detail_model.g.dart';
 
-@HiveType(typeId: 10) // <-- Tambahkan anotasi HiveType dengan ID unik
+@HiveType(typeId: 10)
 class ProofOfServiceDetailModel {
-  @HiveField(0) // <-- Tambahkan anotasi HiveField untuk setiap properti
+  @HiveField(0)
   final ProofOfServiceHeader header;
 
   @HiveField(1)
   final List<ProofOfServiceItemDetail> detail;
 
-  @HiveField(2)
-  final List<String>? noteIndoorOptions;
+  // @HiveField(2)
+  // final List<String>? noteIndoorOptions;
+  //
+  // @HiveField(3)
+  // final List<String>? noteOutdoorOptions;
+  //
+  // @HiveField(4)
+  // final List<String>? unserviceableReasons;
 
-  @HiveField(3)
-  final List<String>? noteOutdoorOptions;
+  @HiveField(5)
+  final List<NoteOption>? noteIndoorOptions;
 
-  @HiveField(4)
-  final List<String>? unserviceableReasons;
+  @HiveField(6)
+  final List<NoteOption>? noteOutdoorOptions;
+
+  @HiveField(7)
+  final List<NoteOption>? unserviceableReasons;
 
   ProofOfServiceDetailModel({
     required this.header,
@@ -32,19 +43,36 @@ class ProofOfServiceDetailModel {
 
   // Biarkan factory fromJson tetap ada untuk parsing data dari API
   factory ProofOfServiceDetailModel.fromJson(Map<String, dynamic> json) {
+    List<NoteOption> _parseNotes(dynamic list) {
+      if (list == null || list is! List) return [];
+      return list.map((item) {
+        if (item is Map) {
+          // Format Baru (Object)
+          return NoteOption.fromJson(Map<String, dynamic>.from(item));
+        } else if (item is String) {
+          // Format Lama (String) - Fallback safety
+          return NoteOption.fromJson({'label': item});
+        }
+        return NoteOption(label: item.toString());
+      }).toList();
+    }
+
     return ProofOfServiceDetailModel(
       header: ProofOfServiceHeader.fromJson(json['header'] ?? {}),
       detail: (json['detail'] as List<dynamic>? ?? [])
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
-      noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
-      noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
-      unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
+      // noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
+      // noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
+      // unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
+      noteIndoorOptions: _parseNotes(json['note_indoor_options']),
+      noteOutdoorOptions: _parseNotes(json['note_outdoor_options']),
+      unserviceableReasons: _parseNotes(json['unserviceable_reasons']),
     );
   }
 }
 
-@HiveType(typeId: 11) // <-- ID unik lainnya
+@HiveType(typeId: 11)
 class ProofOfServiceHeader {
   @HiveField(0)
   final String transNo;

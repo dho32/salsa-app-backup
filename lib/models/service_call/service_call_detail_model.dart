@@ -1,21 +1,25 @@
 import 'package:salsa/models/service_call/problem_source_model.dart';
 
+import '../common/note_option.dart';
+
 class ServiceCallDetailModel {
   final ServiceCallHeader header;
   final List<ServiceCallUnitDetail> detail;
-  final List<OutdoorUnit> outdoor;
+  final List<SerialNo> indoorAvailable;
+  final List<SerialNo> outdoor;
   final List<ProblemSourceModel> problems;
-  final List<String> unserviceableReasons;
-  final List<String> noteIndoorBeforeOptions;
-  final List<String> noteIndoorAfterOptions;
-  final List<String> noteOutdoorBeforeOptions;
-  final List<String> noteOutdoorAfterOptions;
-  final List<String> noteOutdoorPsiBeforeOptions;
-  final List<String> noteOutdoorPsiAfterOptions;
+  final List<NoteOption> unserviceableReasons;
+  final List<NoteOption> noteIndoorBeforeOptions;
+  final List<NoteOption> noteIndoorAfterOptions;
+  final List<NoteOption> noteOutdoorBeforeOptions;
+  final List<NoteOption> noteOutdoorAfterOptions;
+  final List<NoteOption> noteOutdoorPsiBeforeOptions;
+  final List<NoteOption> noteOutdoorPsiAfterOptions;
 
   ServiceCallDetailModel({
     required this.header,
     required this.detail,
+    required this.indoorAvailable,
     required this.outdoor,
     required this.problems,
     required this.unserviceableReasons,
@@ -28,23 +32,38 @@ class ServiceCallDetailModel {
   });
 
   factory ServiceCallDetailModel.fromJson(Map<String, dynamic> json) {
+    var indoorList = json['indoor'] as List<dynamic>? ?? [];
     var outdoorList = json['outdoor'] as List<dynamic>? ?? [];
     var problemList = json['problems'] as List<dynamic>? ?? [];
+
+    List<NoteOption> _parseNotes(dynamic list) {
+      if (list == null || list is! List) return [];
+      return list.map((item) {
+        if (item is Map) {
+          return NoteOption.fromJson(Map<String, dynamic>.from(item));
+        } else if (item is String) {
+          // Fallback untuk string lama
+          return NoteOption(label: item);
+        }
+        return NoteOption(label: item.toString());
+      }).toList();
+    }
 
     return ServiceCallDetailModel(
       header: ServiceCallHeader.fromJson(json['header']),
       detail: (json['detail'] as List<dynamic>)
           .map((item) => ServiceCallUnitDetail.fromJson(item))
           .toList(),
-      outdoor: outdoorList.map((item) => OutdoorUnit.fromJson(item)).toList(),
+      indoorAvailable: indoorList.map((item) => SerialNo.fromJson(item)).toList(),
+      outdoor: outdoorList.map((item) => SerialNo.fromJson(item)).toList(),
       problems: problemList.map((item) => ProblemSourceModel.fromJson(item)).toList(),
-      unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
-      noteIndoorBeforeOptions: List<String>.from(json['note_indoor_before_options'] ?? []),
-      noteIndoorAfterOptions: List<String>.from(json['note_indoor_after_options'] ?? []),
-      noteOutdoorBeforeOptions: List<String>.from(json['note_outdoor_before_options'] ?? []),
-      noteOutdoorAfterOptions: List<String>.from(json['note_outdoor_after_options'] ?? []),
-      noteOutdoorPsiBeforeOptions: List<String>.from(json['note_outdoor_psi_before_options'] ?? []),
-      noteOutdoorPsiAfterOptions: List<String>.from(json['note_outdoor_psi_after_options'] ?? []),
+      unserviceableReasons: _parseNotes(json['unserviceable_reasons']),
+      noteIndoorBeforeOptions: _parseNotes(json['note_indoor_before_options']),
+      noteIndoorAfterOptions: _parseNotes(json['note_indoor_after_options']),
+      noteOutdoorBeforeOptions: _parseNotes(json['note_outdoor_before_options']),
+      noteOutdoorAfterOptions: _parseNotes(json['note_outdoor_after_options']),
+      noteOutdoorPsiBeforeOptions: _parseNotes(json['note_outdoor_psi_before_options']),
+      noteOutdoorPsiAfterOptions: _parseNotes(json['note_outdoor_psi_after_options']),
     );
   }
 }
@@ -155,13 +174,13 @@ class ServiceCallUnitDetail {
   }
 }
 
-class OutdoorUnit {
+class SerialNo {
   final String serialNo;
 
-  OutdoorUnit({required this.serialNo});
+  SerialNo({required this.serialNo});
 
-  factory OutdoorUnit.fromJson(Map<String, dynamic> json) {
-    return OutdoorUnit(
+  factory SerialNo.fromJson(Map<String, dynamic> json) {
+    return SerialNo(
       serialNo: json['serial_no'] ?? '',
     );
   }

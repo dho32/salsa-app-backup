@@ -1,47 +1,50 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'measurement_entry.dart';
+part of 'measurement_limits.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class MeasurementEntryAdapter extends TypeAdapter<MeasurementEntry> {
+class MeasurementLimitsAdapter extends TypeAdapter<MeasurementLimits> {
   @override
-  final int typeId = 3;
+  final int typeId = 15;
 
   @override
-  MeasurementEntry read(BinaryReader reader) {
+  MeasurementLimits read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return MeasurementEntry(
-      measurementId: fields[0] as String,
-      value: fields[1] as double,
-      unit: fields[2] as String,
-      capturedImage: fields[3] as CapturedImageDetail?,
-      isSkipped: fields[4] as bool?,
-      remark: fields[5] as String?,
+    return MeasurementLimits(
+      id: fields[0] as String,
+      label: fields[1] as String,
+      min: fields[2] as double,
+      max: fields[3] as double,
+      unit: fields[4] as String,
+      normalMin: fields[5] as double,
+      normalMax: fields[6] as double,
     );
   }
 
   @override
-  void write(BinaryWriter writer, MeasurementEntry obj) {
+  void write(BinaryWriter writer, MeasurementLimits obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
-      ..write(obj.measurementId)
+      ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.value)
+      ..write(obj.label)
       ..writeByte(2)
-      ..write(obj.unit)
+      ..write(obj.min)
       ..writeByte(3)
-      ..write(obj.capturedImage)
+      ..write(obj.max)
       ..writeByte(4)
-      ..write(obj.isSkipped)
+      ..write(obj.unit)
       ..writeByte(5)
-      ..write(obj.remark);
+      ..write(obj.normalMin)
+      ..writeByte(6)
+      ..write(obj.normalMax);
   }
 
   @override
@@ -50,7 +53,7 @@ class MeasurementEntryAdapter extends TypeAdapter<MeasurementEntry> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is MeasurementEntryAdapter &&
+      other is MeasurementLimitsAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

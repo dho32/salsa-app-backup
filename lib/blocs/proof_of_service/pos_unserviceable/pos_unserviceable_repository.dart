@@ -15,6 +15,7 @@ extension PosUnserviceableModelJson on PosUnserviceableModel {
       'reported_at': reportedAt.toIso8601String(),
       'reported_by': reportedBy,
       'reported_by_id': reportedById,
+      'technician_1_name': technicianName,
       'proof_images': proofImages.map((img) {
         // 2. Ubah struktur objek yang di-return di sini
         return {

@@ -31,6 +31,7 @@ class ServiceCallSubmittedRepository {
         'pic_name': transactionInfo?.picName ?? '',
         'pic_position': transactionInfo?.picPosition ?? '',
         'pic_phone': transactionInfo?.picPhone ?? '',
+        'technician_1_name': transactionInfo?.technician1 ?? '',
         'technician_2_name': transactionInfo?.technician2 ?? '',
         'technician_3_name': transactionInfo?.technician3 ?? '',
         'pic_image_detail': transactionInfo?.picImageDetail?.toJson(),
@@ -45,7 +46,7 @@ class ServiceCallSubmittedRepository {
       log(prettyJson);
       log("================================");
 
-      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted');
+      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted/v2');
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},

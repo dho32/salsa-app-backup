@@ -2,14 +2,17 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
+import '../../components/constants.dart';
 import '../../components/shared_function.dart';
 import '../../models/auth/maintenance_info_model.dart';
+import '../../models/common/measurement_limits.dart';
 import 'auth_storage.dart';
 
 class AuthRepository {
   Future<String> login(String email, String password, String appVersion) async {
-    Uri uri = getUrl(pathUrl: '/login');
+    Uri uri = getUrl(pathUrl: 'login');
     var map = <String, dynamic>{};
     map['user'] = email;
     map['password'] = password;
@@ -24,14 +27,62 @@ class AuthRepository {
     final data = jsonDecode(response.body);
     final result = data['result'];
 
+    JsonEncoder encoder = const JsonEncoder.withIndent('  ');
+    String prettyJson = encoder.convert(result);
+    log("====== BODY REQUEST LENGKAP ======");
+    log(prettyJson);
+    log("================================");
+
     if (response.statusCode == 200 && data['status'] == 'OK') {
       final token = result['user_token'];
       if (token == null || token.isEmpty) {
         throw Exception(result['error_message'] ?? 'Login gagal');
       }
-      return token; // Langsung kembalikan token
+      if (result['app_config'] != null) {
+        await _saveAppConfigToHive(result['app_config']);
+      }
+      return token;
     } else {
       throw Exception('Login gagal');
+    }
+  }
+
+  Future<void> _saveAppConfigToHive(Map<String, dynamic> configJson) async {
+    try {
+      final configBox = await Hive.openBox(kAppConfigBox);
+
+      Map<String, MeasurementLimits> parseLimitsMap(dynamic map) {
+        if (map == null || map is! Map) return {};
+        return map.map<String, MeasurementLimits>(
+          (key, value) => MapEntry(
+            key as String,
+            MeasurementLimits.fromJson(value as Map<String, dynamic>),
+          ),
+        );
+      }
+
+      // Parsing setiap 'key' dari JSON API
+      final limitsTempHeader = parseLimitsMap(configJson['limits_temp_header']);
+      final limitsScBefore =
+          parseLimitsMap(configJson['limits_validation_unit']?['sc_before']);
+      final limitsScAfter =
+          parseLimitsMap(configJson['limits_validation_unit']?['sc_after']);
+      final limitsPosAfter =
+          parseLimitsMap(configJson['limits_validation_unit']?['pos_after']);
+
+      // Simpan ke Hive (Gunakan 'put' agar menimpa config lama)
+      await configBox.put('limits_temp_header', limitsTempHeader);
+      await configBox.put('limits_sc_before', limitsScBefore);
+      await configBox.put('limits_sc_after', limitsScAfter);
+      await configBox.put('limits_pos_after', limitsPosAfter);
+
+      print("✅ AppConfig berhasil disimpan di Hive.");
+      log("Data limits_temp_header: ${limitsTempHeader.length} item");
+      log("Data limits_sc_before: ${limitsScBefore.length} item");
+      log("Data limits_sc_after: ${limitsScAfter.length} item");
+      log("Data limits_pos_after: ${limitsPosAfter.length} item");
+    } catch (e) {
+      print("🔴 GAGAL menyimpan AppConfig ke Hive: $e");
     }
   }
 
@@ -41,21 +92,25 @@ class AuthRepository {
     final payload = JwtHelper.decode(token);
     if (payload == null) throw Exception("Token tidak valid");
 
-    // Tentukan maintenance_by dan maintenance_by_name
-    final maintenanceBy = selectedMaintenance?.maintenanceBy ??
-        payload['maintenance'][0]['maintenance_by'];
-    final maintenanceByName = selectedMaintenance?.maintenanceByName ??
-        payload['maintenance'][0]['maintenance_by_name'];
+    final MaintenanceInfo activeMaintenance;
+    if (selectedMaintenance != null) {
+      activeMaintenance = selectedMaintenance;
+    } else {
+      activeMaintenance = MaintenanceInfo.fromJson(payload['maintenance'][0]);
+    }
+
+    final String maintenanceType = activeMaintenance.maintenanceType;
+    final String maintenanceBy = activeMaintenance.maintenanceBy;
+    final String maintenanceByName = activeMaintenance.maintenanceByName;
 
     final deviceInfo = DeviceInfoPlugin();
     String deviceModel = 'Unknown Device';
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
-      deviceModel =
-          "${androidInfo.manufacturer} ${androidInfo.model}"; // mis: "Samsung SM-A525F"
+      deviceModel = "${androidInfo.manufacturer} ${androidInfo.model}";
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
-      deviceModel = iosInfo.utsname.machine; // mis: "iPhone13,2"
+      deviceModel = iosInfo.utsname.machine;
     }
 
     await AuthStorage.saveUser(
@@ -63,12 +118,11 @@ class AuthRepository {
       name: payload['user_name'],
       email: payload['email'],
       maintenanceBy: maintenanceBy,
-      // Gunakan nilai yang sudah ditentukan
       maintenanceByName: maintenanceByName,
-      // Gunakan nilai yang sudah ditentukan
       role: payload['role_code'],
       team: payload['team'],
       deviceModel: deviceModel,
+      maintenanceType: maintenanceType,
     );
   }
 
@@ -84,7 +138,8 @@ class AuthRepository {
     return (await getToken()) != null;
   }
 
-  Future<void> recordLogin(String token, String vendorId, String appVersion) async {
+  Future<void> recordLogin(
+      String token, String vendorId, String appVersion) async {
     try {
       // Ambil data dari token untuk dikirim
       final payload = JwtHelper.decode(token);
@@ -162,8 +217,6 @@ class AuthRepository {
       print("Gagal mencatat log logout: $e");
     }
   }
-
-  // auth_repository.dart
 
   Future<Map<String, String>> getAppConfig() async {
     Uri uri = getUrl(pathUrl: '/version');
