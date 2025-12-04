@@ -14,7 +14,6 @@ import 'package:salsa/models/service_call/service_call_validation_entry_model.da
 import 'package:salsa/screens/service_call/service_call_validation/components/widgets/service_call_validation_widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../blocs/auth/auth_storage.dart';
-import '../../../../components/constants.dart';
 import '../../../../components/services/watermark_service.dart';
 import '../../../../components/widgets/sc_measurement_input_section.dart';
 import '../../../../models/common/captured_image_detail.dart';

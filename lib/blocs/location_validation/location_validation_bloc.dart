@@ -27,7 +27,8 @@ class LocationValidationBloc
     on<SubmitLocationValidation>(_onSubmitValidation);
   }
 
-  String _getHiveKey(String transNo) => transNo.trim().toUpperCase();
+  String _getHiveKey(String transNo) =>
+      transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   Future<void> _onLoadPhoto(
       LoadLocationPhoto event, Emitter<LocationValidationState> emit) async {
@@ -69,12 +70,47 @@ class LocationValidationBloc
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
-      );
+      // ──────────────── GPS LOGIC (OPSI A: STRICT) ────────────────
+      Position? position;
+
+      // 1. Cek Cache Dulu (Last Known)
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      bool isFresh = false;
+
+      if (lastKnown != null) {
+        final age = DateTime.now().difference(lastKnown.timestamp).inMinutes;
+        // Batas toleransi 20 menit. Jika kurang dari itu, dianggap Valid.
+        if (age < 20) {
+          position = lastKnown;
+          isFresh = true;
+          print("📍 [GPS] Pakai Last Known (Umur: $age menit)");
+        } else {
+          print("⚠️ [GPS] Data Last Known Basi (Umur: $age menit). Skip.");
+        }
+      }
+
+      if (!isFresh) {
+        try {
+          print("📡 [GPS] Mencari sinyal satelit baru...");
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: LocationSettings(
+              accuracy: LocationAccuracy.high,
+            ), // High = 10-15m (Cukup & Lebih Cepat)
+          ).timeout(const Duration(seconds: 10)); // Timeout 10 Detik
+        } catch (e) {
+          print("❌ [GPS] Timeout/Error di Gedung Beton: $e");
+
+          // 3. STRICT FAILURE (Opsi A)
+          // Jika gagal lock GPS baru, kita TOLAK. Jangan pakai data basi.
+          emit(const LocationValidationFailure(
+              "Gagal mendeteksi lokasi akurat. Harap geser ke dekat jendela atau area terbuka.",
+              photo: null));
+          return; // Stop proses
+        }
+      }
 
       final String locationString =
-          "Loc: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}";
+          "Loc: ${position!.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}";
 
       // 1. Siapkan Data User (Untuk Watermark)
       final userData = await AuthStorage.getUser();

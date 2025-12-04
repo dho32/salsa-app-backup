@@ -63,3 +63,22 @@ class OtpTick extends OtpEvent {
   @override
   List<Object?> get props => [transNo, shipTo];
 }
+
+class OtpTimerTicked extends OtpEvent {
+  const OtpTimerTicked();
+}
+
+class CheckOtpStatus extends OtpEvent {
+  final String transNo;
+  final bool hasExistingPhoto;
+  const CheckOtpStatus(this.transNo, {this.hasExistingPhoto = false});
+  @override
+  List<Object> get props => [transNo, hasExistingPhoto];
+}
+
+class ResetOtp extends OtpEvent {
+  final String transNo;
+  const ResetOtp(this.transNo);
+  @override
+  List<Object> get props => [transNo];
+}

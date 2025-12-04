@@ -12,16 +12,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/service_call/service_call_unserviceable/sc_unserviceable_event.dart';
 import 'package:salsa/blocs/service_call/service_call_unserviceable/sc_unserviceable_repository.dart';
 import 'package:salsa/blocs/service_call/service_call_unserviceable/sc_unserviceable_state.dart';
-import 'package:salsa/models/service_call/service_call_validation_entry_model.dart';
 
 import '../../../components/constants.dart';
 import '../../../components/services/hive_clear_service.dart';
-import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/common/captured_image_detail.dart';
 import '../../../models/service_call/sc_unserviceable_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
-import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../../screens/common/services/confirmation_service.dart';
 import '../../auth/auth_storage.dart';
@@ -86,8 +83,6 @@ class SCUnserviceableBloc
         ));
       }
     } catch (e) {
-      print(
-          "🔴 Draft lama untuk $transNo tidak kompatibel. Menghapus draft rusak...");
       _draftBox.delete(transNo);
     }
   }
@@ -114,7 +109,6 @@ class SCUnserviceableBloc
           reportedById: '',
         );
         _draftBox.put(transNo, draft);
-        print("💾 Draft untuk $transNo berhasil disimpan ke Hive.");
       },
     );
   }
@@ -156,7 +150,9 @@ class SCUnserviceableBloc
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       final user = await AuthStorage.getUser();
@@ -352,7 +348,6 @@ class SCUnserviceableBloc
       await queueBox.put(transNo.trim().toUpperCase(), task);
       await ConfirmationService().processQueue();
     } catch (e) {
-      print("🔴 Error saat membersihkan data Hive untuk $transNo: $e");
       throw Exception(
           "Gagal membersihkan data lokal setelah upload: ${e.toString()}");
     }

@@ -9,7 +9,6 @@ import 'package:easy_debounce/easy_debounce.dart';
 
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
-import '../../../models/service_call/validation_status.dart';
 import '../../auth/auth_storage.dart';
 
 class ScFormCubit extends Cubit<ScFormState> {
@@ -63,8 +62,6 @@ class ScFormCubit extends Cubit<ScFormState> {
           finalTempNote: info.finalTempNote,
         ));
       } else {
-        print("Membuat draft SC baru untuk key: $normalizedKey");
-
         String initialTechnician1 = '';
         if (_userType == 'WH') {
           initialTechnician1 = _userName; // Otomatis isi jika 'WH'
@@ -78,8 +75,8 @@ class ScFormCubit extends Cubit<ScFormState> {
         emit(state.copyWith(technician1: initialTechnician1));
       }
     } catch (e) {
-      print(
-          "🔴 Gagal memuat draft ScFormCubit (kemungkinan data lama tidak kompatibel): $e");
+      // print(
+      //     "🔴 Gagal memuat draft ScFormCubit (kemungkinan data lama tidak kompatibel): $e");
       _transactionInfoBox.delete(normalizedKey); // ✅ Gunakan kunci baru
     } finally {
       _validateForm();
@@ -189,7 +186,7 @@ class ScFormCubit extends Cubit<ScFormState> {
     final infoToSave = _transactionInfoBox.get(normalizedKey);
 
     if (infoToSave == null) {
-      print("PERINGATAN: Draft SC $normalizedKey hilang, membuat ulang.");
+      // print("PERINGATAN: Draft SC $normalizedKey hilang, membuat ulang.");
       _loadInitialData(); // Panggil ini untuk membuat ulang draft
       return;
     }
@@ -249,7 +246,7 @@ class ScFormCubit extends Cubit<ScFormState> {
     }
 
     if (maxIndoorTemp != null) {
-      print("❄️ Max Indoor Temp ditemukan: $maxIndoorTemp");
+      // print("❄️ Max Indoor Temp ditemukan: $maxIndoorTemp");
     }
 
     // 3. Panggil copyWith pada 'currentState' (yang sudah pasti ScFormLoaded)

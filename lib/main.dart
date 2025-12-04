@@ -11,7 +11,6 @@ import 'package:salsa/models/service_call/transaction_info_model.dart';
 import 'package:salsa/screens/common/auth_gate/auth_gate.dart';
 import 'package:salsa/screens/common/error_page/error_retry_screen.dart';
 import 'package:salsa/screens/common/services/confirmation_service.dart';
-import 'package:upgrader/upgrader.dart';
 
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
@@ -23,6 +22,7 @@ import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
 import 'models/common/measurement_limits.dart';
 import 'models/common/note_option.dart';
+import 'models/common/otp_tracking_model.dart';
 import 'models/proof_of_service/pos_transaction_info_model.dart';
 import 'models/proof_of_service/pos_unserviceable_model.dart';
 import 'models/proof_of_service/pos_validation_entry_model.dart';
@@ -92,6 +92,7 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(SCUnserviceableModelAdapter());
     Hive.registerAdapter(MeasurementLimitsAdapter());
     Hive.registerAdapter(NoteOptionAdapter());
+    Hive.registerAdapter(OtpTrackingModelAdapter());
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -113,6 +114,7 @@ class _AppInitializerState extends State<AppInitializer> {
       await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
       await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
       await Hive.openBox(kAppConfigBox);
+      await Hive.openBox<OtpTrackingModel>(kOtpTrackingBox);
     } catch (e) {
       print("🔴 Hive Error detected (Schema Mismatch?). Resetting all data...");
       // JIKA GAGAL (Data Korup), HAPUS SEMUA DATA LAMA

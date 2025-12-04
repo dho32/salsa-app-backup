@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
-import 'package:salsa/components/shared_function.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart';
 import '../blocs/upload_progress/upload_progress_cubit.dart';
 import '../components/constants.dart';

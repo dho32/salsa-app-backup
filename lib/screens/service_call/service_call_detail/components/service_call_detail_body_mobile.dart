@@ -35,13 +35,11 @@ import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/common/note_option.dart';
-import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
 import '../../../../models/service_call/problem_source_model.dart';
-import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
+import '../../../../models/service_call/service_call_detail_model.dart';
 import '../../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../../models/service_call/transaction_info_model.dart';
 import '../../../../models/service_call/validation_status.dart';
-import '../../../common/services/confirmation_service.dart';
 import '../../service_call_validation/components/remote_validation/remote_validation_screen.dart';
 import '../../service_call_validation/service_call_validation_screen.dart';
 
@@ -92,6 +90,7 @@ class _ServiceCallDetailBodyMobileState
   void initState() {
     super.initState();
     _loadUserInfoAndIP();
+    _syncSavedPhoto();
 
     final configBox = Hive.box(kAppConfigBox);
     final Map<String, MeasurementLimits> headerLimits =
@@ -194,6 +193,29 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
+  void _syncSavedPhoto() {
+    try {
+      // 1. Buka Box (Pastikan box ini sudah open di main.dart / parent)
+      final box = Hive.box<TransactionInfoModel>(kTransactionInfoHiveBox);
+
+      // 2. Gunakan Key yang SAMA dengan saat menyimpan (Regex)
+      final String hiveKey =
+          widget.transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+      // 3. Ambil Data
+      final data = box.get(hiveKey);
+
+      // 4. Jika ada foto, Masukkan ke ScFormCubit
+      if (data != null && data.picImageDetail != null) {
+        print(
+            "📸 Foto PIC ditemukan di Hive (Resume Session). Sync ke FormCubit.");
+        context.read<ScFormCubit>().picImageChanged(data.picImageDetail!);
+      }
+    } catch (e) {
+      print("⚠️ Gagal sync foto dari Hive: $e");
+    }
+  }
+
   Future<ValidationLoadResult> _loadValidationData(String transNo) async {
     try {
       final box =
@@ -210,13 +232,10 @@ class _ServiceCallDetailBodyMobileState
             ? ValidationStatus.completed
             : ValidationStatus.inProgress;
       }
-      print(
-          "✅ Selesai _loadValidationData. Ditemukan ${statuses.length} status.");
 
       // Kembalikan objek baru yang berisi KEDUANYA
       return ValidationLoadResult(statuses: statuses, entries: relevantEntries);
     } catch (e) {
-      print("🔴 ERROR di _loadValidationData: $e");
       // Kembalikan data kosong jika error
       return ValidationLoadResult(statuses: {}, entries: []);
     }
@@ -240,7 +259,6 @@ class _ServiceCallDetailBodyMobileState
           formCubit.updateValidationProgress(allUnits, result.entries);
         }
       }).catchError((error) {
-        print("🔴 Gagal me-refresh status validasi: $error");
         if (mounted) {
           _showValidationSnackbar(
               context, "Gagal memuat status validasi unit.");
@@ -251,7 +269,6 @@ class _ServiceCallDetailBodyMobileState
         }
       });
     } else {
-      print("ℹ️ _refreshSerials dipanggil TAPI detailState bukan Loaded.");
       if (mounted) {
         setState(() {
           _validationStatusFuture = Future.value({});
@@ -302,14 +319,9 @@ class _ServiceCallDetailBodyMobileState
       },
       child: BlocConsumer<ServiceCallDetailBloc, ServiceCallDetailState>(
         listener: (context, detailState) {
-          // Panggil _refreshSerials SETELAH data detail berhasil dimuat
-          log("### UI LISTENER MENERIMA STATE: ${detailState.runtimeType} ###");
           if (detailState is ServiceCallDetailLoaded) {
-            print(
-                "🚀 ServiceCallDetailBloc Loaded. Memanggil _refreshSerials...");
             _refreshSerials();
           } else if (detailState is ServiceCallDetailError) {
-            print("🔴 ServiceCallDetailBloc Error: ${detailState.message}");
             // Set future ke nilai default agar FutureBuilder tidak loading terus
             if (mounted) {
               setState(() {
@@ -335,16 +347,11 @@ class _ServiceCallDetailBodyMobileState
               bool isBRemote =
                   b.articleNameUnit.toUpperCase().contains('REMOTE');
 
-              // Jika a REMOTE dan b BUKAN, a ditaruh di bawah (return 1)
               if (isARemote && !isBRemote) {
                 return 1;
-              }
-              // Jika a BUKAN dan b REMOTE, a ditaruh di atas (return -1)
-              else if (!isARemote && isBRemote) {
+              } else if (!isARemote && isBRemote) {
                 return -1;
-              }
-              // Jika keduanya REMOTE atau keduanya BUKAN REMOTE, sort by serialNo
-              else {
+              } else {
                 return a.serialNo.compareTo(b.serialNo);
               }
             });
@@ -385,8 +392,16 @@ class _ServiceCallDetailBodyMobileState
                     return BlocListener<ServiceCallSubmittedBloc,
                         ServiceCallSubmittedState>(
                       listener: (context, state) async {
-                        if (state is ScProceedToAhoDialog) {
+                        if (state is ScFinalValidationLoading) {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => const Center(
+                                child: CircularProgressIndicator()),
+                          );
+                        } else if (state is ScProceedToAhoDialog) {
                           log(">>> LISTENER: Masuk ke blok 'if (state is ScProceedToAhoDialog)' <<<");
+                          Navigator.of(context, rootNavigator: true).pop();
                           try {
                             // Tampilkan dialog AHO baru Anda
                             await showDialog<void>(
@@ -422,6 +437,7 @@ class _ServiceCallDetailBodyMobileState
                           }
                         } else if (state is ScProceedToOtpDialog) {
                           // Ambil formState yang sudah divalidasi dari BLoC state
+                          Navigator.of(context, rootNavigator: true).pop();
                           final formState = state.formState;
                           final double storeLat =
                               double.tryParse(header.storeLat) ?? 0.0;
@@ -455,11 +471,10 @@ class _ServiceCallDetailBodyMobileState
                                 child: OtpDialog(
                                   transNo: header.transNo,
                                   shipTo: header.storeId,
-                                  // Sesuaikan field
                                   email: header.storeEmail,
-                                  // Sesuaikan field
                                   storeLat: storeLat,
                                   storeLong: storeLong,
+                                  initialPhoto: state.formState.picImageDetail,
                                   onVerified: () {
                                     // SAAT OTP BERHASIL, BARU KIRIM EVENT SUBMIT SEBENARNYA
                                     final progressCubit =
@@ -498,7 +513,6 @@ class _ServiceCallDetailBodyMobileState
                           }
                         } else if (state is ValidationSuccess) {
                           // Jika 100% sukses, langsung tutup halaman detail
-                          ConfirmationService().processQueue();
                           showSuccessDialog(
                             context,
                             "Data berhasil dikirim.",
@@ -618,11 +632,11 @@ class _ServiceCallDetailBodyMobileState
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
+        color: Colors.white.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 6,
             offset: const Offset(0, 2),
           )
@@ -945,7 +959,6 @@ class _ServiceCallDetailBodyMobileState
                       fontSize: 10,
                       color: Colors.deepOrange,
                       fontStyle: FontStyle.italic)),
-
             Text('Keluhan: ${detail.complaintDetails}',
                 style: const TextStyle(fontSize: 12)),
           ],
@@ -1213,10 +1226,6 @@ class _ServiceCallDetailBodyMobileState
         filteredOptions.where((opt) => opt.label == selectedValue).firstOrNull;
     final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
 
-    // ... (Sisa kode _buildNoteDropdown persis sama seperti
-    //      yang ada di ScMeasurementInputSection: Padding, DropdownButtonFormField2, dll.)
-
-    // Pastikan Anda menyalin seluruh method _buildNoteDropdown ke sini
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0),
       // Sesuaikan padding

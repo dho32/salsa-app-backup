@@ -1,317 +1,210 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 
+import '../../components/constants.dart';
+import '../../models/common/otp_tracking_model.dart';
 import 'otp_event.dart';
 import 'otp_state.dart';
 import 'otp_repository.dart';
 
 class OtpBloc extends Bloc<OtpEvent, OtpState> {
   final OtpRepository repository;
-
-  // ───────────────────────── Business rules ─────────────────────────
-  static const int _maxResend = 4; // batas resend
-  static const Duration _lockDuration = Duration(hours: 1);
-
-  // ───────────────────────── In-memory storage ──────────────────────
-  final Map<String, String> _latestOtp = {};
-  final Map<String, int> _retryUsed = {};
-  final Map<String, DateTime?> _expiredAt = {};
-  final Map<String, DateTime?> _resendAvailableAt = {};
-  final Map<String, DateTime?> _lockedUntil = {};
-
-  String? _currentKey;
-  late final Timer _ticker;
-
-  String _getCompositeKey(String shipTo, String transNo) => '$transNo-$shipTo';
+  final Box<OtpTrackingModel> _otpBox =
+      Hive.box<OtpTrackingModel>(kOtpTrackingBox);
+  Timer? _timer;
+  int _cooldown = 0;
+  int _retryCount = 0;
+  static const int _maxRetries = 4;
+  static const int _initialTimer = 10; // 3 Menit
 
   // ───────────────────────── Constructor ────────────────────────────
-  OtpBloc({required this.repository}) : super(const OtpInitial()) {
-    final box = Hive.box('otp_state');
-    for (var entry in box.toMap().entries) {
-      final k = entry.key.toString();
-      if (k.startsWith('otp_')) {
-        final key = k.replaceFirst('otp_', '');
-        _latestOtp[key] = entry.value as String;
-      }
-      if (k.startsWith('expiredAt_')) {
-        final key = k.replaceFirst('expiredAt_', '');
-        _expiredAt[key] = DateTime.parse(entry.value as String);
-      }
-      if (k.startsWith('retryCount_')) {
-        final key = k.replaceFirst('retryCount_', '');
-        _retryUsed[key] = entry.value as int;
-      }
-      if (k.startsWith('resendAt_')) {
-        final key = k.replaceFirst('resendAt_', '');
-        _resendAvailableAt[key] = DateTime.parse(entry.value as String);
-      }
-      if (k.startsWith('lockedUntil_')) {
-        final key = k.replaceFirst('lockedUntil_', '');
-        _lockedUntil[key] = DateTime.parse(entry.value as String);
-      }
-    }
-
+  OtpBloc({required this.repository}) : super(OtpInitial()) {
+    on<CheckOtpStatus>(_onCheckOtpStatus);
     on<RequestOtp>(_onRequestOtp);
     on<ResendOtp>(_onResendOtp);
     on<VerifyOtp>(_onVerifyOtp);
-    on<OtpTick>(_onTick);
-
-    // Timer tick tiap 1 detik
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_currentKey != null) {
-        final parts = _currentKey!.split('-');
-        if (parts.length == 2) {
-          add(OtpTick(parts[0], parts[1]));
-        }
-      }
-    });
+    on<OtpTimerTicked>(_onTimerTicked);
+    on<ResetOtp>(_onResetOtp);
   }
 
   // ─────────────────────── Event handlers ───────────────────────────
 
-  /// Kirim OTP pertama kali atau fetch status dari server
-  Future<void> _onRequestOtp(RequestOtp e, Emitter<OtpState> emit) async {
-    final key = _getCompositeKey(e.shipTo, e.transNo);
+  void _onCheckOtpStatus(CheckOtpStatus event, Emitter<OtpState> emit) {
+    final String hiveKey = event.transNo
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final OtpTrackingModel trackingEntry =
+        _otpBox.get(hiveKey) ?? OtpTrackingModel(transNo: hiveKey);
 
-    // 🚩 1. Kalau user masih lock
-    if (_isLocked(key)) {
-      _currentKey = key;
-      return emit(OtpLocked(_lockedUntil[key]!.difference(DateTime.now())));
+    final DateTime now = DateTime.now();
+    final DateTime? lastRequest = trackingEntry.lastRequestTime;
+    _retryCount = trackingEntry.retryCount;
+    bool isExpiredOneHour = false;
+
+    // Cek Reset 1 Jam
+    if (lastRequest != null) {
+      if (now.difference(lastRequest).inSeconds >= 10) {
+        isExpiredOneHour = true;
+      }
     }
 
-    // 🚩 2. Kalau user cuma "fetch status" (isFirst=0)
-    if (e.isFirst == '0') {
-      final otp = _latestOtp[key];
-      final expired = _expiredAt[key];
+    if (isExpiredOneHour && !event.hasExistingPhoto) {
+      print("🕒 [OTP] Expired > 1 Jam & No Photo -> AUTO RESET.");
+      _performReset(hiveKey, trackingEntry);
+      emit(OtpInitial());
+      return; // Selesai, user langsung bisa minta OTP
+    }
 
-      if (otp != null && expired != null) {
-        if (DateTime.now().isBefore(expired)) {
-          _currentKey = key;
-          emit(_buildSentState(key));
-          return;
-        }
-
-        // 🚩 Kalau OTP expired → reset semua supaya bisa mulai dari nol
-        _cleanup(key);
-        _retryUsed[key] = 0;
-        _lockedUntil[key] = null;
-
-        emit(const OtpInitial());
+    if (!isExpiredOneHour && lastRequest != null && _retryCount > 0) {
+      final int secondsPassed = now.difference(lastRequest).inSeconds;
+      if (secondsPassed < _initialTimer) {
+        _cooldown = _initialTimer - secondsPassed;
+        _startTimer();
+        emit(OtpSent(
+            cooldown: _cooldown,
+            retryLeft: _maxRetries - _retryCount,
+            canReset: false));
         return;
       }
-
-      // Kalau cache kosong → jangan langsung kirim OTP
-      emit(const OtpInitial());
-      return;
     }
 
-    // 🚩 3. Kalau user memang minta OTP baru (isFirst=1)
-    emit(const OtpLoading());
-    final res = await repository.sendOtp(e.transNo, e.shipTo, '1');
-    if (res == null) return emit(const OtpError('Gagal mengirim OTP'));
-    _currentKey = key;
-
-    if (res['otp'] == "") {
-      emit(const OtpInitial());
+    if (_retryCount >= _maxRetries) {
+      // Limit habis, tapi kalau expired, user bisa pilih reset
+      emit(OtpSent(cooldown: 0, retryLeft: 0, canReset: isExpiredOneHour));
+    } else if (_retryCount > 0) {
+      // Timer habis, retry masih ada
+      emit(OtpSent(
+          cooldown: 0,
+          retryLeft: _maxRetries - _retryCount,
+          canReset: isExpiredOneHour));
     } else {
-      _hydrateFromServer(key, res, resetCooldown: true);
-      emit(_buildSentState(key));
+      emit(OtpInitial());
     }
+  }
+
+  void _performReset(String hiveKey, OtpTrackingModel entry) {
+    entry.retryCount = 0;
+    entry.lastRequestTime = null;
+    _otpBox.put(hiveKey, entry);
+
+    _retryCount = 0;
+    _cooldown = 0;
+    _timer?.cancel();
+  }
+
+  void _onResetOtp(ResetOtp event, Emitter<OtpState> emit) {
+    final String hiveKey =
+        event.transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final OtpTrackingModel trackingEntry =
+        _otpBox.get(hiveKey) ?? OtpTrackingModel(transNo: hiveKey);
+
+    _performReset(hiveKey, trackingEntry); // Panggil helper
+
+    emit(OtpInitial());
+  }
+
+  /// Kirim OTP pertama kali atau fetch status dari server
+  Future<void> _onRequestOtp(RequestOtp event, Emitter<OtpState> emit) async {
+    _startOptimisticFlow(event.transNo, event.shipTo, '1', emit);
   }
 
   /// Resend OTP — aturan sama seperti request, tapi menambah retryUsed
-  Future<void> _onResendOtp(ResendOtp e, Emitter<OtpState> emit) async {
-    final key = _getCompositeKey(e.shipTo, e.transNo);
+  Future<void> _onResendOtp(ResendOtp event, Emitter<OtpState> emit) async {
+    _startOptimisticFlow(event.transNo, event.shipTo, '0', emit);
+  }
 
-    if (_isLocked(key)) {
-      return emit(OtpLocked(_lockedUntil[key]!.difference(DateTime.now())));
+  void _startOptimisticFlow(
+      String transNo, String shipTo, String isFirst, Emitter<OtpState> emit) {
+    final String hiveKey =
+        transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+    OtpTrackingModel trackingEntry =
+        _otpBox.get(hiveKey) ?? OtpTrackingModel(transNo: hiveKey);
+
+    final DateTime now = DateTime.now();
+    final DateTime? lastRequest = trackingEntry.lastRequestTime;
+
+    if (lastRequest != null) {
+      final difference = now.difference(lastRequest);
+      if (difference.inHours >= 1) {
+        // RESET COUNTER JIKA SUDAH > 1 JAM
+        trackingEntry.retryCount = 0;
+        print("🕒 OTP Reset: Sudah 1 jam berlalu.");
+      }
     }
-    if (!_canResend(key)) return;
 
-    emit(const OtpLoading());
-
-    final res = await repository.sendOtp(e.transNo, e.shipTo, e.isFirst);
-    if (res == null) return emit(const OtpError('Gagal mengirim OTP'));
-    _currentKey = key;
-
-    _retryUsed[key] = (_retryUsed[key] ?? 0) + 1;
-    _hydrateFromServer(key, res, resetCooldown: true);
-
-    if ((_retryUsed[key] ?? 0) >= _maxResend) {
-      final lockedUntil = DateTime.now().add(_lockDuration);
-      _lockedUntil[key] = lockedUntil;
-      Hive.box('otp_state')
-          .put('lockedUntil_$key', lockedUntil.toIso8601String());
-      return emit(OtpLocked(_lockDuration));
+    // A. Cek Limit
+    if (trackingEntry.retryCount >= _maxRetries) {
+      // Limit Habis -> Emit state dengan retryLeft 0 agar UI memunculkan tombol Lokasi
+      _retryCount = trackingEntry.retryCount;
+      emit(OtpSent(cooldown: 0, retryLeft: 0));
+      return;
     }
 
-    emit(_buildSentState(key));
+    // Update Data
+    _retryCount = trackingEntry.retryCount + 1;
+    trackingEntry.retryCount = _retryCount;
+    trackingEntry.lastRequestTime = DateTime.now();
+    _otpBox.put(hiveKey, trackingEntry);
+
+    // Set Timer Baru
+    _cooldown = _initialTimer;
+    _startTimer();
+
+    // Emit State
+    emit(OtpSent(cooldown: _cooldown, retryLeft: _maxRetries - _retryCount));
+
+    // Fire API
+    repository.sendOtp(transNo, shipTo, isFirst);
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      add(const OtpTimerTicked());
+    });
+  }
+
+  void _onTimerTicked(OtpTimerTicked event, Emitter<OtpState> emit) {
+    if (_cooldown > 0) {
+      _cooldown--;
+      emit(OtpSent(cooldown: _cooldown, retryLeft: _maxRetries - _retryCount));
+    } else {
+      _timer?.cancel();
+      // Timer habis, cooldown 0 -> Tombol Resend aktif
+      emit(OtpSent(cooldown: 0, retryLeft: _maxRetries - _retryCount));
+    }
   }
 
   /// Verifikasi kode yang diketik user
-  void _onVerifyOtp(VerifyOtp e, Emitter<OtpState> emit) {
-    final key = _getCompositeKey(e.shipTo, e.transNo);
-    final serverOtp = _latestOtp[key];
+  Future<void> _onVerifyOtp(VerifyOtp event, Emitter<OtpState> emit) async {
+    emit(OtpLoading());
 
-    if (_isLocked(key)) {
-      if (serverOtp != null && serverOtp == e.otp.trim()) {
-        _cleanup(key);
-        emit(const OtpVerified());
+    try {
+      final isValid =
+          await repository.validateOtp(event.transNo, event.shipTo, event.otp);
+
+      if (isValid) {
+        _timer?.cancel();
+        emit(OtpVerified());
       } else {
-        final remaining = _lockedUntil[key]!.difference(DateTime.now());
-        if (!remaining.isNegative) {
-          emit(OtpLocked(remaining, temporaryError: 'Kode OTP salah'));
-        }
+        // Gagal: Emit Error dulu buat Snackbar
+        emit(const OtpError("Kode OTP Salah. Silakan cek lagi."));
+        // Lalu Balik ke Sent agar timer tetap kelihatan jalan
+        emit(
+            OtpSent(cooldown: _cooldown, retryLeft: _maxRetries - _retryCount));
       }
-      return;
+    } catch (e) {
+      emit(OtpError(e.toString()));
+      emit(OtpSent(cooldown: _cooldown, retryLeft: _maxRetries - _retryCount));
     }
-
-    if (_expiredAt.containsKey(key) &&
-        DateTime.now().isAfter(_expiredAt[key]!)) {
-      emit(const OtpExpired());
-      return;
-    }
-    if (serverOtp == null) {
-      emit(const OtpError('Silakan minta OTP terlebih dahulu'));
-      return;
-    }
-
-    if (serverOtp == e.otp.trim()) {
-      _cleanup(key);
-      emit(const OtpVerified());
-    } else {
-      final currentState = state;
-      if (currentState is OtpSent) {
-        emit(OtpError(
-          'Kode OTP salah, silahkan masukan ulang menggunakan kode yang benar',
-          secondsRemaining: currentState.secondsRemaining,
-          resendCooldown: currentState.resendCooldown,
-          retryLeft: currentState.retryLeft,
-          hasOtp: currentState.hasOtp,
-        ));
-      } else {
-        emit(const OtpError(
-            'Kode OTP salah, silahkan masukan ulang menggunakan kode yang benar'));
-      }
-    }
-  }
-
-  /// Tick 1-detik untuk update countdown
-  void _onTick(OtpTick e, Emitter<OtpState> emit) {
-    final key = _getCompositeKey(e.shipTo, e.transNo);
-    if (key != _currentKey) return;
-
-    if (state is OtpLocked) {
-      final remaining = _lockedUntil[key]!.difference(DateTime.now());
-      if (remaining.isNegative) {
-        _lockedUntil.remove(key);
-        Hive.box('otp_state').delete('lockedUntil_$key');
-        emit(_buildSentState(key));
-      } else {
-        emit(OtpLocked(remaining));
-      }
-      return;
-    }
-
-    if (state is OtpSent) emit(_buildSentState(key));
-
-    if (state is OtpError) {
-      final currentMessage = (state as OtpError).message;
-      final now = DateTime.now();
-      final secondsRemaining =
-          max(0, (_expiredAt[key] ?? now).difference(now).inSeconds);
-      final resendCooldown =
-          max(0, (_resendAvailableAt[key] ?? now).difference(now).inSeconds);
-      final retryLeft = max(0, _maxResend - (_retryUsed[key] ?? 0));
-      final hasOtp = _latestOtp[key]?.isNotEmpty ?? false;
-
-      emit(OtpError(
-        currentMessage,
-        secondsRemaining: secondsRemaining,
-        resendCooldown: resendCooldown,
-        retryLeft: retryLeft,
-        hasOtp: hasOtp,
-      ));
-    }
-  }
-
-  // ─────────────────────── Helper methods ───────────────────────────
-
-  void _hydrateFromServer(String key, Map<String, dynamic> res,
-      {required bool resetCooldown}) {
-    final otpStr = (res['otp'] as String).trim();
-    final expiredAt = res['expired_date'] as DateTime;
-    final retryCount = res['retry_count'] as int;
-
-    _latestOtp[key] = otpStr;
-    _expiredAt[key] = expiredAt;
-    _retryUsed[key] = retryCount;
-
-    final box = Hive.box('otp_state');
-    box.put('otp_$key', otpStr);
-    box.put('expiredAt_$key', expiredAt.toIso8601String());
-    box.put('retryCount_$key', retryCount);
-
-    if (resetCooldown && otpStr.isNotEmpty) {
-      _resendAvailableAt[key] = expiredAt.subtract(const Duration(minutes: 57));
-      box.put('resendAt_$key', _resendAvailableAt[key]!.toIso8601String());
-    } else if (_resendAvailableAt[key] == null) {
-      _resendAvailableAt[key] = DateTime.now();
-      box.put('resendAt_$key', _resendAvailableAt[key]!.toIso8601String());
-    }
-
-    if (_retryUsed[key]! >= _maxResend) {
-      final lockedUntil = DateTime.now().add(_lockDuration);
-      _lockedUntil[key] = lockedUntil;
-      box.put('lockedUntil_$key', lockedUntil.toIso8601String());
-    }
-  }
-
-  bool _isLocked(String key) =>
-      DateTime.now().isBefore(_lockedUntil[key] ?? DateTime(1970));
-
-  bool _canResend(String key) =>
-      DateTime.now().isAfter(_resendAvailableAt[key] ?? DateTime(1970)) &&
-      (_retryUsed[key] ?? 0) < _maxResend;
-
-  OtpSent _buildSentState(String key) {
-    final now = DateTime.now();
-    final secondsRemaining = max(0, _expiredAt[key]!.difference(now).inSeconds);
-    final resendCooldown =
-        max(0, _resendAvailableAt[key]!.difference(now).inSeconds);
-    final retryLeft = max(0, _maxResend - (_retryUsed[key] ?? 0));
-    final hasOtp = _latestOtp[key]?.isNotEmpty ?? false;
-
-    return OtpSent(
-      secondsRemaining: secondsRemaining,
-      resendCooldown: resendCooldown,
-      retryLeft: retryLeft,
-      hasOtp: hasOtp,
-    );
-  }
-
-  void _cleanup(String key) {
-    _latestOtp.remove(key);
-    _retryUsed.remove(key);
-    _expiredAt.remove(key);
-    _resendAvailableAt.remove(key);
-    _lockedUntil.remove(key);
-
-    final box = Hive.box('otp_state');
-    box.delete('otp_$key');
-    box.delete('expiredAt_$key');
-    box.delete('retryCount_$key');
-    box.delete('resendAt_$key');
-    box.delete('lockedUntil_$key');
-
-    if (key == _currentKey) _currentKey = null;
   }
 
   @override
   Future<void> close() {
-    _ticker.cancel();
+    _timer?.cancel();
     return super.close();
   }
 }

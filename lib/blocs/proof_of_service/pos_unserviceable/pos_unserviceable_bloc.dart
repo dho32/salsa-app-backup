@@ -11,14 +11,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../../components/services/hive_clear_service.dart';
 import '../../../components/services/watermark_service.dart';
-import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
-import '../../../models/proof_of_service/pos_transaction_info_model.dart';
 import '../../../models/proof_of_service/pos_unserviceable_model.dart';
-import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../../screens/common/services/confirmation_service.dart';
@@ -103,8 +99,8 @@ class PosUnserviceableBloc
         emit(state.copyWith(technicianName: initialTechnician1));
       }
     } catch (e) {
-      print(
-          "🔴 Draft lama untuk $transNo tidak kompatibel. Menghapus draft rusak...");
+      // print(
+      //     "🔴 Draft lama untuk $transNo tidak kompatibel. Menghapus draft rusak...");
       _draftBox.delete(transNo);
       final String initialTechnician1 = (_userType == 'WH') ? _userName : '';
       emit(state.copyWith(technicianName: initialTechnician1));
@@ -134,7 +130,7 @@ class PosUnserviceableBloc
           technicianName: state.technicianName,
         );
         _draftBox.put(transNo, draft);
-        print("💾 Draft untuk $transNo berhasil disimpan ke Hive.");
+        // print("💾 Draft untuk $transNo berhasil disimpan ke Hive.");
       },
     );
   }
@@ -200,7 +196,9 @@ class PosUnserviceableBloc
 
       // 5. Ambil GPS (Untuk Metadata)
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       // 6. Simpan ke State
@@ -410,6 +408,6 @@ class PosUnserviceableBloc
 
     await ConfirmationService().processQueue();
 
-    print("🧹 Semua data Hive untuk transaksi $transNo telah dibersihkan.");
+    // print("🧹 Semua data Hive untuk transaksi $transNo telah dibersihkan.");
   }
 }

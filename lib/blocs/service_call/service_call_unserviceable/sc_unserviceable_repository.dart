@@ -3,7 +3,6 @@ import 'dart:developer';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:salsa/components/shared_function.dart';
-import 'package:salsa/models/proof_of_service/pos_unserviceable_model.dart';
 import 'package:salsa/models/service_call/sc_unserviceable_model.dart'; // Bisa reuse model ini
 
 // Ekstensi toJson bisa dibuat di file terpisah atau di sini

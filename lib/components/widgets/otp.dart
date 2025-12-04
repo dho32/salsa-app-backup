@@ -24,6 +24,7 @@ class OtpDialog extends StatefulWidget {
   final double storeLat;
   final double storeLong;
   final VoidCallback onVerified;
+  final CapturedImageDetail? initialPhoto;
 
   const OtpDialog({
     super.key,
@@ -33,6 +34,7 @@ class OtpDialog extends StatefulWidget {
     required this.storeLat,
     required this.storeLong,
     required this.onVerified,
+    this.initialPhoto,
   });
 
   @override
@@ -42,18 +44,26 @@ class OtpDialog extends StatefulWidget {
 class _OtpDialogState extends State<OtpDialog> {
   final _pinController = TextEditingController();
   final _focusNode = FocusNode();
+
   bool _isLocationMode = false;
+  bool _isLoading = false;
   bool _isErrorDialogShowing = false;
 
   @override
   void initState() {
     super.initState();
-    context.read<OtpBloc>().add(RequestOtp(widget.transNo, widget.shipTo, '0'));
+    // 1. CEK STATUS DULU (Fix Bug 2: Resume Timer)
+    context.read<OtpBloc>().add(CheckOtpStatus(
+        widget.transNo,
+        hasExistingPhoto: widget.initialPhoto != null
+    ));
+
+    // Load data lokasi untuk persiapan jika switch ke mode lokasi
     context.read<LocationValidationBloc>().add(LoadLocationPhoto(
-          widget.transNo,
-          widget.storeLat,
-          widget.storeLong,
-        ));
+      widget.transNo,
+      widget.storeLat,
+      widget.storeLong,
+    ));
   }
 
   @override
@@ -89,206 +99,182 @@ class _OtpDialogState extends State<OtpDialog> {
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: !_isLocationMode
-          ? BlocConsumer<OtpBloc, OtpState>(
-              listenWhen: (_, current) =>
-                  current is OtpVerified || current is OtpError,
-              listener: (context, state) {
-                if (state is OtpVerified) {
-                  widget.onVerified();
-                  Navigator.pop(context);
-                }
-                if (state is OtpError) {
-                  if (!_isErrorDialogShowing) {
-                    _isErrorDialogShowing = true; // Set flag sebelum tampilkan
-                    if (_pinController.length >= 6) {
-                      // Cek panjang >= 6 lebih aman
-                      _pinController.clear();
-                      // Minta fokus kembali setelah clear agar user bisa langsung ketik
-                      _focusNode.requestFocus();
-                    }
-                    showFailureDialog(context, "OTP salah, coba lagi.")
-                        .then((_) {
-                      // ✅ RESET FLAG SETELAH DIALOG DITUTUP
-                      if (mounted) {
-                        // Pastikan widget masih ada
-                        setState(() {
-                          _isErrorDialogShowing = false;
-                        });
-                      }
-                    });
-                  } else {
-                    print(
-                        "ℹ️ OtpError received, but dialog already showing. Ignoring."); // Optional log
-                  }
-                }
-              },
-              builder: (context, state) {
-                return Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Verifikasi OTP',
-                          style: TextStyle(
-                              fontSize: 22, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Masukkan 6 digit kode yang dikirim ke email ${_maskEmail(widget.email)}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.grey),
+      // PILIH KONTEN: Mode Lokasi atau Mode OTP
+      child: _isLocationMode
+          ? _buildLocationValidationUI()
+          : _buildOtpContainer(defaultPinTheme),
+    );
+  }
+
+  Widget _buildOtpContainer(PinTheme defaultPinTheme) {
+    return BlocListener<OtpBloc, OtpState>(
+      listenWhen: (_, current) => current is OtpVerified || current is OtpError || current is OtpLoading || current is OtpSent,
+      listener: (context, state) {
+
+        if (state is OtpLoading) {
+          setState(() => _isLoading = true);
+        } else if (state is OtpSent) {
+          setState(() => _isLoading = false);
+        } else if (state is OtpVerified) {
+          widget.onVerified();
+          Navigator.pop(context);
+        } else if (state is OtpError) {
+          setState(() => _isLoading = false);
+          if (!_isErrorDialogShowing) {
+            _isErrorDialogShowing = true;
+            if (_pinController.length >= 6) {
+              _pinController.clear();
+              _focusNode.requestFocus();
+            }
+            showFailureDialog(context, state.message).then((_) {
+              if (mounted) setState(() => _isErrorDialogShowing = false);
+            });
+          }
+        }
+      },
+      child: BlocBuilder<OtpBloc, OtpState>(
+        builder: (context, state) {
+
+          // TAMPILAN 1: AWAL (Fix Bug 1: Tombol Minta OTP dulu)
+          if (state is OtpInitial) {
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Verifikasi OTP', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  const Text("Kode OTP akan dikirim ke email Toko.", textAlign: TextAlign.center),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        context.read<OtpBloc>().add(RequestOtp(widget.transNo, widget.shipTo, '1'));
+                      },
+                      child: const Text("Minta Kode OTP"),
+                    ),
+                  )
+                ],
+              ),
+            );
+          }
+
+          // TAMPILAN 2: TIMER BERJALAN (Input PIN)
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_isLoading)
+                  const CircularProgressIndicator()
+                else ...[
+                  const Text('Verifikasi OTP', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('Masukkan kode OTP dari email: ${_maskEmail(widget.email)}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 24),
+                  Pinput(
+                    length: 6,
+                    controller: _pinController,
+                    focusNode: _focusNode,
+                    autofocus: true,
+                    defaultPinTheme: defaultPinTheme,
+                    focusedPinTheme: defaultPinTheme.copyWith(
+                      decoration: defaultPinTheme.decoration!.copyWith(
+                        border: Border.all(color: Theme.of(context).primaryColor),
                       ),
-                      const SizedBox(height: 24),
-                      Pinput(
-                        length: 6,
-                        controller: _pinController,
-                        focusNode: _focusNode,
-                        autofocus: true,
-                        defaultPinTheme: defaultPinTheme,
-                        focusedPinTheme: defaultPinTheme.copyWith(
-                          decoration: defaultPinTheme.decoration!.copyWith(
-                            border: Border.all(
-                                color: Theme.of(context).primaryColor),
-                          ),
-                        ),
-                        errorPinTheme: defaultPinTheme.copyWith(
-                          decoration: defaultPinTheme.decoration!.copyWith(
-                            border: Border.all(color: Colors.red),
-                          ),
-                        ),
-                        onCompleted: (pin) {
-                          context.read<OtpBloc>().add(
-                              VerifyOtp(widget.transNo, widget.shipTo, pin));
-                        },
+                    ),
+                    errorPinTheme: defaultPinTheme.copyWith(
+                      decoration: defaultPinTheme.decoration!.copyWith(
+                        border: Border.all(color: Colors.red),
                       ),
-                      const SizedBox(height: 16),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: _buildResendArea(state),
-                      ),
-                      if (state is OtpLocked ||
-                          (state is OtpSent && state.retryLeft == 0))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16.0),
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.location_on),
-                            label: const Text("Validasi Menggunakan Lokasi"),
-                            onPressed: () {
-                              setState(() => _isLocationMode = true);
-                            },
-                          ),
-                        ),
-                    ],
+                    ),
+                    onCompleted: (pin) {
+                      // Hit API Validasi (Backend)
+                      context.read<OtpBloc>().add(VerifyOtp(widget.transNo, widget.shipTo, pin));
+                    },
                   ),
-                );
-              },
-            )
-          : _buildLocationValidationUI(),
+                  const SizedBox(height: 16),
+
+                  // Bagian Timer / Resend / Tombol Lokasi
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _buildResendArea(state),
+                  ),
+                ]
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildResendArea(OtpState state) {
-    if (state is OtpInitial) {
-      return TextButton(
-        key: const ValueKey('request'),
-        onPressed: () {
-          context
-              .read<OtpBloc>()
-              .add(ResendOtp(widget.transNo, widget.shipTo, '1'));
-        },
-        child: const Text('Minta OTP'),
-      );
-    }
-
-    if (state is OtpLoading) {
-      return const SizedBox(
-        height: 24,
-        width: 24,
-        child: CircularProgressIndicator(strokeWidth: 3),
-      );
-    }
-
     if (state is OtpSent) {
-      if (state.resendCooldown > 0) {
-        return Text('Kirim ulang dalam ${state.resendCooldown} detik',
-            style: const TextStyle(color: Colors.grey));
+      // Fix Bug 3: Jika retry habis, tombol Lokasi muncul permanen
+      if (state.retryLeft == 0) {
+        return Column(
+          key: const ValueKey('limit_reached'),
+          children: [
+            const Text("Batas permintaan OTP habis.", style: TextStyle(color: Colors.red)),
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                icon: const Icon(Icons.location_on, color: Colors.white),
+                label: const Text("Gunakan Validasi Lokasi", style: TextStyle(color: Colors.white)),
+                onPressed: () {
+                  setState(() => _isLocationMode = true);
+                },
+              ),
+            ),
+
+            if (state.canReset) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  child: const Text("Minta OTP Baru (Reset)"),
+                  onPressed: () {
+                    context.read<OtpBloc>().add(ResetOtp(widget.transNo));
+                  },
+                ),
+              ),
+            ]
+          ],
+        );
+      }
+
+      // KONDISI NORMAL: Timer Jalan
+      if (state.cooldown > 0) {
+        return Text('Kirim ulang dalam ${state.cooldown} detik',
+            key: const ValueKey('timer'),
+            style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold));
       } else {
+        // TOMBOL RESEND
         return TextButton(
+          key: const ValueKey('resend_btn'),
           onPressed: () {
             _pinController.clear();
-            context
-                .read<OtpBloc>()
-                .add(ResendOtp(widget.transNo, widget.shipTo, '1'));
+            context.read<OtpBloc>().add(ResendOtp(widget.transNo, widget.shipTo, '0'));
           },
           child: const Text('Tidak menerima kode? Kirim Ulang'),
         );
       }
     }
-
-    if (state is OtpLocked) {
-      return Text(
-        'Terlalu banyak mencoba. Coba validasi lokasi.',
-        style: const TextStyle(color: Colors.orange),
-      );
-    }
-
     return const SizedBox.shrink();
   }
 
-  Widget _buildPhotoInstructionCard() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                "Panduan Foto PIC",
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Colors.blue.shade800),
-              ),
-            ],
-          ),
-          const Divider(height: 12),
-          _buildInstructionItem(
-              "Wajah PIC terlihat jelas (Lepas Masker/Helm) dan menghadap kamera "),
-          _buildInstructionItem("Wajib berlatar belakang TOKO"),
-          _buildInstructionItem("Pencahayaan cukup & tidak buram"),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInstructionItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("• ", style: TextStyle(fontWeight: FontWeight.bold)),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
-        ],
-      ),
-    );
-  }
-
+  // --- UI VALIDASI LOKASI ---
   Widget _buildLocationValidationUI() {
     return BlocConsumer<LocationValidationBloc, LocationValidationState>(
       listener: (context, state) {
         if (state is LocationValidationSuccess) {
-          widget.onVerified(); // ✅ langsung submit
-          Navigator.pop(context); // ✅ close dialog
+          widget.onVerified(); // ✅ Langsung submit
+          Navigator.pop(context); // ✅ Close dialog
         }
         if (state is LocationValidationFailure) {
           showFailureDialog(context, state.message);
@@ -299,10 +285,10 @@ class _OtpDialogState extends State<OtpDialog> {
         double? distanceToShow;
         if (state is LocationPhotoLoaded) {
           photoToShow = state.photo;
-          distanceToShow = state.distance; // Ambil jarak dari state Loaded
+          distanceToShow = state.distance;
         } else if (state is LocationValidationFailure) {
           photoToShow = state.photo;
-          distanceToShow = state.distance; // Ambil jarak dari state Failure
+          distanceToShow = state.distance;
         }
         return Padding(
           padding: const EdgeInsets.all(24.0),
@@ -368,12 +354,12 @@ class _OtpDialogState extends State<OtpDialog> {
                 ElevatedButton(
                   onPressed: () {
                     context.read<LocationValidationBloc>().add(
-                          SubmitLocationValidation(
-                            widget.transNo,
-                            widget.storeLat,
-                            widget.storeLong,
-                          ),
-                        );
+                      SubmitLocationValidation(
+                        widget.transNo,
+                        widget.storeLat,
+                        widget.storeLong,
+                      ),
+                    );
                   },
                   child: const Text("Submit Validasi Lokasi"),
                 ),
@@ -386,10 +372,10 @@ class _OtpDialogState extends State<OtpDialog> {
                     context
                         .read<LocationValidationBloc>()
                         .add(TakeLocationPhoto(
-                          widget.transNo,
-                          widget.storeLat,
-                          widget.storeLong,
-                        ));
+                      widget.transNo,
+                      widget.storeLat,
+                      widget.storeLong,
+                    ));
                   },
                 ),
               ],
@@ -397,6 +383,54 @@ class _OtpDialogState extends State<OtpDialog> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPhotoInstructionCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                "Panduan Foto PIC",
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.blue.shade800),
+              ),
+            ],
+          ),
+          const Divider(height: 12),
+          _buildInstructionItem(
+              "Wajah PIC terlihat jelas (Lepas Masker/Helm) dan menghadap kamera "),
+          _buildInstructionItem("Wajib berlatar belakang TOKO"),
+          _buildInstructionItem("Pencahayaan cukup & tidak buram"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("• ", style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
     );
   }
 }

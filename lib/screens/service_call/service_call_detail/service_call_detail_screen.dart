@@ -21,7 +21,6 @@ import '../../../components/constants.dart';
 import '../../../components/shared_widgets.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
-import '../service_call_report_issue/service_call_report_issue_screen.dart';
 import 'components/service_call_detail_body_mobile.dart';
 
 

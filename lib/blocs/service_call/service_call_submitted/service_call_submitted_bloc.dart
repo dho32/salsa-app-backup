@@ -97,19 +97,17 @@ class ServiceCallSubmittedBloc
     ScFinalValidationRequested event,
     Emitter<ServiceCallSubmittedState> emit,
   ) async {
+    emit(ScFinalValidationLoading());
     final bool needsAho = await _checkIfAhoIsNeeded(
       event.transNo,
       event.problemSources,
     );
 
-    log("--- Hasil Pengecekan AHO: needsAho = $needsAho ---");
     if (needsAho) {
-      log("--- EMITTING ScProceedToAhoDialog ---");
       emit(ScProceedToAhoDialog(event.formState, initialAho: _cachedAhoNumber));
     } else {
-      log("--- EMITTING ScProceedToOtpDialog (karena needsAho false) ---");
       emit(ScProceedToOtpDialog(event.formState,
-          ahoNumber: null)); // <-- Lanjut ke OTP
+          ahoNumber: null));
     }
   }
 
@@ -194,7 +192,7 @@ class ServiceCallSubmittedBloc
       } else {
         emit(ValidationFailure(result['message'] ?? 'Gagal submit'));
       }
-    } catch (e, stacktrace) {
+    } catch (e) {
       emit(ValidationFailure("Error: ${e.toString()}"));
     }
   }

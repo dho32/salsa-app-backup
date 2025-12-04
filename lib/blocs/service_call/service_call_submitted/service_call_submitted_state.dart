@@ -55,3 +55,5 @@ class ScProceedToAhoDialog extends ServiceCallSubmittedState {
   final String? initialAho;
   ScProceedToAhoDialog(this.formState, {this.initialAho});
 }
+
+class ScFinalValidationLoading extends ServiceCallSubmittedState {}

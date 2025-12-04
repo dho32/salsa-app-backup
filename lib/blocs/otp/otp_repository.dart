@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../../components/shared_function.dart';
 
 class OtpRepository {
-  Future<Map<String, dynamic>?> sendOtp(
+  Future<void> sendOtp(
       String transNo, String shipTo, String isFirst) async {
     final params = {
       'trans_no': transNo,
@@ -11,18 +11,47 @@ class OtpRepository {
       'is_first': isFirst
     };
     Uri uri = getUrl(pathUrl: 'otp/request', params: params);
-    final response = await http.get(uri);
 
-    if (response.statusCode != 200) return null;
+    print(uri);
 
-    final json = jsonDecode(response.body);
-    if (json['status'] != 'OK') return null;
+    try {
+      await http.get(uri).timeout(const Duration(seconds: 30));
+    } catch (e) {
+      print("⚠️ Request OTP Background Error (Ignored): $e");
+    }
+  }
 
-    final result = json['result'];
-    return {
-      'otp': result['otp'].toString().trim(),
-      'expired_date': DateTime.parse(result['expired_date']).toLocal(),
-      'retry_count': int.parse(result['retry_count'].toString()),
+  Future<bool> validateOtp(String transNo, String shipTo, String otpCode) async {
+    final body = {
+      "trans_no": transNo,
+      "ship_to": shipTo,
+      "otp_code": otpCode,
     };
+
+    Uri uri = getUrl(pathUrl: 'otp/validate');
+
+    print(uri);
+
+    try {
+      print("masuk hit");
+      final response = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body)
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final status = json['status']?.toString().toUpperCase() ?? '';
+        final message = json['message']?.toString().toUpperCase() ?? '';
+
+        print(status);
+        print(message);
+        return status == 'OK' && message == 'SUCCESS';
+      }
+      return false;
+    } catch (e) {
+      throw Exception("Gagal validasi ke server: $e");
+    }
   }
 }
