@@ -174,3 +174,21 @@ class UpdateNoteRemark extends PosValidationEvent {
   @override
   List<Object> get props => [remark];
 }
+
+class AddRemarkPhoto extends PosValidationEvent {
+  final CapturedImageDetail imageDetail;
+
+  const AddRemarkPhoto(this.imageDetail);
+
+  @override
+  List<Object?> get props => [imageDetail];
+}
+
+class RemoveRemarkPhoto extends PosValidationEvent {
+  final String imagePath;
+
+  const RemoveRemarkPhoto(this.imagePath);
+
+  @override
+  List<Object?> get props => [imagePath];
+}

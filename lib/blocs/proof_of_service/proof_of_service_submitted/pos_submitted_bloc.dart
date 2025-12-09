@@ -6,7 +6,7 @@ import 'package:salsa/blocs/proof_of_service/proof_of_service_submitted/pos_subm
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/components/upload_s3_service.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
-import 'package:salsa/models/proof_of_service/pos_validasion_entry_model_ext.dart';
+import 'package:salsa/models/proof_of_service/pos_validation_entry_model_ext.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
 import '../../../components/services/hive_clear_service.dart';
@@ -180,6 +180,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             result['message'] ?? 'Gagal mengirim data validasi.'));
       }
     } catch (e) {
+      print("masuk sini");
       emit(PosValidationFailure("Terjadi error: ${e.toString()}"));
     }
   }

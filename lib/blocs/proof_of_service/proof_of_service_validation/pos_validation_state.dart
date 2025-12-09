@@ -28,6 +28,7 @@ class PosValidationLoaded extends PosValidationState {
   final String? pairedIndoorSerial;
   final String? note;
   final String? noteRemark;
+  final List<CapturedImageDetail>? remarkPhotos;
 
   const PosValidationLoaded({
     this.currentStep = 0,
@@ -44,6 +45,7 @@ class PosValidationLoaded extends PosValidationState {
     this.pairedIndoorSerial,
     this.note,
     this.noteRemark,
+    this.remarkPhotos = const [],
   });
 
   PosValidationLoaded copyWith({
@@ -61,6 +63,7 @@ class PosValidationLoaded extends PosValidationState {
     String? pairedIndoorSerial,
     String? note,
     String? noteRemark,
+    List<CapturedImageDetail>? remarkPhotos,
   }) {
     return PosValidationLoaded(
       currentStep: currentStep ?? this.currentStep,
@@ -78,6 +81,7 @@ class PosValidationLoaded extends PosValidationState {
       pairedIndoorSerial: pairedIndoorSerial ?? this.pairedIndoorSerial,
       note: note ?? this.note,
       noteRemark: noteRemark ?? this.noteRemark,
+      remarkPhotos: remarkPhotos ?? this.remarkPhotos,
     );
   }
 
@@ -97,6 +101,7 @@ class PosValidationLoaded extends PosValidationState {
         pairedIndoorSerial,
         note,
         noteRemark,
+        remarkPhotos,
       ];
 }
 

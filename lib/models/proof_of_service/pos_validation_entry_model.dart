@@ -48,6 +48,9 @@ class PosValidationEntryModel extends HiveObject {
   @HiveField(13)
   String? noteRemark;
 
+  @HiveField(14)
+  List<CapturedImageDetail>? remarkPhotos;
+
   PosValidationEntryModel({
     required this.transNo,
     required this.serialNo,
@@ -63,6 +66,7 @@ class PosValidationEntryModel extends HiveObject {
     required this.articleType,
     this.pairedSerialNo,
     this.noteRemark,
+    this.remarkPhotos,
   });
 
   factory PosValidationEntryModel.empty() {
@@ -81,6 +85,7 @@ class PosValidationEntryModel extends HiveObject {
       articleType: '',
       pairedSerialNo: '',
       noteRemark: '',
+      remarkPhotos: [],
     );
   }
 }

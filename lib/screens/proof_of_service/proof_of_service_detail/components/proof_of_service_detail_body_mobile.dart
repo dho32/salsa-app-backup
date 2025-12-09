@@ -1045,8 +1045,10 @@ class _ProofOfServiceDetailBodyMobileState
         ],
       ),
       trailing: Icon(iconData, color: iconColor, size: 28),
-      onTap: () =>
-          _navigateToValidation(context, header, detail, formState.tempIn),
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        _navigateToValidation(context, header, detail, formState.tempIn);
+      }
     );
   }
 

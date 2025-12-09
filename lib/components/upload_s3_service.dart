@@ -62,6 +62,9 @@ Future<UploadResult> uploadAllImagesToS3(
       ...entry.imagePathsBefore, ...entry.imagePathsAfter,
       ...entry.measurementsBefore.map((m) => m.capturedImage).whereType<CapturedImageDetail>(),
       ...entry.measurementsAfter.map((m) => m.capturedImage).whereType<CapturedImageDetail>(),
+      ...entry.remarkPhotosIndoorAfter ?? [],
+      ...entry.remarkPhotosOutdoorAfter ?? [],
+      ...entry.remarkPhotosOutdoorPsiAfter ?? [],
     ];
     for (final imageDetail in allUnitImages) {
       localFileMap[imageDetail.imagePath.split('/').last] = imageDetail.imagePath;
@@ -119,6 +122,7 @@ Future<UploadResult> uploadPosImagesToS3(
       ...entry.photosBefore,
       ...entry.photosAfter,
       ...entry.measurementsAfter.map((m) => m.capturedImage).whereType<CapturedImageDetail>(),
+      ...entry.remarkPhotos ?? [],
     ];
     for (final imageDetail in allUnitImages) {
       localFileMap[imageDetail.imagePath.split('/').last] = imageDetail.imagePath;

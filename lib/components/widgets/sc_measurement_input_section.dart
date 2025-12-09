@@ -1,7 +1,13 @@
+import 'dart:io';
+
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:salsa/components/widgets/remark_photo_picker.dart';
 import '../../../../../models/common/note_option.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
@@ -9,6 +15,9 @@ import '../../../../../blocs/service_call/validation_dropdown/validation_dropdow
 import '../../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../../models/common/measurement_entry.dart';
 import '../../../../../models/common/measurement_limits.dart';
+import '../../blocs/auth/auth_storage.dart';
+import '../../models/common/captured_image_detail.dart';
+import '../services/watermark_service.dart';
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
@@ -25,17 +34,25 @@ class ScMeasurementInputSection extends StatefulWidget {
   });
 
   @override
-  State<ScMeasurementInputSection> createState() => _ScMeasurementInputSectionState();
+  State<ScMeasurementInputSection> createState() =>
+      _ScMeasurementInputSectionState();
 }
 
 class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
   final Map<String, TextEditingController> _controllers = {};
   final TextEditingController _indoorRemarkController = TextEditingController();
-  final TextEditingController _outdoorRemarkController = TextEditingController();
-  final TextEditingController _outdoorPsiRemarkController = TextEditingController();
-  final TextEditingController _indoorNoteSearchController = TextEditingController();
-  final TextEditingController _outdoorNoteSearchController = TextEditingController();
-  final TextEditingController _outdoorPSINoteSearchController = TextEditingController();
+  final TextEditingController _outdoorRemarkController =
+      TextEditingController();
+  final TextEditingController _outdoorPsiRemarkController =
+      TextEditingController();
+  final TextEditingController _indoorNoteSearchController =
+      TextEditingController();
+  final TextEditingController _outdoorNoteSearchController =
+      TextEditingController();
+  final TextEditingController _outdoorPSINoteSearchController =
+      TextEditingController();
+
+  bool _isCapturingRemarkPhoto = false;
 
   @override
   void initState() {
@@ -71,24 +88,25 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         final initial = m.value == m.value.truncateToDouble()
             ? m.value.truncate().toString()
             : m.value.toStringAsFixed(2);
-        _controllers[m.measurementId] = TextEditingController(text: (initial == '0') ? '' : initial);
+        _controllers[m.measurementId] =
+            TextEditingController(text: (initial == '0') ? '' : initial);
       }
     }
   }
 
   void _initRemarkControllers() {
     final indoorM = widget.measurements.firstWhere(
-            (m) => m.measurementId == 'temperature',
+        (m) => m.measurementId == 'temperature',
         orElse: () => MeasurementEntry(measurementId: '', value: 0, unit: ''));
     if (indoorM.remark != null) _indoorRemarkController.text = indoorM.remark!;
 
     final outdoorM = widget.measurements.firstWhere(
-            (m) => m.measurementId == 'volt',
+        (m) => m.measurementId == 'volt',
         orElse: () => MeasurementEntry(measurementId: '', value: 0, unit: ''));
-    if (outdoorM.remark != null) _outdoorRemarkController.text = outdoorM.remark!;
+    if (outdoorM.remark != null)
+      _outdoorRemarkController.text = outdoorM.remark!;
 
-    final psiM = widget.measurements.firstWhere(
-            (m) => m.measurementId == 'psi',
+    final psiM = widget.measurements.firstWhere((m) => m.measurementId == 'psi',
         orElse: () => MeasurementEntry(measurementId: '', value: 0, unit: ''));
     if (psiM.remark != null) _outdoorPsiRemarkController.text = psiM.remark!;
   }
@@ -110,9 +128,91 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     }
   }
 
+  Future<void> _handlePickRemarkPhoto(
+      BuildContext context, NoteType noteType) async {
+    setState(() => _isCapturingRemarkPhoto = true);
+
+    try {
+      // 1. Bersihkan Cache
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
+      // 2. Buka Kamera
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        // 3. Prepare Watermark Data
+        final userData = await AuthStorage.getUser();
+        final technicianName = userData['name'] ?? 'Unknown';
+        final deviceModel = userData['device_model'] ?? 'Unknown Device';
+        final timestamp = DateTime.now();
+
+        final appDir = await getApplicationDocumentsDirectory();
+        final imagesDir = Directory(p.join(appDir.path, 'remark_photos'));
+        if (!await imagesDir.exists()) await imagesDir.create();
+
+        final targetPath = p.join(
+            imagesDir.path, 'RM_${timestamp.millisecondsSinceEpoch}.jpg');
+
+        // 4. Proses Watermark
+        final request = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: widget.transNo,
+          timestamp: timestamp,
+          technicianName: technicianName,
+          deviceModel: deviceModel,
+        );
+
+        final String? finalImagePath =
+            await WatermarkService.processImage(request);
+
+        if (finalImagePath == null) {
+          throw Exception("Gagal memproses watermark.");
+        }
+
+        // 5. Buat Object Foto
+        final capturedPhoto = CapturedImageDetail(
+          imagePath: finalImagePath,
+          timestamp: timestamp,
+          technicianName: technicianName,
+          deviceModel: deviceModel,
+          transNo: widget.transNo,
+          latitude: 0,
+          longitude: 0,
+          address: '',
+        );
+
+        // 6. Kirim ke BLoC
+        if (mounted) {
+          context.read<ValidationDropdownBloc>().add(AddRemarkPhoto(
+              noteType, capturedPhoto,
+              isBefore: widget.isBefore));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text("Error foto remark: $e"),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCapturingRemarkPhoto = false);
+    }
+  }
+
   Widget buildMeasurementWidget(MeasurementEntry mEntry) {
     final limits = widget.limitsMap[mEntry.measurementId];
-    if (limits == null) return Text("Error: Config for ${mEntry.measurementId} missing");
+    if (limits == null)
+      return Text("Error: Config for ${mEntry.measurementId} missing");
 
     final controller = _getController(mEntry);
 
@@ -134,16 +234,26 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         },
         onImageChanged: (newImage) {
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(mEntry.copyWith(capturedImage: newImage))
-              : UpdateMeasurementAfter(mEntry.copyWith(capturedImage: newImage));
+              ? UpdateMeasurementBefore(
+                  mEntry.copyWith(capturedImage: newImage))
+              : UpdateMeasurementAfter(
+                  mEntry.copyWith(capturedImage: newImage));
           context.read<ValidationDropdownBloc>().add(event);
         },
         isSkipEnabled: true,
         isSkipped: mEntry.isSkipped ?? false,
         onSkipChanged: (isSkipped) {
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(mEntry.copyWith(isSkipped: isSkipped, value: 0.0, capturedImage: null, remark: ''))
-              : UpdateMeasurementAfter(mEntry.copyWith(isSkipped: isSkipped, value: 0.0, capturedImage: null, remark: ''));
+              ? UpdateMeasurementBefore(mEntry.copyWith(
+                  isSkipped: isSkipped,
+                  value: 0.0,
+                  capturedImage: null,
+                  remark: ''))
+              : UpdateMeasurementAfter(mEntry.copyWith(
+                  isSkipped: isSkipped,
+                  value: 0.0,
+                  capturedImage: null,
+                  remark: ''));
           context.read<ValidationDropdownBloc>().add(event);
           if (isSkipped) {
             controller.clear();
@@ -161,7 +271,8 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
   NoteType _noteType(String measurementId) {
     if (measurementId == 'temperature') return NoteType.indoor;
-    if (measurementId == 'volt' || measurementId == 'ampere') return NoteType.outdoor;
+    if (measurementId == 'volt' || measurementId == 'ampere')
+      return NoteType.outdoor;
     return NoteType.outdoorPsi;
   }
 
@@ -176,13 +287,21 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     const outdoorElecIds = {'volt', 'ampere'};
     const outdoorPsiIds = {'psi'};
 
-    final indoorMeasurements = widget.measurements.where((m) => indoorIds.contains(m.measurementId)).toList();
-    final outdoorElecMeasurements = widget.measurements.where((m) => outdoorElecIds.contains(m.measurementId)).toList();
-    final outdoorPsiMeasurements = widget.measurements.where((m) => outdoorPsiIds.contains(m.measurementId)).toList();
+    final indoorMeasurements = widget.measurements
+        .where((m) => indoorIds.contains(m.measurementId))
+        .toList();
+    final outdoorElecMeasurements = widget.measurements
+        .where((m) => outdoorElecIds.contains(m.measurementId))
+        .toList();
+    final outdoorPsiMeasurements = widget.measurements
+        .where((m) => outdoorPsiIds.contains(m.measurementId))
+        .toList();
 
     final isIndoorSkipped = indoorMeasurements.any((m) => m.isSkipped ?? false);
-    final isOutdoorElecSkipped = outdoorElecMeasurements.any((m) => m.isSkipped ?? false);
-    final isOutdoorPsiSkipped = outdoorPsiMeasurements.any((m) => m.isSkipped ?? false);
+    final isOutdoorElecSkipped =
+        outdoorElecMeasurements.any((m) => m.isSkipped ?? false);
+    final isOutdoorPsiSkipped =
+        outdoorPsiMeasurements.any((m) => m.isSkipped ?? false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,20 +321,28 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           if (isIndoorSkipped)
             _buildNoteDropdown(
               context: context,
-              options: widget.isBefore ? blocState.noteIndoorBeforeOptions : blocState.noteIndoorAfterOptions,
-              selectedValue: widget.isBefore ? blocState.selectedIndoorNoteBefore : blocState.selectedIndoorNoteAfter,
+              options: widget.isBefore
+                  ? blocState.noteIndoorBeforeOptions
+                  : blocState.noteIndoorAfterOptions,
+              selectedValue: widget.isBefore
+                  ? blocState.selectedIndoorNoteBefore
+                  : blocState.selectedIndoorNoteAfter,
               searchController: _indoorNoteSearchController,
               label: 'Alasan Skip Pengukuran Indoor',
               remarkController: _indoorRemarkController,
+              noteType: NoteType.indoor,
               onChanged: (value) {
                 context.read<ValidationDropdownBloc>().add(
-                  NoteChanged(value, noteType: NoteType.indoor, isBefore: widget.isBefore),
-                );
+                      NoteChanged(value,
+                          noteType: NoteType.indoor, isBefore: widget.isBefore),
+                    );
               },
-              onRemarkChanged: (val) => _updateGroupRemark(val, indoorMeasurements),
+              onRemarkChanged: (val) =>
+                  _updateGroupRemark(val, indoorMeasurements),
             ),
         ],
-        if (outdoorElecMeasurements.isNotEmpty || outdoorPsiMeasurements.isNotEmpty) ...[
+        if (outdoorElecMeasurements.isNotEmpty ||
+            outdoorPsiMeasurements.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
@@ -242,16 +369,21 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                     ),
                     hint: const Text('Pilih Serial No. Outdoor'),
                     items: state.outdoorSerialNumbers
-                        .map((serial) => DropdownMenuItem(value: serial, child: Text(serial)))
+                        .map((serial) => DropdownMenuItem(
+                            value: serial, child: Text(serial)))
                         .toList(),
                     onChanged: isEnabled
                         ? (value) {
-                      if (value != null) {
-                        context.read<ValidationDropdownBloc>().add(SelectOutdoorSerial(value));
-                      }
-                    }
+                            if (value != null) {
+                              context
+                                  .read<ValidationDropdownBloc>()
+                                  .add(SelectOutdoorSerial(value));
+                            }
+                          }
                         : null,
-                    validator: (value) => value == null ? 'Serial No. Outdoor harus dipilih' : null,
+                    validator: (value) => value == null
+                        ? 'Serial No. Outdoor harus dipilih'
+                        : null,
                   );
                 }
                 return const SizedBox.shrink();
@@ -265,17 +397,25 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           if (isOutdoorElecSkipped)
             _buildNoteDropdown(
               context: context,
-              options: widget.isBefore ? blocState.noteOutdoorBeforeOptions : blocState.noteOutdoorAfterOptions,
-              selectedValue: widget.isBefore ? blocState.selectedOutdoorNoteBefore : blocState.selectedOutdoorNoteAfter,
+              options: widget.isBefore
+                  ? blocState.noteOutdoorBeforeOptions
+                  : blocState.noteOutdoorAfterOptions,
+              selectedValue: widget.isBefore
+                  ? blocState.selectedOutdoorNoteBefore
+                  : blocState.selectedOutdoorNoteAfter,
               searchController: _outdoorNoteSearchController,
               label: 'Alasan Skip (Volt/Ampere)',
               remarkController: _outdoorRemarkController,
+              noteType: NoteType.outdoor,
               onChanged: (value) {
                 context.read<ValidationDropdownBloc>().add(
-                  NoteChanged(value, noteType: NoteType.outdoor, isBefore: widget.isBefore),
-                );
+                      NoteChanged(value,
+                          noteType: NoteType.outdoor,
+                          isBefore: widget.isBefore),
+                    );
               },
-              onRemarkChanged: (val) => _updateGroupRemark(val, outdoorElecMeasurements),
+              onRemarkChanged: (val) =>
+                  _updateGroupRemark(val, outdoorElecMeasurements),
             ),
         ],
         if (outdoorPsiMeasurements.isNotEmpty) ...[
@@ -284,17 +424,25 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           if (isOutdoorPsiSkipped)
             _buildNoteDropdown(
               context: context,
-              options: widget.isBefore ? blocState.noteOutdoorPsiBeforeOptions : blocState.noteOutdoorPsiAfterOptions,
-              selectedValue: widget.isBefore ? blocState.selectedOutdoorPSINoteBefore : blocState.selectedOutdoorPSINoteAfter,
+              options: widget.isBefore
+                  ? blocState.noteOutdoorPsiBeforeOptions
+                  : blocState.noteOutdoorPsiAfterOptions,
+              selectedValue: widget.isBefore
+                  ? blocState.selectedOutdoorPSINoteBefore
+                  : blocState.selectedOutdoorPSINoteAfter,
               searchController: _outdoorPSINoteSearchController,
               label: 'Alasan Skip (Tekanan)',
               remarkController: _outdoorPsiRemarkController,
+              noteType: NoteType.outdoorPsi,
               onChanged: (value) {
                 context.read<ValidationDropdownBloc>().add(
-                  NoteChanged(value, noteType: NoteType.outdoorPsi, isBefore: widget.isBefore),
-                );
+                      NoteChanged(value,
+                          noteType: NoteType.outdoorPsi,
+                          isBefore: widget.isBefore),
+                    );
               },
-              onRemarkChanged: (val) => _updateGroupRemark(val, outdoorPsiMeasurements),
+              onRemarkChanged: (val) =>
+                  _updateGroupRemark(val, outdoorPsiMeasurements),
             ),
         ],
       ],
@@ -310,14 +458,17 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
     required TextEditingController remarkController,
     required ValueChanged<String?> onChanged,
     required ValueChanged<String> onRemarkChanged,
+    required NoteType noteType,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
-    final filteredOptions = options.where((opt) => !opt.isSystemOnly || opt.label == selectedValue).toList();
+    final filteredOptions = options
+        .where((opt) => !opt.isSystemOnly || opt.label == selectedValue)
+        .toList();
 
     NoteOption? selectedOptionObj;
     try {
       selectedOptionObj = filteredOptions.firstWhere(
-            (opt) => opt.label == selectedValue,
+        (opt) => opt.label == selectedValue,
       );
     } catch (e) {
       selectedOptionObj = null;
@@ -325,6 +476,15 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
     final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
     final bool requireRemark = selectedOptionObj?.requireRemark ?? false;
+
+    final blocState = context.read<ValidationDropdownBloc>().state;
+    List<CapturedImageDetail> currentPhotos = [];
+    if (blocState is ValidationDropdownLoaded) {
+      final map = widget.isBefore
+          ? blocState.remarkPhotosBefore
+          : blocState.remarkPhotosAfter;
+      currentPhotos = map[noteType] ?? [];
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16.0),
@@ -336,45 +496,49 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
             decoration: InputDecoration(
               labelText: '$label (*Wajib)',
               border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               filled: true,
-              fillColor: isReadOnlySystemValue ? Colors.grey.shade200 : Colors.white,
+              fillColor:
+                  isReadOnlySystemValue ? Colors.grey.shade200 : Colors.white,
             ),
             hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
             onChanged: isReadOnlySystemValue
                 ? null
                 : (value) {
-              onChanged(value);
-              FocusScope.of(context).unfocus();
-              remarkController.clear();
-              onRemarkChanged('');
-            },
+                    onChanged(value);
+                    FocusScope.of(context).unfocus();
+                    remarkController.clear();
+                    onRemarkChanged('');
+                  },
             items: filteredOptions
                 .map((item) => DropdownMenuItem<String>(
-              value: item.label,
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text(item.label,
-                      style: const TextStyle(fontSize: 14)),
-                ),
-              ),
-            ))
+                      value: item.label,
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text(item.label,
+                              style: const TextStyle(fontSize: 14)),
+                        ),
+                      ),
+                    ))
                 .toList(),
             selectedItemBuilder: (context) {
               return options.map((item) {
                 return Text(item.label,
-                    style:
-                    const TextStyle(fontSize: 14, overflow: TextOverflow.ellipsis),
+                    style: const TextStyle(
+                        fontSize: 14, overflow: TextOverflow.ellipsis),
                     maxLines: 1);
               }).toList();
             },
             dropdownStyleData: DropdownStyleData(
               maxHeight: maxDropdownHeight,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+              decoration:
+                  BoxDecoration(borderRadius: BorderRadius.circular(15)),
             ),
-            menuItemStyleData: const MenuItemStyleData(padding: EdgeInsets.symmetric(horizontal: 14)),
+            menuItemStyleData: const MenuItemStyleData(
+                padding: EdgeInsets.symmetric(horizontal: 14)),
             dropdownSearchData: DropdownSearchData(
               searchController: searchController,
               searchInnerWidgetHeight: 50,
@@ -385,45 +549,74 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
                   controller: searchController,
                   decoration: InputDecoration(
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     hintText: 'Cari catatan...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ),
-              searchMatchFn: (item, searchValue) =>
-                  item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+              searchMatchFn: (item, searchValue) => item.value
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchValue.toLowerCase()),
             ),
             onMenuStateChange: (isOpen) {
               if (!isOpen) searchController.clear();
             },
           ),
           if (requireRemark && !widget.isBefore)
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0),
-              child: TextFormField(
-                controller: remarkController,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                decoration: InputDecoration(
-                  labelText: 'Keterangan Tambahan (*Wajib)',
-                  hintText: 'Jelaskan detail masalah dan solusinya (Min. 20 huruf)...',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.all(12),
-                  prefixIcon: const Icon(Icons.edit_note),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 12.0),
+                  child: TextFormField(
+                    controller: remarkController,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    decoration: InputDecoration(
+                      labelText: 'Keterangan Tambahan (*Wajib)',
+                      hintText:
+                          'Jelaskan detail masalah dan solusinya (Min. 20 huruf)...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.only(top: 10, bottom: 10, right: 12),
+                      prefixIcon: const Icon(
+                        Icons.edit_note,
+                        size: 25,
+                      ),
+                    ),
+                    onChanged: onRemarkChanged,
+                    validator: (value) {
+                      final text = value ?? '';
+                      if (text.trim().isEmpty) return 'Wajib diisi';
+                      final int charCount = text.replaceAll(' ', '').length;
+                      if (charCount < 20) {
+                        return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
+                      }
+                      return null;
+                    },
+                    maxLines: 2,
+                  ),
                 ),
-                onChanged: onRemarkChanged,
-                validator: (value) {
-                  final text = value ?? '';
-                  if (text.trim().isEmpty) return 'Wajib diisi';
-                  final int charCount = text.replaceAll(' ', '').length;
-                  if (charCount < 20) {
-                    return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
-                  }
-                  return null;
-                },
-                maxLines: 2,
-              ),
+                const SizedBox(height: 12),
+                RemarkPhotoPicker(
+                  photos: currentPhotos,
+                  isLoading: _isCapturingRemarkPhoto,
+                  isReadOnly: false,
+                  onAddTap: () {
+                    _handlePickRemarkPhoto(context, noteType);
+                  },
+                  onRemoveTap: (path) {
+                    context.read<ValidationDropdownBloc>().add(
+                        RemoveRemarkPhoto(noteType, path,
+                            isBefore: widget.isBefore));
+                  },
+                ),
+              ],
             ),
         ],
       ),

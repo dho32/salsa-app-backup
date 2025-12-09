@@ -52,6 +52,9 @@ extension ServiceCallValidationEntryModelJson
       'note_remark_indoor': noteRemarkIndoor ?? '',
       'note_remark_outdoor': noteRemarkOutdoor ?? '',
       'note_remark_psi': noteRemarkPSI ?? '',
+      'remark_photos_indoor': remarkPhotosIndoorAfter?.map((img) => img.toJson()).toList() ?? [],
+      'remark_photos_outdoor': remarkPhotosOutdoorAfter?.map((img) => img.toJson()).toList() ?? [],
+      'remark_photos_psi': remarkPhotosOutdoorPsiAfter?.map((img) => img.toJson()).toList() ?? [],
     };
   }
 }

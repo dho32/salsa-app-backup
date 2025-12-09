@@ -6,7 +6,6 @@ import '../../../models/common/measurement_limits.dart';
 import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
 
-// BARU: Enum untuk mode tampilan
 enum ValidationViewMode {
   before,
   after,
@@ -19,6 +18,12 @@ enum ValidationSaveStatus {
   successSilent,
   successFinal,
   error
+}
+
+enum NoteType {
+  indoor,
+  outdoor,
+  outdoorPsi,
 }
 
 abstract class ValidationDropdownState extends Equatable {
@@ -75,6 +80,9 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final String? selectedOutdoorPSINoteBefore;
   final String? selectedOutdoorPSINoteAfter;
 
+  final Map<NoteType, List<CapturedImageDetail>> remarkPhotosBefore;
+  final Map<NoteType, List<CapturedImageDetail>> remarkPhotosAfter;
+
   final Map<String, MeasurementLimits> limitsScBefore;
   final Map<String, MeasurementLimits> limitsScAfter;
 
@@ -115,6 +123,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.selectedOutdoorNoteAfter,
     this.selectedOutdoorPSINoteBefore,
     this.selectedOutdoorPSINoteAfter,
+    this.remarkPhotosBefore = const {},
+    this.remarkPhotosAfter = const {},
     this.saveStatus = ValidationSaveStatus.initial,
     this.saveMessage,
     this.correctSerialNo,
@@ -146,6 +156,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     Object? selectedOutdoorNoteAfter = const Object(),
     Object? selectedOutdoorPSINoteBefore = const Object(),
     Object? selectedOutdoorPSINoteAfter = const Object(),
+    Map<NoteType, List<CapturedImageDetail>>? remarkPhotosBefore,
+    Map<NoteType, List<CapturedImageDetail>>? remarkPhotosAfter,
     ValidationSaveStatus? saveStatus,
     Object? saveMessage = const Object(),
     Map<String, MeasurementLimits>? limitsScBefore,
@@ -205,6 +217,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
           selectedOutdoorPSINoteBefore, this.selectedOutdoorPSINoteBefore),
       selectedOutdoorPSINoteAfter: handleNullable(
           selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
+      remarkPhotosBefore: remarkPhotosBefore ?? this.remarkPhotosBefore,
+      remarkPhotosAfter: remarkPhotosAfter ?? this.remarkPhotosAfter,
       saveStatus: saveStatus ?? this.saveStatus,
       saveMessage: handleNullable(saveMessage, this.saveMessage),
       correctSerialNo: handleNullable(correctSerialNo, this.correctSerialNo),
@@ -238,6 +252,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
         selectedOutdoorNoteAfter,
         selectedOutdoorPSINoteBefore,
         selectedOutdoorPSINoteAfter,
+        remarkPhotosBefore,
+        remarkPhotosAfter,
         limitsScBefore,
         limitsScAfter,
         saveStatus,

@@ -32,13 +32,14 @@ class PosValidationEntryModelAdapter
       articleType: fields[11] as String?,
       pairedSerialNo: fields[12] as String?,
       noteRemark: fields[13] as String?,
+      remarkPhotos: (fields[14] as List?)?.cast<CapturedImageDetail>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, PosValidationEntryModel obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -66,7 +67,9 @@ class PosValidationEntryModelAdapter
       ..writeByte(12)
       ..write(obj.pairedSerialNo)
       ..writeByte(13)
-      ..write(obj.noteRemark);
+      ..write(obj.noteRemark)
+      ..writeByte(14)
+      ..write(obj.remarkPhotos);
   }
 
   @override

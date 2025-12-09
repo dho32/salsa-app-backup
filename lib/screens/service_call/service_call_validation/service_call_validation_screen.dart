@@ -361,50 +361,50 @@ class _ServiceCallValidationScreenState
               ),
             ),
           ] else if (state.currentStep == 0) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  FocusScope.of(context).unfocus();
-                  await Future.delayed(const Duration(milliseconds: 200));
-
-                  bool hasDataToSave = state.capturedPhotosBefore.isNotEmpty ||
-                      state.capturedMeasurementsBefore
-                          .any((m) => m.value != 0.0);
-
-                  if (!hasDataToSave) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Belum ada data untuk disimpan'),
-                        backgroundColor: Colors.orange,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    return;
-                  }
-
-                  final measurementError = _validateMeasurements(
-                    state.capturedMeasurementsBefore,
-                    state.limitsScBefore,
-                  );
-                  if (measurementError != null) {
-                    _showErrorSnackbar(measurementError);
-                    return;
-                  }
-
-                  bloc.add(SaveValidationData(
-                    transNo: widget.transNo,
-                    serialNo: widget.serialNo,
-                    showNotification: true,
-                  ));
-                },
-                label: const Text('Simpan Draft'),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: primary),
-                  foregroundColor: primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
+            // Expanded(
+            //   child: OutlinedButton.icon(
+            //     onPressed: () async {
+            //       FocusScope.of(context).unfocus();
+            //       await Future.delayed(const Duration(milliseconds: 200));
+            //
+            //       bool hasDataToSave = state.capturedPhotosBefore.isNotEmpty ||
+            //           state.capturedMeasurementsBefore
+            //               .any((m) => m.value != 0.0);
+            //
+            //       if (!hasDataToSave) {
+            //         ScaffoldMessenger.of(context).showSnackBar(
+            //           const SnackBar(
+            //             content: Text('Belum ada data untuk disimpan'),
+            //             backgroundColor: Colors.orange,
+            //             behavior: SnackBarBehavior.floating,
+            //           ),
+            //         );
+            //         return;
+            //       }
+            //
+            //       final measurementError = _validateMeasurements(
+            //         state.capturedMeasurementsBefore,
+            //         state.limitsScBefore,
+            //       );
+            //       if (measurementError != null) {
+            //         _showErrorSnackbar(measurementError);
+            //         return;
+            //       }
+            //
+            //       bloc.add(SaveValidationData(
+            //         transNo: widget.transNo,
+            //         serialNo: widget.serialNo,
+            //         showNotification: true,
+            //       ));
+            //     },
+            //     label: const Text('Simpan Draft'),
+            //     style: OutlinedButton.styleFrom(
+            //       side: BorderSide(color: primary),
+            //       foregroundColor: primary,
+            //     ),
+            //   ),
+            // ),
+            // const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
                 onPressed: () async {
@@ -469,6 +469,7 @@ class _ServiceCallValidationScreenState
       required List<NoteOption> options,
       required String? selectedNoteLabel,
       required String groupName,
+      required NoteType noteType,
     }) {
       // 1. Cek apakah ada item di grup ini yang di-skip
       final skippedItems = measurements
@@ -498,6 +499,10 @@ class _ServiceCallValidationScreenState
             if (charCount < 20) {
               return 'Keterangan $groupName minimal 20 huruf (tanpa spasi). Saat ini: $charCount.';
             }
+            final photos = state.remarkPhotosAfter[noteType] ?? [];
+            if (photos.isEmpty) {
+              return 'Wajib melampirkan minimal 1 foto untuk Remark $groupName.';
+            }
           }
         }
       }
@@ -514,6 +519,7 @@ class _ServiceCallValidationScreenState
           ? state.selectedIndoorNoteBefore
           : state.selectedIndoorNoteAfter,
       groupName: 'Indoor',
+      noteType: NoteType.indoor,
     );
     if (indoorError != null) return indoorError;
 
@@ -527,6 +533,7 @@ class _ServiceCallValidationScreenState
           ? state.selectedOutdoorNoteBefore
           : state.selectedOutdoorNoteAfter,
       groupName: 'Outdoor (Volt/Ampere)',
+      noteType: NoteType.outdoor,
     );
     if (outdoorError != null) return outdoorError;
 
@@ -540,6 +547,7 @@ class _ServiceCallValidationScreenState
           ? state.selectedOutdoorPSINoteBefore
           : state.selectedOutdoorPSINoteAfter,
       groupName: 'Outdoor (Tekanan)',
+      noteType: NoteType.outdoorPsi,
     );
     if (psiError != null) return psiError;
 

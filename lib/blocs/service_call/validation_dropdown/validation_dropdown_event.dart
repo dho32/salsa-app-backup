@@ -2,6 +2,7 @@
 import 'package:equatable/equatable.dart';
 import '../../../models/common/captured_image_detail.dart';
 import '../../../models/common/measurement_entry.dart';
+
 // import '../../../models/service_call/problem_source_model.dart'; // Tidak diperlukan di sini
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart'; // Diperlukan untuk SaveValidationData
 import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
@@ -9,8 +10,6 @@ import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown
 import '../../../models/common/measurement_limits.dart';
 import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/service_call_detail_model.dart'; // BARU: Import ValidationViewMode
-
-enum NoteType { indoor, outdoor, outdoorPsi }
 
 abstract class ValidationDropdownEvent extends Equatable {
   const ValidationDropdownEvent();
@@ -42,14 +41,14 @@ class FetchValidationDropdownData extends ValidationDropdownEvent {
 
   @override
   List<Object?> get props => [
-    initialData,
-    transNo,
-    currentIndoorSerial,
-    allAvailableOutdoorSerials,
-    detailData,
-    limitsScBefore,
-    limitsScAfter,
-  ];
+        initialData,
+        transNo,
+        currentIndoorSerial,
+        allAvailableOutdoorSerials,
+        detailData,
+        limitsScBefore,
+        limitsScAfter,
+      ];
 }
 
 class NoteChanged extends ValidationDropdownEvent {
@@ -57,7 +56,8 @@ class NoteChanged extends ValidationDropdownEvent {
   final NoteType noteType;
   final bool isBefore;
 
-  const NoteChanged(this.note, {required this.noteType, required this.isBefore});
+  const NoteChanged(this.note,
+      {required this.noteType, required this.isBefore});
 
   @override
   List<Object?> get props => [note, noteType, isBefore];
@@ -65,6 +65,7 @@ class NoteChanged extends ValidationDropdownEvent {
 
 class SelectUnitType extends ValidationDropdownEvent {
   final String unitType;
+
   const SelectUnitType(this.unitType);
 
   @override
@@ -83,6 +84,7 @@ class AddProblemCard extends ValidationDropdownEvent {
 
 class RemoveProblemCard extends ValidationDropdownEvent {
   final String problemId;
+
   const RemoveProblemCard({required this.problemId});
 
   @override
@@ -101,6 +103,7 @@ class SelectOutdoorSerial extends ValidationDropdownEvent {
 class SelectProblemForCard extends ValidationDropdownEvent {
   final int index;
   final String problemId;
+
   const SelectProblemForCard(this.index, this.problemId);
 
   @override
@@ -110,6 +113,7 @@ class SelectProblemForCard extends ValidationDropdownEvent {
 class SelectSolutionsForCard extends ValidationDropdownEvent {
   final int index;
   final List<String> solutionIds;
+
   const SelectSolutionsForCard(this.index, this.solutionIds);
 
   @override
@@ -136,6 +140,7 @@ class MarkUnitAsInvalid extends ValidationDropdownEvent {
 // ============= Event untuk Data SEBELUM =============
 class AddCapturedPhotoBefore extends ValidationDropdownEvent {
   final CapturedImageDetail imageDetail;
+
   const AddCapturedPhotoBefore(this.imageDetail);
 
   @override
@@ -144,6 +149,7 @@ class AddCapturedPhotoBefore extends ValidationDropdownEvent {
 
 class RemoveCapturedPhotoBefore extends ValidationDropdownEvent {
   final String imagePath;
+
   const RemoveCapturedPhotoBefore(this.imagePath);
 
   @override
@@ -152,6 +158,7 @@ class RemoveCapturedPhotoBefore extends ValidationDropdownEvent {
 
 class UpdateMeasurementBefore extends ValidationDropdownEvent {
   final MeasurementEntry measurement;
+
   const UpdateMeasurementBefore(this.measurement);
 
   @override
@@ -161,6 +168,7 @@ class UpdateMeasurementBefore extends ValidationDropdownEvent {
 // ============= Event untuk Data SESUDAH (Foto dan Pengukuran) =============
 class AddCapturedPhotoAfter extends ValidationDropdownEvent {
   final CapturedImageDetail imageDetail;
+
   const AddCapturedPhotoAfter(this.imageDetail);
 
   @override
@@ -169,6 +177,7 @@ class AddCapturedPhotoAfter extends ValidationDropdownEvent {
 
 class RemoveCapturedPhotoAfter extends ValidationDropdownEvent {
   final String imagePath;
+
   const RemoveCapturedPhotoAfter(this.imagePath);
 
   @override
@@ -177,6 +186,7 @@ class RemoveCapturedPhotoAfter extends ValidationDropdownEvent {
 
 class UpdateMeasurementAfter extends ValidationDropdownEvent {
   final MeasurementEntry measurement;
+
   const UpdateMeasurementAfter(this.measurement);
 
   @override
@@ -185,6 +195,7 @@ class UpdateMeasurementAfter extends ValidationDropdownEvent {
 
 class ChangeValidationStep extends ValidationDropdownEvent {
   final int step;
+
   const ChangeValidationStep(this.step);
 
   @override
@@ -203,8 +214,10 @@ class ChangeValidationViewMode extends ValidationDropdownEvent {
 
 // BARU: Event untuk menyimpan data validasi
 class SaveValidationData extends ValidationDropdownEvent {
-  final String transNo; // Menggunakan transNo dari ServiceCallValidationEntryModel
-  final String serialNo; // Menggunakan serialNo dari ServiceCallValidationEntryModel
+  final String
+      transNo; // Menggunakan transNo dari ServiceCallValidationEntryModel
+  final String
+      serialNo; // Menggunakan serialNo dari ServiceCallValidationEntryModel
   final bool markAsCompleted;
   final bool showNotification;
 
@@ -216,7 +229,8 @@ class SaveValidationData extends ValidationDropdownEvent {
   });
 
   @override
-  List<Object?> get props => [transNo, serialNo, markAsCompleted, showNotification];
+  List<Object?> get props =>
+      [transNo, serialNo, markAsCompleted, showNotification];
 }
 
 class CorrectUnitSerial extends ValidationDropdownEvent {
@@ -234,4 +248,27 @@ class CorrectUnitSerial extends ValidationDropdownEvent {
 
   @override
   List<Object?> get props => [transNo, oldSerialNo, newSerialNo, reason];
+}
+
+class AddRemarkPhoto extends ValidationDropdownEvent {
+  final NoteType noteType;
+  final CapturedImageDetail photo;
+  final bool isBefore;
+
+  const AddRemarkPhoto(this.noteType, this.photo, {required this.isBefore});
+
+  @override
+  List<Object?> get props => [noteType, photo, isBefore];
+}
+
+class RemoveRemarkPhoto extends ValidationDropdownEvent {
+  final NoteType noteType;
+  final String imagePath;
+  final bool isBefore;
+
+  const RemoveRemarkPhoto(this.noteType, this.imagePath,
+      {required this.isBefore});
+
+  @override
+  List<Object?> get props => [noteType, imagePath, isBefore];
 }
