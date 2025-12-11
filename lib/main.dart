@@ -45,19 +45,22 @@ class AppInitializer extends StatefulWidget {
 }
 
 class _AppInitializerState extends State<AppInitializer> {
-  // Tetap 'late' tapi HAPUS 'final'
   late Future<void> _initializationFuture;
-
-  // Tandai apakah setup sekali jalan sudah selesai
   bool _oneTimeSetupDone = false;
 
   @override
   void initState() {
     super.initState();
-    // INI PERBAIKANNYA:
-    // Langsung assign Future-nya di initState.
-    // FutureBuilder akan otomatis "await" future ini.
     _initializationFuture = _initialize();
+  }
+
+  // Fungsi ini dipanggil oleh initState dan future-nya ditampung
+  Future<void> _initialize() async {
+    if (!_oneTimeSetupDone) {
+      await _setupOneTimeThings();
+    }
+    // Langsung panggil (tanpa setState)
+    await _loadRetryableData();
   }
 
   // Fungsi setup sekali jalan (TETAP SAMA)
@@ -76,6 +79,16 @@ class _AppInitializerState extends State<AppInitializer> {
     await Hive.initFlutter();
 
     // Registrasi adapter
+    _registerHiveAdapters();
+
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+
+    _oneTimeSetupDone = true;
+  }
+
+  void _registerHiveAdapters() {
     Hive.registerAdapter(ValidationProblemAdapter());
     Hive.registerAdapter(ServiceCallValidationEntryModelAdapter());
     Hive.registerAdapter(ProofOfServiceDetailDataAdapter());
@@ -93,69 +106,78 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(MeasurementLimitsAdapter());
     Hive.registerAdapter(NoteOptionAdapter());
     Hive.registerAdapter(OtpTrackingModelAdapter());
-
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]);
-
-    _oneTimeSetupDone = true;
   }
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
   Future<void> _loadRetryableData() async {
     try {
-      // Coba buka semua box
-      await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-      await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
-      await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-      await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-      await Hive.openBox('otp_state');
-      await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-      await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
-      await Hive.openBox(kAppConfigBox);
-      await Hive.openBox<OtpTrackingModel>(kOtpTrackingBox);
+      // Gunakan _openBoxSafely untuk setiap box penting
+      // Ini mencegah aplikasi Force Close jika salah satu box korup/beda schema
+
+      await _openBoxSafely<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      await _openBoxSafely<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
+      await _openBoxSafely<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+
+      // Box Utama POS (Sering Crash disini biasanya)
+      await _openBoxSafely<PosValidationEntryModel>(kPosValidationHiveBox);
+
+      await _openBoxSafely<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+      await _openBoxSafely(null, boxName: 'otp_state'); // Box tanpa tipe generik
+      await _openBoxSafely<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+      await _openBoxSafely<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+      await _openBoxSafely(null, boxName: kAppConfigBox);
+      await _openBoxSafely<OtpTrackingModel>(kOtpTrackingBox);
     } catch (e) {
-      print("🔴 Hive Error detected (Schema Mismatch?). Resetting all data...");
-      // JIKA GAGAL (Data Korup), HAPUS SEMUA DATA LAMA
-      await Hive.deleteFromDisk();
-      // Restart app mandiri atau lempar error biar user tekan 'Coba Lagi'
-      throw Exception("Data aplikasi diperbarui. Silakan tekan 'Coba Lagi'.");
+      // Jika error sangat fatal (Disk Penuh Total / Permission Error)
+      print("💀 Fatal Init Error: $e");
+      throw Exception("Gagal memuat penyimpanan lokal. Pastikan memori HP tidak penuh.");
     }
 
     ConfirmationService().processQueue();
   }
 
-  // Fungsi ini dipanggil oleh initState dan future-nya ditampung
-  Future<void> _initialize() async {
-    if (!_oneTimeSetupDone) {
-      await _setupOneTimeThings();
+  Future<void> _openBoxSafely<T>(String? boxNameGeneric, {String? boxName}) async {
+    final name = boxNameGeneric ?? boxName!;
+    try {
+      if (T != dynamic && T != Null) {
+        await Hive.openBox<T>(name);
+      } else {
+        await Hive.openBox(name);
+      }
+    } catch (e) {
+      print("🔥 Hive Box '$name' Korup/Mismatch: $e");
+      print("🧹 Melakukan Self-Healing untuk box '$name'...");
+      try {
+        // Hapus file box yang rusak dari disk
+        await Hive.deleteBoxFromDisk(name);
+        // Coba buka lagi (seharusnya sekarang bersih)
+        if (T != dynamic && T != Null) {
+          await Hive.openBox<T>(name);
+        } else {
+          await Hive.openBox(name);
+        }
+        print("✅ Box '$name' berhasil dipulihkan (Data lama di box ini terhapus).");
+      } catch (e2) {
+        // Kalau masih gagal juga, berarti masalah disk fisik/permission
+        print("❌ Gagal recovery box '$name': $e2");
+        throw e2;
+      }
     }
-    // Langsung panggil (tanpa setState)
-    await _loadRetryableData();
   }
 
-  // Fungsi ini HARUS pakai setState untuk memicu FutureBuilder
   void _retryInitialization() {
     setState(() {
-      // Kita hanya mengulang proses yang bisa gagal (load data),
-      _initializationFuture = _loadRetryableData();
+      _initializationFuture = _initialize();
     });
   }
 
-  // Build method Anda (TETAP SAMA, tidak perlu diubah)
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
       future: _initializationFuture,
       builder: (context, snapshot) {
-        // Cek status future
-        print(snapshot.connectionState);
-        print(ConnectionState.done);
         if (snapshot.connectionState == ConnectionState.done) {
-          // JIKA SEMUA INISIALISASI SELESAI
           if (snapshot.hasError) {
-            // Jika ada error, tampilkan halaman error
             return MaterialApp(
               debugShowCheckedModeBanner: false,
               home: ErrorRetryScreen(
@@ -165,7 +187,6 @@ class _AppInitializerState extends State<AppInitializer> {
             );
           }
 
-          // Jika berhasil, bangun aplikasi utama Anda
           final authRepository = AuthRepository();
           return RepositoryProvider.value(
             value: authRepository,
@@ -176,117 +197,19 @@ class _AppInitializerState extends State<AppInitializer> {
           );
         }
 
-        // SELAMA MENUNGGU, tampilkan loading indicator
         return const MaterialApp(
+          debugShowCheckedModeBanner: false,
           home: Scaffold(
+            backgroundColor: Colors.white,
             body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _AppInitializerState2 extends State<AppInitializer> {
-  late final Future<void> _initializationFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializationFuture = _initializeApp();
-  }
-
-  Future<void> _initializeApp() async {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
-
-    await initializeDateFormatting('id_ID', null);
-    await Hive.initFlutter();
-
-    // Registrasi adapter bisa tetap di sini, karena sinkron
-    Hive.registerAdapter(ValidationProblemAdapter());
-    Hive.registerAdapter(ServiceCallValidationEntryModelAdapter());
-    Hive.registerAdapter(ProofOfServiceDetailDataAdapter());
-    Hive.registerAdapter(CapturedImageDetailAdapter());
-    Hive.registerAdapter(MeasurementEntryAdapter());
-    Hive.registerAdapter(TransactionInfoModelAdapter());
-    Hive.registerAdapter(ConfirmationTaskModelAdapter()); //6
-    Hive.registerAdapter(PosTransactionInfoModelAdapter()); //7
-    Hive.registerAdapter(PosValidationEntryModelAdapter()); //8
-    Hive.registerAdapter(ProofOfServiceDetailModelAdapter()); // 10
-    Hive.registerAdapter(ProofOfServiceHeaderAdapter()); // 11
-    Hive.registerAdapter(ProofOfServiceItemDetailAdapter()); //12
-    Hive.registerAdapter(PosUnserviceableModelAdapter()); //13
-    Hive.registerAdapter(SCUnserviceableModelAdapter()); //14
-    await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
-    await Hive.openBox<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
-    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-    await Hive.openBox('otp_state');
-    await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
-    await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
-
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]);
-
-    // Jalankan proses background
-    ConfirmationService().processQueue();
-  }
-
-  void _retryInitialization() {
-    setState(() {
-      _initializationFuture = _initializeApp();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: _initializationFuture,
-      builder: (context, snapshot) {
-        // Cek status future
-        print(snapshot.connectionState);
-        print(ConnectionState.done);
-        if (snapshot.connectionState == ConnectionState.done) {
-          // JIKA SEMUA INISIALISASI SELESAI
-          if (snapshot.hasError) {
-            // Jika ada error, tampilkan halaman error
-            return MaterialApp(
-              debugShowCheckedModeBanner: false,
-              home: ErrorRetryScreen(
-                errorMessage: snapshot.error.toString(),
-                onRetry: _retryInitialization,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text("Memuat data aplikasi...", style: TextStyle(color: Colors.grey)),
+                ],
               ),
-            );
-          }
-
-          // Jika berhasil, bangun aplikasi utama Anda
-          final authRepository = AuthRepository();
-          return RepositoryProvider.value(
-            value: authRepository,
-            child: BlocProvider(
-              create: (_) => AuthBloc(authRepository: authRepository)..add(AppLoaded()),
-              child: const MyApp(), // Lanjutkan ke MyApp Anda yang lama
-            ),
-          );
-        }
-
-        // SELAMA MENUNGGU, tampilkan loading indicator
-        return const MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
             ),
           ),
         );
@@ -308,25 +231,28 @@ class _MyAppState extends State<MyApp> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Panggil fungsi pre-cache di sini
     _precacheImage();
   }
 
   Future<void> _precacheImage() async {
-    // Hanya jalankan sekali
     if (_isImagePrecached) return;
-
-    await precacheImage(const AssetImage("assets/images/bg_app.png"), context);
-
-    setState(() {
-      _isImagePrecached = true;
-    });
+    try {
+      await precacheImage(const AssetImage("assets/images/bg_app.png"), context);
+    } catch (e) {
+      print("Gagal precache image: $e");
+    }
+    if (mounted) {
+      setState(() {
+        _isImagePrecached = true;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_isImagePrecached) {
       return const MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(child: CircularProgressIndicator()),
         ),

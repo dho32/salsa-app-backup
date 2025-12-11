@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:salsa/models/service_call/service_call_validation_entry_model.dart';
 import '../blocs/upload_progress/upload_progress_cubit.dart';
+import '../blocs/upload_progress/upload_progress_repository.dart';
 import '../components/constants.dart';
 import 'package:hive/hive.dart';
 import 'dart:math';
@@ -261,13 +262,10 @@ Future<UploadResult> _executeUploadTasks(
     // Update progress SEBELUM mencoba upload file ini
     progressCubit?.updateProgress(currentCount, totalToUpload, 'Mengupload ${task.fileKey}...');
 
-    // --- MULAI TRY...CATCH PER FILE ---
     try {
       final file = File(task.filePath);
-      // Cek file hilang SEBELUM mencoba baca
       if (!await file.exists()) {
         print("🔴 File not found for task: ${task.fileKey}");
-        // Lempar error spesifik agar ditangkap di catch bawah
         throw Exception("file tidak ditemukan");
       }
 
@@ -284,6 +282,7 @@ Future<UploadResult> _executeUploadTasks(
       // Cek status code
       if (response.statusCode == 200) {
         successCount++;
+        await notifyBackendSuccess(task.url);
         print("✅ Upload success: ${task.fileKey}");
       } else {
         // Gagal karena respons server non-200
