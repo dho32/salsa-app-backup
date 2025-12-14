@@ -56,7 +56,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
       }
 
       // Jika semua pengecekan lolos, beri perintah untuk lanjut ke OTP
-      emit(ProceedToOtpDialog());
+      emit(ProceedToOtpDialog(event.formState));
 
     } catch (e) {
       emit(PosValidationFailure("Gagal melakukan validasi akhir: ${e.toString()}"));

@@ -1,3 +1,5 @@
+import '../pos_form/pos_form_state.dart';
+
 abstract class PosSubmittedState {}
 
 class PosValidationInitial extends PosSubmittedState {}
@@ -25,4 +27,9 @@ class PosValidationUploadPartial extends PosSubmittedState {
 }
 class ShowCreateServiceCallDialog extends PosSubmittedState {}
 
-class ProceedToOtpDialog extends PosSubmittedState {}
+class ProceedToOtpDialog extends PosSubmittedState {
+  final PosFormState formState;
+
+  ProceedToOtpDialog(this.formState);
+
+}

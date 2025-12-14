@@ -42,8 +42,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         final box = await Hive.openBox<Map<dynamic, dynamic>>(boxName);
         final subscription = box.watch().listen((event) {
           if (event.deleted) {
-            print(
-                "📦 Hive DELETION detected in $boxName for key ${event.key}, scheduling reload...");
             if (!isClosed) {
               // Tambahkan delay
               Future.delayed(const Duration(milliseconds: 500), () {
@@ -81,7 +79,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
 
     final List<Map<String, dynamic>> allFailedTyped = [];
     try {
-      print("🔄 Loading failed uploads...");
 
       Future<void> loadFromBox(String boxName, String moduleHint) async {
         Box<Map<dynamic, dynamic>>? box;
@@ -89,12 +86,9 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           // 1. Coba akses via Hive.box() dulu
           if (Hive.isBoxOpen(boxName)) {
             box = Hive.box<Map<dynamic, dynamic>>(boxName);
-            print("  [Loader] Accessed open box: $boxName");
           } else {
             // 2. Jika belum terbuka, coba buka SEKARANG (fallback)
-            print("  [Loader] Box $boxName not open, attempting to open...");
             box = await Hive.openBox<Map<dynamic, dynamic>>(boxName);
-            print("  [Loader] Successfully opened box: $boxName");
           }
 
           // 3. Jika box berhasil didapatkan/dibuka, baca datanya
@@ -104,7 +98,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
             return typedMap;
           }).toList();
           allFailedTyped.addAll(values);
-          print("  - Found ${values.length} items in $boxName.");
         } catch (e) {
           // Tangani error saat mencoba membuka atau membaca
           print("🔴 Error accessing/reading from $boxName: $e");
@@ -117,13 +110,11 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       await loadFromBox(kPosUnserviceablePartialBox, 'POS_UNSERVICEABLE');
       await loadFromBox(kScUnserviceablePartialBox, 'SC_UNSERVICEABLE');
 
-      print("✅ Loaded ${allFailedTyped.length} total failed transactions.");
       emit(state.copyWith(
         status: FailedUploadsStatus.loaded,
         failedTransactions: allFailedTyped,
       ));
     } catch (e) {
-      print("🔴 Gagal load failed uploads: $e");
       emit(state.copyWith(
         status: FailedUploadsStatus.error,
         errorMessage: "Gagal memuat daftar upload gagal: ${e.toString()}",
@@ -198,8 +189,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       }
 
       if (result.allSuccess) {
-        print("✅ Retry successful for $transNo. Melakukan cleanup SEKARANG.");
-
         await clearTransactionData(transNo); // Panggil helper cleanup lengkap
 
         // 2. Tambahkan ke queue SEKARANG
@@ -225,8 +214,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         String snackbarMsg;
 
         if (allMissing) {
-          print(
-              "⚠️ All files for retry ($transNo) are missing. Removing item from partial cache ONLY.");
           snackbarMsg =
               "File foto untuk $transNo tidak ditemukan di perangkat.";
           // Hapus HANYA dari cache partial
@@ -248,7 +235,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
             retryFailedFiles: result.failedFiles,
           ));
         } else {
-          print("⚠️ Retry partially failed for $transNo");
           await _updateFailedTransactionInCache(transNo, moduleType,
               result.failedFiles, presignedDetail, storeName);
 
@@ -276,7 +262,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         }
       }
     } catch (e) {
-      print("🔴 Retry failed with exception for $transNo: $e");
       emit(state.copyWith(
         status: FailedUploadsStatus.loaded,
         clearUploadingTransNo: true,
@@ -313,7 +298,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       final cacheBox =
           Hive.box<Map<dynamic, dynamic>>(boxName); // Gunakan Hive.box()
       await cacheBox.delete(transNo);
-      print("🗑️ Removed $transNo ($moduleType) from cache box $boxName.");
     } catch (e) {
       print("🔴 Error removing $transNo from cache box $boxName: $e");
     }
@@ -342,7 +326,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         'storeName': storeName,
         'module': moduleType,
       });
-      print("💾 Updated cache for $transNo ($moduleType) in box $boxName.");
     } catch (e) {
       print("🔴 Error updating cache for $transNo in box $boxName: $e");
     }
@@ -375,8 +358,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           final task = ConfirmationTaskModel(transNo: key);
           await queueBox.put(key, task);
           await ConfirmationService().processQueue();
-          print(
-              "✅ Added $key ($moduleType) to confirmation queue after successful retry.");
         } else {
           print("ℹ️ $key ($moduleType) already in confirmation queue.");
         }

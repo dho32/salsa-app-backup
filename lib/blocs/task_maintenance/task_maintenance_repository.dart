@@ -18,8 +18,6 @@ class TaskMaintenanceRepository {
       Uri uri = getUrl(pathUrl: 'task_maintenance/v2', params: params);
       final response = await http.get(uri);
 
-      print(uri);
-
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 'OK') {

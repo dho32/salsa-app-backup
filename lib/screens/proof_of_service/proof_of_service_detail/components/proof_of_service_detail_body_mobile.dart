@@ -1152,6 +1152,7 @@ class _ProofOfServiceDetailBodyMobileState
 
                 context.read<PosSubmittedBloc>().add(FinalValidationRequested(
                       transNo: header.transNo,
+                      formState: latestFormState,
                       customerCode: header.shipToCode,
                     ));
               } else {

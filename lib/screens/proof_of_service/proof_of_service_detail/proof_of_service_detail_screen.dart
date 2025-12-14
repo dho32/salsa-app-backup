@@ -277,6 +277,12 @@ class _ProofOfServiceDetailScreenState
                 final detailState = context.read<ProofOfServiceDetailBloc>().state;
                 if (detailState is ProofOfServiceDetailLoaded) {
                   final header = detailState.data.header;
+                  bool hasPhoto = false;
+                  final infoBox = Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+                  final info = infoBox.get(detailState.data.header.transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ''));
+                  if (info?.picImageDetail != null) {
+                    hasPhoto = true;
+                  }
                   showDialog<void>(
                     context: context,
                     builder: (_) {
@@ -301,6 +307,7 @@ class _ProofOfServiceDetailScreenState
                           email: header.storeEmail,
                           storeLat: double.tryParse(header.latitude) ?? 0.0,
                           storeLong: double.tryParse(header.longitude) ?? 0.0,
+                          isPhotoExisting: hasPhoto,
                           onVerified: () {
                             AuthStorage.getUser().then((user) {
                               getPublicIpAddress().then((ip) {

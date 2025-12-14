@@ -61,8 +61,6 @@ class ProofOfServiceDetailBloc
         emit(ProofOfServiceDetailLoaded(dataFromApi, statuses));
       } catch (e) {
         // --- TAHAP 4: Tangkap semua error lainnya ---
-        // Blok ini akan menangkap error jika API gagal atau ada masalah tak terduga lainnya.
-        print("🔴🔴 Gagal total memuat data: $e");
         emit(ProofOfServiceDetailError(
             "Gagal memuat detail data. Periksa koneksi internet Anda dan coba lagi."));
       }

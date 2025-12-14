@@ -76,13 +76,12 @@ class AuthRepository {
       await configBox.put('limits_sc_after', limitsScAfter);
       await configBox.put('limits_pos_after', limitsPosAfter);
 
-      print("✅ AppConfig berhasil disimpan di Hive.");
       log("Data limits_temp_header: ${limitsTempHeader.length} item");
       log("Data limits_sc_before: ${limitsScBefore.length} item");
       log("Data limits_sc_after: ${limitsScAfter.length} item");
       log("Data limits_pos_after: ${limitsPosAfter.length} item");
     } catch (e) {
-      print("🔴 GAGAL menyimpan AppConfig ke Hive: $e");
+      // print("🔴 GAGAL menyimpan AppConfig ke Hive: $e");
     }
   }
 

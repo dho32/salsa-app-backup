@@ -18,7 +18,6 @@ import 'package:salsa/models/service_call/transaction_info_model.dart';
 import 'package:salsa/models/service_call/sc_unserviceable_model.dart';
 
 Future<void> clearTransactionData(String transNo) async {
-  print("🧹 Cleaning up Hive data for transaction: $transNo");
   final normalizedKey = getHiveKeyForTransaction(transNo);
   final List<String> pathsToDelete = [];
 
