@@ -571,7 +571,7 @@ class _ServiceCallValidationScreenState
       final limits = limitsMap[mEntry.measurementId];
       if (limits == null) continue;
       if (mEntry.value < limits.min || mEntry.value > limits.max) {
-        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar (Min: ${limits.min}, Maks: ${limits.max}).';
+        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar.';
       }
     }
     return null;
