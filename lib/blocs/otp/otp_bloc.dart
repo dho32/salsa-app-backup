@@ -40,10 +40,6 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
     final DateTime? lastRequest = trackingEntry.lastRequestTime;
     _retryCount = trackingEntry.retryCount;
 
-    print(OtpTrackingModel(transNo: hiveKey).transNo);
-    print(lastRequest);
-    print(_retryCount);
-
     bool isExpiredOneHour = false;
     if (lastRequest != null) {
       if (now.difference(lastRequest).inHours >= 1) {
@@ -78,7 +74,7 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
       emit(OtpSent(
           cooldown: 0,
           retryLeft: (_maxRetries - _retryCount).clamp(0, _maxRetries),
-          canReset: isExpiredOneHour // Kirim flag reset
+          canReset: isExpiredOneHour
       ));
     }else{
       emit(OtpInitial());

@@ -307,3 +307,7 @@ class ImageHelper {
     );
   }
 }
+
+String getHiveKey(String transNo) {
+  return transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+}

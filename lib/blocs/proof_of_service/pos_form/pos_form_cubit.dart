@@ -20,12 +20,13 @@ class PosFormCubit extends Cubit<PosFormState> {
   late final String _userType;
   late final String _userName;
 
+  // Helper Key Konsisten
   String _getHiveKey(String transNo) =>
-      transNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   PosFormCubit({required this.transNo, required bool initialAllUnitsValidated})
       : _transactionInfoBox =
-            Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox),
+  Hive.box<PosTransactionInfoModel>(kPosTransactionInfoHiveBox),
         super(const PosFormState()) {
     _initAsync();
   }
@@ -41,6 +42,7 @@ class PosFormCubit extends Cubit<PosFormState> {
   void _loadInitialData() {
     final String hiveKey = _getHiveKey(transNo);
     final info = _transactionInfoBox.get(hiveKey);
+
     if (info != null) {
       emit(state.copyWith(
         picName: info.picName ?? '',
@@ -81,6 +83,11 @@ class PosFormCubit extends Cubit<PosFormState> {
     }
     _validateForm();
   }
+
+  // --- 🔥 TAMBAHAN UTAMA: Method Sync Foto dari Screen ---
+  void picImageChanged(CapturedImageDetail? image) =>
+      emit(state.copyWith(picImageDetail: image));
+  // -----------------------------------------------------
 
   void tempInSkipped(bool isSkipped) {
     emit(state.copyWith(
@@ -135,7 +142,7 @@ class PosFormCubit extends Cubit<PosFormState> {
 
   void recalculateFinalTempLimit() {
     final validationBox =
-        Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
+    Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
 
     final indoorEntries = validationBox.values.where((e) {
       bool isComplete = e.isCompleted ?? false;
@@ -156,10 +163,7 @@ class PosFormCubit extends Cubit<PosFormState> {
       }
     }
 
-    // Jika tidak ada suhu yang ditemukan, jangan set batas. Jika ada, set batasnya.
     final newLimit = (minTemp == double.infinity) ? 4.0 : minTemp;
-
-    // Hanya emit state jika nilainya berubah
     if (state.minFinalTempInLimit != newLimit) {
       emit(state.copyWith(minFinalTempInLimit: newLimit));
     }
@@ -167,41 +171,20 @@ class PosFormCubit extends Cubit<PosFormState> {
 
   // --- Methods for UI events ---
   void picNameChanged(String value) => emit(state.copyWith(picName: value));
-
   void picNikChanged(String value) => emit(state.copyWith(picNik: value));
-
-  void picPositionChanged(String value) =>
-      emit(state.copyWith(picPosition: value));
-
+  void picPositionChanged(String value) => emit(state.copyWith(picPosition: value));
   void picPhoneChanged(String value) => emit(state.copyWith(picPhone: value));
-
   void tempInChanged(String value) => emit(state.copyWith(tempIn: value));
-
   void tempOutChanged(String value) => emit(state.copyWith(tempOut: value));
+  void technician1Changed(String value) => emit(state.copyWith(technician1: value));
+  void technician2Changed(String value) => emit(state.copyWith(technician2: value));
+  void technician3Changed(String value) => emit(state.copyWith(technician3: value));
+  void toggleTechnician3(bool show) => emit(state.copyWith(showTechnician3: show));
+  void tempInImageChanged(CapturedImageDetail? image) => emit(state.copyWith(temperatureInImage: image));
+  void tempOutImageChanged(CapturedImageDetail? image) => emit(state.copyWith(temperatureOutImage: image));
 
-  void technician1Changed(String value) =>
-      emit(state.copyWith(technician1: value));
-
-  void technician2Changed(String value) =>
-      emit(state.copyWith(technician2: value));
-
-  void technician3Changed(String value) =>
-      emit(state.copyWith(technician3: value));
-
-  void toggleTechnician3(bool show) =>
-      emit(state.copyWith(showTechnician3: show));
-
-  void tempInImageChanged(CapturedImageDetail? image) =>
-      emit(state.copyWith(temperatureInImage: image));
-
-  void tempOutImageChanged(CapturedImageDetail? image) =>
-      emit(state.copyWith(temperatureOutImage: image));
-
-  // Semua perubahan akan memicu validasi dan penyimpanan
   void onFieldChanged() {
     _validateForm();
-
-    // Debounce untuk efisiensi penulisan ke Hive
     EasyDebounce.debounce(
       'save-to-hive-debouncer',
       const Duration(milliseconds: 500),
@@ -237,8 +220,6 @@ class PosFormCubit extends Cubit<PosFormState> {
         (state.finalTempIn.isNotEmpty && state.finalTempInImage != null) ||
             (state.isFinalTempInSkipped && state.finalTempInNote.isNotEmpty);
 
-    // final isReady = picStoreValid && serviceInfoValid && state.allUnitsValidated;
-
     final isReady = picStoreValid &&
         technicianValid &&
         serviceInfoValid &&
@@ -252,30 +233,45 @@ class PosFormCubit extends Cubit<PosFormState> {
     ));
   }
 
+  // 🔥 FIX LOGIC SAVE (Baca dulu, baru update)
   Future<void> _saveStateToHive() async {
-    final infoToSave = PosTransactionInfoModel(transNo: transNo)
-      ..picName = state.picName
-      ..picNik = state.picNik
-      ..picPosition = state.picPosition
-      ..picPhone = state.picPhone
-      ..technician1 = state.technician1
-      ..technician2 = state.technician2
-      ..technician3 = state.technician3
-      ..temperatureIn = state.tempIn
-      ..temperatureOut = state.tempOut
-      ..serviceTime = state.serviceTime
-      ..picImageDetail = state.picImageDetail
-      ..temperatureInImage = state.temperatureInImage
-      ..temperatureOutImage = state.temperatureOutImage
-      ..finalTemperatureIn = state.finalTempIn
-      ..finalTemperatureInImage = state.finalTempInImage
-      ..isTempInSkipped = state.isTempInSkipped
-      ..tempInNote = state.tempInNote
-      ..isTempOutSkipped = state.isTempOutSkipped
-      ..tempOutNote = state.tempOutNote
-      ..isFinalTempInSkipped = state.isFinalTempInSkipped
-      ..finalTempInNote = state.finalTempInNote;
+    final String key = _getHiveKey(transNo);
 
-    await _transactionInfoBox.put(transNo, infoToSave);
+    // 1. Ambil data lama
+    var infoToSave = _transactionInfoBox.get(key);
+
+    // 2. Jika tidak ada, baru buat baru
+    if (infoToSave == null) {
+      infoToSave = PosTransactionInfoModel(transNo: transNo);
+    }
+
+    // 3. Update field
+    infoToSave.picName = state.picName;
+    infoToSave.picNik = state.picNik;
+    infoToSave.picPosition = state.picPosition;
+    infoToSave.picPhone = state.picPhone;
+    infoToSave.technician1 = state.technician1;
+    infoToSave.technician2 = state.technician2;
+    infoToSave.technician3 = state.technician3;
+    infoToSave.temperatureIn = state.tempIn;
+    infoToSave.temperatureOut = state.tempOut;
+    infoToSave.serviceTime = state.serviceTime;
+
+    // Pastikan foto ikut tersimpan jika sudah ada di state
+    infoToSave.picImageDetail = state.picImageDetail;
+
+    infoToSave.temperatureInImage = state.temperatureInImage;
+    infoToSave.temperatureOutImage = state.temperatureOutImage;
+    infoToSave.finalTemperatureIn = state.finalTempIn;
+    infoToSave.finalTemperatureInImage = state.finalTempInImage;
+    infoToSave.isTempInSkipped = state.isTempInSkipped;
+    infoToSave.tempInNote = state.tempInNote;
+    infoToSave.isTempOutSkipped = state.isTempOutSkipped;
+    infoToSave.tempOutNote = state.tempOutNote;
+    infoToSave.isFinalTempInSkipped = state.isFinalTempInSkipped;
+    infoToSave.finalTempInNote = state.finalTempInNote;
+
+    // 4. Save
+    await _transactionInfoBox.put(key, infoToSave);
   }
 }

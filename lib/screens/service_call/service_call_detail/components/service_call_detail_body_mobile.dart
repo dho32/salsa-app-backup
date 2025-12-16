@@ -13,10 +13,10 @@ import 'package:hive/hive.dart';
 // --- Impor BLoC & State ---
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../blocs/location_validation/location_validation_bloc.dart';
-import '../../../../blocs/location_validation/location_validation_event.dart'; // [PENTING] Import Event
+import '../../../../blocs/location_validation/location_validation_event.dart';
 import '../../../../blocs/location_validation/location_validation_state.dart';
 import '../../../../blocs/otp/otp_bloc.dart';
-import '../../../../blocs/otp/otp_event.dart'; // [PENTING] Import Event
+import '../../../../blocs/otp/otp_event.dart';
 import '../../../../blocs/otp/otp_repository.dart';
 import '../../../../blocs/service_call/sc_form/sc_form_cubit.dart';
 import '../../../../blocs/service_call/sc_form/sc_form_state.dart';
@@ -70,7 +70,6 @@ class ServiceCallDetailBodyMobile extends StatefulWidget {
 
 class _ServiceCallDetailBodyMobileState
     extends State<ServiceCallDetailBodyMobile> {
-  // --- Kelola Semua Controller di Sini ---
   late final TextEditingController _picNameController;
   late final TextEditingController _picPhoneController;
   late final TextEditingController _picNikController;
@@ -79,7 +78,7 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _technician3Controller;
   late final TextEditingController _finalTempController;
   final TextEditingController _finalTempNoteSearchController =
-      TextEditingController();
+  TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
@@ -96,8 +95,8 @@ class _ServiceCallDetailBodyMobileState
 
     final configBox = Hive.box(kAppConfigBox);
     final Map<String, MeasurementLimits> headerLimits =
-        Map<String, MeasurementLimits>.from(
-            configBox.get('limits_temp_header') ?? {});
+    Map<String, MeasurementLimits>.from(
+        configBox.get('limits_temp_header') ?? {});
 
     _scFinalTempBaseLimits = headerLimits['sc_final_temp_in'] ??
         const MeasurementLimits(
@@ -111,7 +110,6 @@ class _ServiceCallDetailBodyMobileState
 
     final initialFormState = context.read<ScFormCubit>().state;
 
-    // Inisialisasi controller dari state Cubit
     _picNameController = TextEditingController(text: initialFormState.picName);
     _picPhoneController =
         TextEditingController(text: initialFormState.picPhone);
@@ -127,7 +125,6 @@ class _ServiceCallDetailBodyMobileState
 
     _showTechnician3 = initialFormState.showTechnician3;
 
-    // Tambahkan Listener UI -> Cubit
     _addListeners();
   }
 
@@ -195,12 +192,16 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
+  // ✅ Helper Key yang Konsisten
+  String _getHiveKey(String transNo) {
+    return transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+  }
+
   void _syncSavedPhoto() {
     try {
-      final box = Hive.box<TransactionInfoModel>(kTransactionInfoHiveBox);
-      final String hiveKey =
-          widget.transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-      final data = box.get(hiveKey);
+      // ✅ Gunakan widget.transactionInfoBox & Helper Key
+      final String hiveKey = _getHiveKey(widget.transNo);
+      final data = widget.transactionInfoBox.get(hiveKey);
 
       if (data != null && data.picImageDetail != null) {
         context.read<ScFormCubit>().picImageChanged(data.picImageDetail!);
@@ -213,10 +214,10 @@ class _ServiceCallDetailBodyMobileState
   Future<ValidationLoadResult> _loadValidationData(String transNo) async {
     try {
       final box =
-          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       final statuses = <String, ValidationStatus>{};
       final List<ServiceCallValidationEntryModel> relevantEntries =
-          box.values.where((e) => e.transNo == transNo).toList();
+      box.values.where((e) => e.transNo == transNo).toList();
 
       for (final entry in relevantEntries) {
         final serial = entry.serialNo.trim().toUpperCase();
@@ -261,25 +262,19 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
-  // --- BUILD METHOD UTAMA ---
   @override
   Widget build(BuildContext context) {
-    // 🔥 [UPDATE 1] Bungkus dengan MultiBlocProvider disini!
     return MultiBlocProvider(
       providers: [
         BlocProvider(
           create: (context) {
-            // [FIX CASE 5] Load OTP State saat halaman dibuka
             return OtpBloc(repository: OtpRepository())
-              ..add(CheckOtpStatus(widget.transNo)); // <-- Tambahkan ini!
+              ..add(CheckOtpStatus(widget.transNo));
           },
         ),
         BlocProvider(
-          lazy: false,
+          lazy: false, // ✅ Wajib False
           create: (context) {
-            final Box scBox =
-                Hive.box<TransactionInfoModel>(kTransactionInfoHiveBox);
-            // [FIX CASE 4] Load Foto PIC saat halaman dibuka
             final detailState = context.read<ServiceCallDetailBloc>().state;
             double lat = 0;
             double long = 0;
@@ -288,49 +283,64 @@ class _ServiceCallDetailBodyMobileState
               long = double.tryParse(detailState.data.header.storeLong) ?? 0;
             }
 
-            return LocationValidationBloc(transactionBox: scBox)
-              ..add(LoadLocationPhoto(
-                  widget.transNo, lat, long)); // <-- Tambahkan ini!
+            return LocationValidationBloc(transactionBox: widget.transactionInfoBox)
+              ..add(LoadLocationPhoto(widget.transNo, lat, long));
           },
         ),
       ],
-      child: BlocListener<ScFormCubit, ScFormState>(
-        listenWhen: (prev, current) =>
+      // 🔥 TAMBAHAN LISTENER UNTUK SYNC FOTO
+      child: MultiBlocListener(
+        listeners: [
+          // 1. Sync Foto dari LocationBloc ke ScFormCubit
+          BlocListener<LocationValidationBloc, LocationValidationState>(
+            listener: (context, state) {
+              if (state is LocationPhotoLoaded && state.photo != null) {
+                print("🔄 [Sync] Foto baru diterima, update ScFormCubit!");
+                context.read<ScFormCubit>().picImageChanged(state.photo!);
+              }
+            },
+          ),
+
+          // 2. Listener Form (Pindahkan logika lama kesini)
+          BlocListener<ScFormCubit, ScFormState>(
+            listenWhen: (prev, current) =>
             prev.picName != current.picName ||
-            prev.picPhone != current.picPhone ||
-            prev.picNik != current.picNik ||
-            prev.picPosition != current.picPosition ||
-            prev.technician1 != current.technician1 ||
-            prev.technician2 != current.technician2 ||
-            prev.technician3 != current.technician3 ||
-            prev.finalTempIn != current.finalTempIn ||
-            prev.showTechnician3 != current.showTechnician3,
-        listener: (context, state) {
-          if (_picNameController.text != state.picName) {
-            _picNameController.text = state.picName;
-          }
-          if (_picPhoneController.text != state.picPhone) {
-            _picPhoneController.text = state.picPhone;
-          }
-          if (_picNikController.text != state.picNik) {
-            _picNikController.text = state.picNik;
-          }
-          if (_technician1Controller.text != state.technician1) {
-            _technician1Controller.text = state.technician1;
-          }
-          if (_technician2Controller.text != state.technician2) {
-            _technician2Controller.text = state.technician2;
-          }
-          if (_technician3Controller.text != state.technician3) {
-            _technician3Controller.text = state.technician3;
-          }
-          if (_finalTempController.text != state.finalTempIn) {
-            _finalTempController.text = state.finalTempIn;
-          }
-          if (_showTechnician3 != state.showTechnician3) {
-            setState(() => _showTechnician3 = state.showTechnician3);
-          }
-        },
+                prev.picPhone != current.picPhone ||
+                prev.picNik != current.picNik ||
+                prev.picPosition != current.picPosition ||
+                prev.technician1 != current.technician1 ||
+                prev.technician2 != current.technician2 ||
+                prev.technician3 != current.technician3 ||
+                prev.finalTempIn != current.finalTempIn ||
+                prev.showTechnician3 != current.showTechnician3,
+            listener: (context, state) {
+              if (_picNameController.text != state.picName) {
+                _picNameController.text = state.picName;
+              }
+              if (_picPhoneController.text != state.picPhone) {
+                _picPhoneController.text = state.picPhone;
+              }
+              if (_picNikController.text != state.picNik) {
+                _picNikController.text = state.picNik;
+              }
+              if (_technician1Controller.text != state.technician1) {
+                _technician1Controller.text = state.technician1;
+              }
+              if (_technician2Controller.text != state.technician2) {
+                _technician2Controller.text = state.technician2;
+              }
+              if (_technician3Controller.text != state.technician3) {
+                _technician3Controller.text = state.technician3;
+              }
+              if (_finalTempController.text != state.finalTempIn) {
+                _finalTempController.text = state.finalTempIn;
+              }
+              if (_showTechnician3 != state.showTechnician3) {
+                setState(() => _showTechnician3 = state.showTechnician3);
+              }
+            },
+          ),
+        ],
         child: BlocConsumer<ServiceCallDetailBloc, ServiceCallDetailState>(
           listener: (context, detailState) {
             if (detailState is ServiceCallDetailLoaded) {
@@ -350,22 +360,18 @@ class _ServiceCallDetailBodyMobileState
               return Center(child: Text("Error: ${detailState.message}"));
             } else if (detailState is ServiceCallDetailLoaded) {
               final detailList = detailState.data.detail;
-
               final sortedDetailList =
-                  List<ServiceCallUnitDetail>.from(detailList);
+              List<ServiceCallUnitDetail>.from(detailList);
+
               sortedDetailList.sort((a, b) {
                 bool isARemote =
-                    a.articleNameUnit.toUpperCase().contains('REMOTE');
+                a.articleNameUnit.toUpperCase().contains('REMOTE');
                 bool isBRemote =
-                    b.articleNameUnit.toUpperCase().contains('REMOTE');
+                b.articleNameUnit.toUpperCase().contains('REMOTE');
 
-                if (isARemote && !isBRemote) {
-                  return 1;
-                } else if (!isARemote && isBRemote) {
-                  return -1;
-                } else {
-                  return a.serialNo.compareTo(b.serialNo);
-                }
+                if (isARemote && !isBRemote) return 1;
+                else if (!isARemote && isBRemote) return -1;
+                else return a.serialNo.compareTo(b.serialNo);
               });
 
               final List<NoteOption> noteOptions =
@@ -385,7 +391,7 @@ class _ServiceCallDetailBodyMobileState
                         return const Center(
                             child: CircularProgressIndicator(
                                 valueColor:
-                                    AlwaysStoppedAnimation(Colors.green)));
+                                AlwaysStoppedAnimation(Colors.green)));
                       }
 
                       if (snapshot.hasError) {
@@ -422,11 +428,11 @@ class _ServiceCallDetailBodyMobileState
                                       context
                                           .read<ServiceCallSubmittedBloc>()
                                           .add(
-                                            AhoInputCompleted(
-                                              formState: state.formState,
-                                              ahoNumber: ahoNumber,
-                                            ),
-                                          );
+                                        AhoInputCompleted(
+                                          formState: state.formState,
+                                          ahoNumber: ahoNumber,
+                                        ),
+                                      );
                                     },
                                   );
                                 },
@@ -445,53 +451,39 @@ class _ServiceCallDetailBodyMobileState
 
                             final otpBloc = context.read<OtpBloc>();
                             final locationBloc =
-                                context.read<LocationValidationBloc>();
+                            context.read<LocationValidationBloc>();
 
+                            // 🔥 Logic Cek Foto Robust (Fallback Hive)
                             bool isPhotoReady = false;
 
                             final locState = locationBloc.state;
                             if (locState is LocationPhotoLoaded &&
                                 locState.photo != null) {
                               isPhotoReady = true;
-                              print(
-                                  "✅ SC: Foto ditemukan di BLoC State (Loaded)");
+                              print("✅ SC: Foto ditemukan di BLoC State");
                             } else if (locState is LocationValidationFailure &&
                                 locState.photo != null) {
-                              // Kadang error tapi cache foto masih ada
                               isPhotoReady = true;
-                              print(
-                                  "⚠️ SC: Foto ditemukan di BLoC State (Failure/Cache)");
-                            } else {
-                              print(
-                                  "❌ SC: Foto TIDAK ditemukan di BLoC State. State saat ini: $locState");
+                              print("⚠️ SC: Foto ditemukan di BLoC Failure State");
                             }
 
                             if (!isPhotoReady) {
                               try {
-                                // Gunakan Key yang SAMA dengan di BLoC (trim + uppercase + regex)
-                                final String hiveKey = widget.transNo
-                                    .trim()
-                                    .toUpperCase()
-                                    .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-                                final box = Hive.box<TransactionInfoModel>(
-                                    kTransactionInfoHiveBox);
-                                final info = box.get(hiveKey);
+                                final String hiveKey = _getHiveKey(widget.transNo);
+                                final info = widget.transactionInfoBox.get(hiveKey);
 
                                 if (info?.picImageDetail != null) {
                                   isPhotoReady = true;
-                                  // Opsional: Paksa update BLoC biar sinkron
-                                  locationBloc.add(
-                                      LoadLocationPhoto(widget.transNo, 0, 0));
-                                  print(
-                                      "✅ SC: Foto ditemukan via Cek Manual Hive (Fallback)");
+                                  print("✅ SC: Foto ditemukan via Fallback Hive (Key: $hiveKey)");
+                                  // Opsional: Refresh Bloc biar sinkron
+                                  locationBloc.add(LoadLocationPhoto(widget.transNo, 0, 0));
+                                } else {
+                                  print("❌ SC: Foto TIDAK ditemukan di Hive. Key: $hiveKey");
                                 }
                               } catch (e) {
                                 print("❌ SC: Gagal cek Hive manual: $e");
                               }
                             }
-
-                            print(
-                                "🔎 FINAL CHECK IS PHOTO READY: $isPhotoReady");
 
                             showDialog<void>(
                               context: context,
@@ -512,10 +504,7 @@ class _ServiceCallDetailBodyMobileState
                                     storeLong: storeLong,
                                     isPhotoExisting: isPhotoReady,
                                     onVerified: () {
-                                      // Tutup dialog OTP sebelum lanjut loading/upload
                                       Navigator.pop(context);
-
-                                      // Tampilkan Loading Jembatan
                                       showDialog(
                                         context: context,
                                         barrierDismissible: false,
@@ -524,24 +513,24 @@ class _ServiceCallDetailBodyMobileState
                                       );
 
                                       final progressCubit =
-                                          context.read<UploadProgressCubit>();
+                                      context.read<UploadProgressCubit>();
                                       context
                                           .read<ServiceCallSubmittedBloc>()
                                           .add(
-                                            SubmitValidation(
-                                              transNo: header.transNo,
-                                              createdBy: maintenanceBy,
-                                              createdByName:
-                                                  formState.technician1,
-                                              createdByIP: maintenanceByIP,
-                                              pathAttachment:
-                                                  header.pathAttachment,
-                                              progressCubit: progressCubit,
-                                              formState: formState,
-                                              storeName: header.storeName,
-                                              ahoNumber: state.ahoNumber,
-                                            ),
-                                          );
+                                        SubmitValidation(
+                                          transNo: header.transNo,
+                                          createdBy: maintenanceBy,
+                                          createdByName:
+                                          formState.technician1,
+                                          createdByIP: maintenanceByIP,
+                                          pathAttachment:
+                                          header.pathAttachment,
+                                          progressCubit: progressCubit,
+                                          formState: formState,
+                                          storeName: header.storeName,
+                                          ahoNumber: state.ahoNumber,
+                                        ),
+                                      );
                                     },
                                   ),
                                 );
@@ -579,7 +568,7 @@ class _ServiceCallDetailBodyMobileState
                               padding: const EdgeInsets.only(bottom: 65.0),
                               child: SingleChildScrollView(
                                 padding:
-                                    const EdgeInsets.fromLTRB(16, 16, 16, 35),
+                                const EdgeInsets.fromLTRB(16, 16, 16, 35),
                                 child: Column(
                                   children: [
                                     _buildCustomerSection(header),
@@ -604,11 +593,10 @@ class _ServiceCallDetailBodyMobileState
                                         ],
                                       ),
                                     ),
-                                    // Widget Suhu Akhir
                                     BlocBuilder<ScFormCubit, ScFormState>(
                                       buildWhen: (prev, current) {
                                         return prev.allUnitsValidated !=
-                                                current.allUnitsValidated ||
+                                            current.allUnitsValidated ||
                                             prev.isFinalTempSkipped !=
                                                 current.isFinalTempSkipped ||
                                             prev.finalTempNote !=
@@ -619,7 +607,7 @@ class _ServiceCallDetailBodyMobileState
                                             formStateForTemp.allUnitsValidated;
                                         return Padding(
                                           padding:
-                                              const EdgeInsets.only(top: 16.0),
+                                          const EdgeInsets.only(top: 16.0),
                                           child: Stack(
                                             children: [
                                               Opacity(
@@ -640,11 +628,11 @@ class _ServiceCallDetailBodyMobileState
                                                             context,
                                                             'Selesaikan validasi semua unit dahulu.'),
                                                     borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
+                                                    BorderRadius.circular(
+                                                        12),
                                                     child: Container(
                                                         color:
-                                                            Colors.transparent),
+                                                        Colors.transparent),
                                                   ),
                                                 ),
                                             ],
@@ -673,9 +661,7 @@ class _ServiceCallDetailBodyMobileState
     );
   }
 
-  // ... (Sisa Widget Helper tetap sama) ...
-  // (Pastikan method helper _buildSection, _buildCustomerSection, dll tetap ada di bawah sini)
-
+  // --- Widget Helper Tetap Sama ---
   Widget _buildSection({required String title, required Widget child}) {
     return Container(
       width: double.infinity,
@@ -698,7 +684,7 @@ class _ServiceCallDetailBodyMobileState
           if (title.isNotEmpty)
             Text(title,
                 style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           if (title.isNotEmpty) const SizedBox(height: 8),
           child,
         ],
@@ -714,7 +700,7 @@ class _ServiceCallDetailBodyMobileState
         children: [
           Text('Toko: ${header.storeName} (${header.storeId})',
               style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 4),
           Text('Alamat: ${header.storeAddress}',
               style: const TextStyle(fontSize: 13)),
@@ -730,33 +716,33 @@ class _ServiceCallDetailBodyMobileState
   }
 
   Widget _buildTicketSection(ServiceCallHeader header) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.confirmation_number_outlined,
-                size: 20, color: Colors.black54),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Text('No: ${header.transNo}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)))
-          ]),
-          const SizedBox(height: 4),
-          Row(children: [
-            const Icon(Icons.calendar_today_outlined,
-                size: 16, color: Colors.black54),
-            const SizedBox(width: 8),
-            Text('Posted: ${header.postedDate.split('T')[0]}')
-          ]),
-          const SizedBox(height: 4),
-          Text('Status: ${header.status}',
-              style: const TextStyle(
-                  color: Colors.blue, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          Text('Kategori: ${header.complaintCategory}'),
-          Text('Keluhan: ${header.complaintSubject}',
-              style: const TextStyle(fontStyle: FontStyle.italic)),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        const Icon(Icons.confirmation_number_outlined,
+            size: 20, color: Colors.black54),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text('No: ${header.transNo}',
+                style: const TextStyle(fontWeight: FontWeight.bold)))
+      ]),
+      const SizedBox(height: 4),
+      Row(children: [
+        const Icon(Icons.calendar_today_outlined,
+            size: 16, color: Colors.black54),
+        const SizedBox(width: 8),
+        Text('Posted: ${header.postedDate.split('T')[0]}')
+      ]),
+      const SizedBox(height: 4),
+      Text('Status: ${header.status}',
+          style: const TextStyle(
+              color: Colors.blue, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      Text('Kategori: ${header.complaintCategory}'),
+      Text('Keluhan: ${header.complaintSubject}',
+          style: const TextStyle(fontStyle: FontStyle.italic)),
+    ],
+  );
 
   Widget _buildPicPanel(BuildContext context, ScFormState formState) {
     context.read<ScFormCubit>();
@@ -873,18 +859,18 @@ class _ServiceCallDetailBodyMobileState
             if (scannedSerialNo == null || !mounted) return;
 
             final matchingItem = detailState.data.detail.firstWhereOrNull(
-              (e) => e.serialNo.trim().toUpperCase().startsWith(
-                    scannedSerialNo.trim().toUpperCase(),
-                  ),
+                  (e) => e.serialNo.trim().toUpperCase().startsWith(
+                scannedSerialNo.trim().toUpperCase(),
+              ),
             );
 
             if (matchingItem != null) {
               final box = Hive.box<ServiceCallValidationEntryModel>(
                   kServiceCallHiveBox);
               final existingData = box.values.firstWhereOrNull(
-                (entry) =>
-                    entry.serialNo.trim().toUpperCase() ==
-                        scannedSerialNo.trim().toUpperCase() &&
+                    (entry) =>
+                entry.serialNo.trim().toUpperCase() ==
+                    scannedSerialNo.trim().toUpperCase() &&
                     entry.transNo == widget.transNo,
               );
 
@@ -933,8 +919,8 @@ class _ServiceCallDetailBodyMobileState
       Map<String, ValidationStatus> validationStatuses) {
     final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
     final existingEntry = box.values.firstWhereOrNull((e) =>
-        e.serialNo.trim().toUpperCase() ==
-            detail.serialNo.trim().toUpperCase() &&
+    e.serialNo.trim().toUpperCase() ==
+        detail.serialNo.trim().toUpperCase() &&
         e.transNo == header.transNo);
 
     String displaySerial = detail.serialNo;
@@ -1008,15 +994,15 @@ class _ServiceCallDetailBodyMobileState
         trailing: Icon(iconData, color: iconColor, size: 28),
         onTap: () async {
           final box =
-              Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
           final existingEntry = box.values.firstWhereOrNull((e) =>
-              e.serialNo.trim().toUpperCase() == serialKey &&
+          e.serialNo.trim().toUpperCase() == serialKey &&
               e.transNo == header.transNo);
           final detailState = context.read<ServiceCallDetailBloc>().state;
           if (detailState is! ServiceCallDetailLoaded) return;
 
           final outdoorSerials =
-              detailState.data.outdoor.map((unit) => unit.serialNo).toList();
+          detailState.data.outdoor.map((unit) => unit.serialNo).toList();
           final problemSources = detailState.data.problems;
 
           String serialForDisplay = detail.serialNo;
@@ -1048,7 +1034,7 @@ class _ServiceCallDetailBodyMobileState
             }
           } else {
             final detailData = (context.read<ServiceCallDetailBloc>().state
-                    as ServiceCallDetailLoaded)
+            as ServiceCallDetailLoaded)
                 .data;
 
             await Navigator.push(
@@ -1171,12 +1157,12 @@ class _ServiceCallDetailBodyMobileState
 
               if (latestFormState.isFormReadyToSubmit) {
                 context.read<ServiceCallSubmittedBloc>().add(
-                      ScFinalValidationRequested(
-                        transNo: widget.transNo,
-                        formState: latestFormState,
-                        problemSources: problems,
-                      ),
-                    );
+                  ScFinalValidationRequested(
+                    transNo: widget.transNo,
+                    formState: latestFormState,
+                    problemSources: problems,
+                  ),
+                );
               } else {
                 // Tampilkan pesan error spesifik
                 if (!latestFormState.isPicStoreValid) {
@@ -1233,7 +1219,7 @@ class _ServiceCallDetailBodyMobileState
       ),
       inputFormatters: [
         TextInputFormatter.withFunction(
-          (oldValue, newValue) =>
+              (oldValue, newValue) =>
               newValue.copyWith(text: newValue.text.toUpperCase()),
         ),
       ],
@@ -1267,21 +1253,21 @@ class _ServiceCallDetailBodyMobileState
           labelText: '$label (*Wajib)',
           border: const OutlineInputBorder(),
           contentPadding:
-              const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         ),
         hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
         items: options
             .map((item) => DropdownMenuItem<String>(
-                  value: item.label,
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(item.label,
-                          style: const TextStyle(fontSize: 14)),
-                    ),
-                  ),
-                ))
+          value: item.label,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(item.label,
+                  style: const TextStyle(fontSize: 14)),
+            ),
+          ),
+        ))
             .toList(),
         onChanged: onChanged,
         selectedItemBuilder: (context) {
@@ -1314,10 +1300,10 @@ class _ServiceCallDetailBodyMobileState
               decoration: InputDecoration(
                 isDense: true,
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 hintText: 'Cari alasan...',
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),

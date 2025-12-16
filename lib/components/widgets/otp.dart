@@ -54,8 +54,6 @@ class _OtpDialogState extends State<OtpDialog> {
   void initState() {
     super.initState();
 
-    print(widget.isPhotoExisting);
-
     context.read<OtpBloc>().add(CheckOtpStatus(widget.transNo,
         hasExistingPhoto: widget.isPhotoExisting));
 

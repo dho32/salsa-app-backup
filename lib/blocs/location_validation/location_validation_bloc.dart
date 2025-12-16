@@ -27,23 +27,43 @@ class LocationValidationBloc
     on<SubmitLocationValidation>(_onSubmitValidation);
   }
 
-  String _getHiveKey(String transNo) =>
+  static String generateHiveKey(String transNo) =>
       transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
   Future<void> _onLoadPhoto(
       LoadLocationPhoto event, Emitter<LocationValidationState> emit) async {
-    final txn =
-        transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+    final key = generateHiveKey(event.transNo);
+    print("📥 [BLoC] Loading Photo for Key: $key");
+
+    final txn = transactionBox.get(key) as IPicPhotoStorable?;
     final photo = txn?.picImageDetail;
 
+    print(key);
+    print(txn);
+    print(photo);
+
     if (photo != null) {
-      final distance = await LocationHelper.calculateDistance(
-        pic: photo,
-        tokoLat: event.tokoLat,
-        tokoLng: event.tokoLng,
-      );
-      emit(LocationPhotoLoaded(photo, distance: distance));
+      // Validasi File Fisik
+      if (File(photo.imagePath).existsSync()) {
+        print("✅ [BLoC] Foto Ditemukan & File Ada: ${photo.imagePath}");
+        final distance = await LocationHelper.calculateDistance(
+          pic: photo,
+          tokoLat: event.tokoLat,
+          tokoLng: event.tokoLng,
+        );
+        emit(LocationPhotoLoaded(photo, distance: distance));
+      } else {
+        print(
+            "❌ [BLoC] Data Hive Ada, Tapi File Fisik HILANG! Menghapus data Hive...");
+        // Bersihkan data sampah
+        if (txn != null) {
+          txn.picImageDetail = null;
+          await transactionBox.put(key, txn);
+        }
+        emit(const LocationPhotoLoaded(null));
+      }
     } else {
+      print("ℹ️ [BLoC] Tidak ada foto tersimpan untuk key ini.");
       emit(const LocationPhotoLoaded(null));
     }
   }
@@ -53,7 +73,6 @@ class LocationValidationBloc
     emit(LocationValidationLoading());
 
     try {
-      // Bersihkan memori gambar sebelum membuka kamera berat
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
 
@@ -70,66 +89,51 @@ class LocationValidationBloc
         return;
       }
 
-      // ──────────────── GPS LOGIC (OPSI A: STRICT) ────────────────
+      // GPS LOGIC
       Position? position;
-
-      // 1. Cek Cache Dulu (Last Known)
       final lastKnown = await Geolocator.getLastKnownPosition();
       bool isFresh = false;
 
       if (lastKnown != null) {
         final age = DateTime.now().difference(lastKnown.timestamp).inMinutes;
-        // Batas toleransi 20 menit. Jika kurang dari itu, dianggap Valid.
         if (age < 20) {
           position = lastKnown;
           isFresh = true;
-          print("📍 [GPS] Pakai Last Known (Umur: $age menit)");
-        } else {
-          print("⚠️ [GPS] Data Last Known Basi (Umur: $age menit). Skip.");
         }
       }
 
       if (!isFresh) {
         try {
-          print("📡 [GPS] Mencari sinyal satelit baru...");
           position = await Geolocator.getCurrentPosition(
-            locationSettings: LocationSettings(
-              accuracy: LocationAccuracy.high,
-            ), // High = 10-15m (Cukup & Lebih Cepat)
-          ).timeout(const Duration(seconds: 10)); // Timeout 10 Detik
+            locationSettings:
+                const LocationSettings(accuracy: LocationAccuracy.high),
+          ).timeout(const Duration(seconds: 10));
         } catch (e) {
-          print("❌ [GPS] Timeout/Error di Gedung Beton: $e");
-
-          // 3. STRICT FAILURE (Opsi A)
-          // Jika gagal lock GPS baru, kita TOLAK. Jangan pakai data basi.
           emit(const LocationValidationFailure(
               "Gagal mendeteksi lokasi akurat. Harap geser ke dekat jendela atau area terbuka.",
               photo: null));
-          return; // Stop proses
+          return;
         }
       }
 
       final String locationString =
           "Loc: ${position!.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}";
 
-      // 1. Siapkan Data User (Untuk Watermark)
+      // Prepare Watermark
       final userData = await AuthStorage.getUser();
       final technicianName = userData['name'] ?? 'Unknown';
       final deviceModel = userData['device_model'] ?? 'Unknown Device';
       final timestamp = DateTime.now();
 
-      // 2. Siapkan Directory Permanen
       final appDir = await getApplicationDocumentsDirectory();
       final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
       if (!await imagesDir.exists()) {
-        await imagesDir.create();
+        await imagesDir.create(recursive: true);
       }
 
-      // 3. Tentukan Path Tujuan (Prefix WM_PIC_)
       final targetPath = p.join(
           imagesDir.path, 'WM_PIC_${timestamp.millisecondsSinceEpoch}.jpg');
 
-      // 4. PROSES WATERMARK
       final request = WatermarkRequest(
         originalPath: image.path,
         targetPath: targetPath,
@@ -143,8 +147,9 @@ class LocationValidationBloc
       final String? finalImagePath =
           await WatermarkService.processImage(request);
 
-      if (finalImagePath == null) {
-        emit(const LocationValidationFailure("Gagal memproses watermark foto",
+      if (finalImagePath == null || !File(finalImagePath).existsSync()) {
+        emit(const LocationValidationFailure(
+            "Gagal memproses/menyimpan watermark foto",
             photo: null));
         return;
       }
@@ -166,15 +171,18 @@ class LocationValidationBloc
         tokoLng: event.tokoLng,
       );
 
-      // 6. Simpan ke Hive (via Interface)
-      final txn =
-          transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
-      if (txn != null) {
+      // 🔥 SIMPAN KE HIVE (SAFE METHOD)
+      final key = generateHiveKey(event.transNo);
+      var txn = transactionBox.get(key);
+
+      if (txn != null && txn is IPicPhotoStorable) {
         txn.picImageDetail = detail;
-        await txn.save();
+        await transactionBox.put(key, txn); // Explicit PUT
+        print("💾 [BLoC] Foto berhasil disimpan ke Hive: $key");
       } else {
         print(
-            "PERINGATAN: Gagal menemukan TransactionInfo/PosTransactionInfo untuk ${event.transNo}");
+            "⚠️ [BLoC] Transaksi tidak ditemukan di Hive ($key), foto tidak tersimpan ke database!");
+        // Optional: Throw error kalau mau strict
       }
 
       emit(LocationPhotoLoaded(detail, distance: distance));
@@ -185,11 +193,12 @@ class LocationValidationBloc
 
   Future<void> _onRemovePhoto(
       RemoveLocationPhoto event, Emitter<LocationValidationState> emit) async {
-    final txn =
-        transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+    final key = generateHiveKey(event.transNo);
+    final txn = transactionBox.get(key) as IPicPhotoStorable?;
     if (txn != null) {
       txn.picImageDetail = null;
-      await txn.save();
+      await transactionBox.put(key, txn); // Explicit PUT
+      print("🗑️ [BLoC] Foto dihapus dari Hive: $key");
     }
     emit(const LocationPhotoLoaded(null));
   }
@@ -199,12 +208,19 @@ class LocationValidationBloc
     emit(LocationValidationLoading());
     await Future.delayed(const Duration(milliseconds: 50));
 
-    final txn =
-        transactionBox.get(_getHiveKey(event.transNo)) as IPicPhotoStorable?;
+    final key = generateHiveKey(event.transNo);
+    final txn = transactionBox.get(key) as IPicPhotoStorable?;
     final photo = txn?.picImageDetail;
 
     if (photo == null) {
       emit(const LocationValidationFailure("Harap ambil foto terlebih dahulu"));
+      return;
+    }
+
+    // Validasi final file exist
+    if (!File(photo.imagePath).existsSync()) {
+      emit(const LocationValidationFailure(
+          "File foto fisik hilang. Harap ambil ulang."));
       return;
     }
 
@@ -223,7 +239,7 @@ class LocationValidationBloc
         tokoLng: event.tokoLng,
       );
       emit(LocationValidationFailure(
-        "Lokasi foto tidak sesuai dengan toko terdaftar. Mohon ambil ulang di lokasi toko.",
+        "Lokasi foto terlalu jauh (${distance.toStringAsFixed(0)}m). Mohon ambil ulang di lokasi toko.",
         photo: photo,
         distance: distance,
       ));
