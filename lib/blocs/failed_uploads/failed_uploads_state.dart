@@ -1,6 +1,14 @@
 part of 'failed_uploads_bloc.dart';
 
-enum FailedUploadsStatus { initial, loading, loaded, uploading, error }
+enum FailedUploadsStatus {
+  initial,
+  loading,
+  loaded,
+  uploading,
+  error,
+  success,
+  failure
+}
 
 enum SuccessAction { stayAndRefresh, popToHome }
 

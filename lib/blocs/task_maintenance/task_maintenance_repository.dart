@@ -10,10 +10,7 @@ class TaskMaintenanceRepository {
   Future<List<TransactionSuggestion>> searchTransactions(
       String transNo, String maintenanceBy) async {
     try {
-      final params = {
-        'trans_no': transNo,
-        'maintenance_by': maintenanceBy
-      };
+      final params = {'trans_no': transNo, 'maintenance_by': maintenanceBy};
 
       Uri uri = getUrl(pathUrl: 'task_maintenance/v2', params: params);
       final response = await http.get(uri);
@@ -80,9 +77,9 @@ class TaskMaintenanceRepository {
         // Periksa status dari body respons API Anda
         if (responseBody['status'] != 'OK') {
           // Jika API mengembalikan status error
-          throw Exception(responseBody['message'] ?? 'Gagal memperbarui data di server.');
+          throw Exception(
+              responseBody['message'] ?? 'Gagal memperbarui data di server.');
         }
-        // Jika status 'OK', tidak perlu return apa-apa (void)
       } else {
         // Jika status code bukan 200
         throw Exception(
@@ -93,10 +90,60 @@ class TaskMaintenanceRepository {
       throw Exception(
           'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
     } catch (e) {
-      // Error lain (termasuk Exception dari atas)
-      // Lempar ulang agar bisa ditangkap oleh UI
       rethrow;
     }
   }
-}
 
+  Future<List<TransactionSuggestion>> getPendingTasks(
+      String maintenanceBy, String createdBy) async {
+    try {
+      final params = {
+        'maintenance_by': maintenanceBy,
+        'created_by': createdBy,
+      };
+
+      Uri uri = getUrl(pathUrl: 'task_maintenance/pending_tasks', params: params);
+      final response = await http.get(uri);
+      print("Response Status Code: ${response.statusCode}");
+      print("Response Body: ${response.body}");
+
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['status'] == 'OK') {
+          final List<dynamic> results = body['result'] ?? [];
+          return results
+              .map((json) => TransactionSuggestion.fromJson(json))
+              .toList();
+        } else {
+          return [];
+        }
+      } else {
+        throw Exception(
+            'Gagal memuat list tugas. Code: ${response.statusCode}');
+      }
+
+      // await Future.delayed(Duration(seconds: 1)); // Simulasi delay
+      // return [
+      //   TransactionSuggestion(
+      //       transNo: "ZOMBIE-123", // Transaksi Pura-pura
+      //       customerName: "Toko Test",
+      //       customerCode: "XXX",
+      //       status: "NEED_UPLOAD", // Status memicu
+      //       type: "SERVICE"
+      //   ),
+      //   TransactionSuggestion(
+      //       transNo: "ZOMBIE-12453", // Transaksi Pura-pura
+      //       customerName: "Toko Test45",
+      //       customerCode: "XX45X",
+      //       status: "NEED_UPLOAD", // Status memicu
+      //       type: "CUCI"
+      //   )
+      // ];
+    } catch (e) {
+      // Return list kosong jika gagal koneksi/error, supaya user tetap bisa pakai fitur search manual
+      log("Error fetching pending tasks: $e");
+      return [];
+    }
+  }
+}

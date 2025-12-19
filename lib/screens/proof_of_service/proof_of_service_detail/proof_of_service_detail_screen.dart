@@ -8,6 +8,7 @@ import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_cubit.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_repository.dart';
 import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
+import '../../../blocs/failed_uploads/failed_uploads_repository.dart';
 import '../../../blocs/location_validation/location_validation_bloc.dart';
 import '../../../blocs/location_validation/location_validation_event.dart';
 import '../../../blocs/location_validation/location_validation_state.dart';
@@ -87,315 +88,315 @@ class _ProofOfServiceDetailScreenState
       );
     }
 
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(
-          create: (context) =>
-          ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
-            ..add(FetchProofOfServiceDetail(widget.transNo)),
-        ),
-        BlocProvider(
-          create: (context) {
-            final bloc = PosSubmittedBloc(repository: PosSubmittedRepository());
-            Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox)
-                .then((box) {
-              if (box.containsKey(widget.transNo)) {
-                bloc.add(LoadPosValidationPartial(widget.transNo));
+    // 🔥 2. BUNGKUS DENGAN REPOSITORY PROVIDER
+    return RepositoryProvider(
+      create: (context) => FailedUploadsRepository(), // Buat Repo di sini
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(
+            create: (context) =>
+            ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
+              ..add(FetchProofOfServiceDetail(widget.transNo)),
+          ),
+          BlocProvider(
+            create: (context) {
+              final bloc =
+              PosSubmittedBloc(repository: PosSubmittedRepository());
+              Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox)
+                  .then((box) {
+                if (box.containsKey(widget.transNo)) {
+                  bloc.add(LoadPosValidationPartial(widget.transNo));
+                }
+              });
+              return bloc;
+            },
+          ),
+          BlocProvider(create: (context) => UploadProgressCubit()),
+
+          // 🔥 3. UPDATE FAILED UPLOADS BLOC
+          BlocProvider(
+            create: (context) => FailedUploadsBloc(
+              progressCubit: context.read<UploadProgressCubit>(),
+              repository: context.read<FailedUploadsRepository>(), // INJECT REPO
+            )..add(LoadFailedUploads()),
+          ),
+
+          BlocProvider<PosFormCubit>(
+            create: (context) {
+              final detailState =
+                  context.read<ProofOfServiceDetailBloc>().state;
+              bool initialAllUnitsValidated = false;
+              if (detailState is ProofOfServiceDetailLoaded) {
+                initialAllUnitsValidated =
+                    detailState.data.detail.every((detail) {
+                      final serialKey = detail.serialNo.trim().toUpperCase();
+                      return detailState.validationStatuses[serialKey] ==
+                          ValidationStatus.completed;
+                    });
               }
-            });
-            return bloc;
-          },
-        ),
-        BlocProvider(create: (context) => UploadProgressCubit()),
-        BlocProvider(
-          create: (context) => FailedUploadsBloc(
-            progressCubit: context.read<UploadProgressCubit>(),
-          )..add(LoadFailedUploads()),
-        ),
-        BlocProvider<PosFormCubit>(
-          create: (context) {
-            final detailState = context.read<ProofOfServiceDetailBloc>().state;
-            bool initialAllUnitsValidated = false;
-            if (detailState is ProofOfServiceDetailLoaded) {
-              initialAllUnitsValidated =
+              return PosFormCubit(
+                transNo: widget.transNo,
+                initialAllUnitsValidated: initialAllUnitsValidated,
+              );
+            },
+          ),
+          BlocProvider(
+            create: (context) => PosUnserviceableBloc(transNo: widget.transNo)
+              ..add(LoadUnserviceableDraft()),
+          ),
+          BlocProvider(
+            create: (context) => OtpBloc(repository: OtpRepository())
+              ..add(CheckOtpStatus(widget.transNo)),
+          ),
+          BlocProvider(
+            lazy: false,
+            create: (context) {
+              final detailBloc = context.read<ProofOfServiceDetailBloc>();
+              final detailState = detailBloc.state;
+              double lat = 0;
+              double long = 0;
+              if (detailState is ProofOfServiceDetailLoaded) {
+                lat = double.tryParse(detailState.data.header.latitude) ?? 0;
+                long = double.tryParse(detailState.data.header.longitude) ?? 0;
+              }
+              return LocationValidationBloc(transactionBox: _transactionInfoBox!)
+                ..add(LoadLocationPhoto(widget.transNo, lat, long));
+            },
+          ),
+        ],
+        child: MultiBlocListener(
+          listeners: [
+            BlocListener<LocationValidationBloc, LocationValidationState>(
+              listener: (context, state) {
+                if (state is LocationPhotoLoaded && state.photo != null) {
+                  print("🔄 [POS Sync] Foto baru diterima, update PosFormCubit!");
+                  context.read<PosFormCubit>().picImageChanged(state.photo!);
+                }
+              },
+            ),
+            BlocListener<PosSubmittedBloc, PosSubmittedState>(
+              listener: (context, state) {
+                if (state is PosValidationUploadInProgress) {
+                  final uploadCubit = context.read<UploadProgressCubit>();
+                  uploadCubit.reset();
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => BlocProvider.value(
+                      value: uploadCubit,
+                      child: const UploadProgressDialog(),
+                    ),
+                  );
+                } else if (state is PosValidationUploadPartial) {
+                  if (Navigator.canPop(context)) Navigator.pop(context);
+                  showPartialUploadDialog(context, state.successCount,
+                      state.failureCount, state.failedFiles);
+                } else if (state is PosValidationSuccess) {
+                  if (Navigator.canPop(context)) Navigator.pop(context);
+                  ConfirmationService().processQueue();
+                  showSuccessDialog(context, "Data berhasil dikirim.", onOk: () {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  });
+                } else if (state is PosValidationFailure) {
+                  if (Navigator.canPop(context)) Navigator.pop(context);
+                  showFailureDialog(context, state.error);
+                } else if (state is ShowCreateServiceCallDialog) {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text("Unit Bermasalah Terdeteksi"),
+                      content: const Text(kStringDialogUnitProblem),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: const Text("OK"))
+                      ],
+                    ),
+                  );
+                } else if (state is ProceedToOtpDialog) {
+                  final detailState =
+                      context.read<ProofOfServiceDetailBloc>().state;
+                  if (detailState is ProofOfServiceDetailLoaded) {
+                    final header = detailState.data.header;
+
+                    bool isPhotoReady = false;
+                    final locationBloc = context.read<LocationValidationBloc>();
+                    final otpBloc = context.read<OtpBloc>();
+
+                    final locState = locationBloc.state;
+                    if (locState is LocationPhotoLoaded &&
+                        locState.photo != null) {
+                      isPhotoReady = true;
+                    } else if (locState is LocationValidationFailure &&
+                        locState.photo != null) {
+                      isPhotoReady = true;
+                    }
+
+                    if (!isPhotoReady && _transactionInfoBox != null) {
+                      try {
+                        final key = _getHiveKey(widget.transNo);
+                        final info = _transactionInfoBox!.get(key);
+                        if (info?.picImageDetail != null) {
+                          isPhotoReady = true;
+                          locationBloc
+                              .add(LoadLocationPhoto(widget.transNo, 0, 0));
+                        }
+                      } catch (e) {
+                        print("Error check hive manual: $e");
+                      }
+                    }
+
+                    showDialog<void>(
+                      context: context,
+                      builder: (_) {
+                        return MultiBlocProvider(
+                          providers: [
+                            BlocProvider.value(value: otpBloc),
+                            BlocProvider.value(value: locationBloc),
+                            BlocProvider.value(
+                                value: context.read<UploadProgressCubit>()),
+                          ],
+                          child: OtpDialog(
+                            transNo: header.transNo,
+                            shipTo: header.shipToCode,
+                            email: header.storeEmail,
+                            storeLat: double.tryParse(header.latitude) ?? 0.0,
+                            storeLong: double.tryParse(header.longitude) ?? 0.0,
+                            isPhotoExisting: isPhotoReady,
+                            onVerified: () {
+                              Navigator.pop(context);
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => const Center(
+                                    child: CircularProgressIndicator()),
+                              );
+                              AuthStorage.getUser().then((user) {
+                                getPublicIpAddress().then((ip) {
+                                  if (!mounted) return; // SAFEGUARD
+                                  context.read<PosSubmittedBloc>().add(
+                                    SubmitPosValidation(
+                                      transNo: header.transNo,
+                                      createdBy: user['user_id'] ?? '',
+                                      createdByName: user['name'] ?? '',
+                                      createdByIP: ip,
+                                      progressCubit:
+                                      context.read<UploadProgressCubit>(),
+                                    ),
+                                  );
+                                });
+                              });
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  }
+                }
+              },
+            ),
+            BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
+              listener: (context, detailState) {
+                if (detailState is ProofOfServiceDetailLoaded) {
+                  final formCubit = context.read<PosFormCubit>();
+                  final allUnitsValidated =
                   detailState.data.detail.every((detail) {
                     final serialKey = detail.serialNo.trim().toUpperCase();
                     return detailState.validationStatuses[serialKey] ==
                         ValidationStatus.completed;
                   });
-            }
-            return PosFormCubit(
-              transNo: widget.transNo,
-              initialAllUnitsValidated: initialAllUnitsValidated,
-            );
-          },
-        ),
-        BlocProvider(
-          create: (context) => PosUnserviceableBloc(transNo: widget.transNo)
-            ..add(LoadUnserviceableDraft()),
-        ),
-
-        // 🔥 OTP BLoC (Global)
-        BlocProvider(
-          create: (context) => OtpBloc(repository: OtpRepository())
-            ..add(CheckOtpStatus(widget.transNo)),
-        ),
-
-        // 🔥 Location Validation BLoC (Global & Lazy False)
-        BlocProvider(
-          lazy: false,
-          create: (context) {
-            final detailBloc = context.read<ProofOfServiceDetailBloc>();
-            final detailState = detailBloc.state;
-            double lat = 0;
-            double long = 0;
-            if (detailState is ProofOfServiceDetailLoaded) {
-              lat = double.tryParse(detailState.data.header.latitude) ?? 0;
-              long = double.tryParse(detailState.data.header.longitude) ?? 0;
-            }
-            return LocationValidationBloc(transactionBox: _transactionInfoBox!)
-              ..add(LoadLocationPhoto(widget.transNo, lat, long));
-          },
-        ),
-      ],
-      child: MultiBlocListener(
-        listeners: [
-          // 1. Sync Foto: LocationBloc -> PosFormCubit
-          BlocListener<LocationValidationBloc, LocationValidationState>(
-            listener: (context, state) {
-              if (state is LocationPhotoLoaded && state.photo != null) {
-                print("🔄 [POS Sync] Foto baru diterima, update PosFormCubit!");
-                context.read<PosFormCubit>().picImageChanged(state.photo!);
-              }
-            },
-          ),
-
-          // 2. Listener Submitted State
-          BlocListener<PosSubmittedBloc, PosSubmittedState>(
-            listener: (context, state) {
-              if (state is PosValidationUploadInProgress) {
-                final uploadCubit = context.read<UploadProgressCubit>();
-                uploadCubit.reset();
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => BlocProvider.value(
-                    value: uploadCubit,
-                    child: const UploadProgressDialog(),
-                  ),
-                );
-              } else if (state is PosValidationUploadPartial) {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-                showPartialUploadDialog(context, state.successCount,
-                    state.failureCount, state.failedFiles);
-              } else if (state is PosValidationSuccess) {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-                ConfirmationService().processQueue();
-                showSuccessDialog(context, "Data berhasil dikirim.", onOk: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                });
-              } else if (state is PosValidationFailure) {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-                showFailureDialog(context, state.error);
-              } else if (state is ShowCreateServiceCallDialog) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (dialogContext) => AlertDialog(
-                    title: const Text("Unit Bermasalah Terdeteksi"),
-                    content: const Text(kStringDialogUnitProblem),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(dialogContext),
-                          child: const Text("OK"))
-                    ],
-                  ),
-                );
-              } else if (state is ProceedToOtpDialog) {
-                final detailState =
-                    context.read<ProofOfServiceDetailBloc>().state;
-                if (detailState is ProofOfServiceDetailLoaded) {
-                  final header = detailState.data.header;
-
-                  bool isPhotoReady = false;
-                  final locationBloc = context.read<LocationValidationBloc>();
-                  final otpBloc = context.read<OtpBloc>();
-
-                  final locState = locationBloc.state;
-                  if (locState is LocationPhotoLoaded &&
-                      locState.photo != null) {
-                    isPhotoReady = true;
-                  } else if (locState is LocationValidationFailure &&
-                      locState.photo != null) {
-                    isPhotoReady = true;
-                  }
-
-                  if (!isPhotoReady && _transactionInfoBox != null) {
-                    try {
-                      final key = _getHiveKey(widget.transNo);
-                      final info = _transactionInfoBox!.get(key);
-                      if (info?.picImageDetail != null) {
-                        isPhotoReady = true;
-                        locationBloc
-                            .add(LoadLocationPhoto(widget.transNo, 0, 0));
-                      }
-                    } catch (e) {
-                      print("Error check hive manual: $e");
-                    }
-                  }
-
-                  showDialog<void>(
-                    context: context,
-                    builder: (_) {
-                      return MultiBlocProvider(
-                        providers: [
-                          BlocProvider.value(value: otpBloc),
-                          BlocProvider.value(value: locationBloc),
-                          BlocProvider.value(
-                              value: context.read<UploadProgressCubit>()),
-                        ],
-                        child: OtpDialog(
-                          transNo: header.transNo,
-                          shipTo: header.shipToCode,
-                          email: header.storeEmail,
-                          storeLat: double.tryParse(header.latitude) ?? 0.0,
-                          storeLong: double.tryParse(header.longitude) ?? 0.0,
-                          isPhotoExisting: isPhotoReady,
-                          onVerified: () {
-                            Navigator.pop(context);
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (_) => const Center(
-                                  child: CircularProgressIndicator()),
-                            );
-                            AuthStorage.getUser().then((user) {
-                              getPublicIpAddress().then((ip) {
-                                context.read<PosSubmittedBloc>().add(
-                                  SubmitPosValidation(
-                                    transNo: header.transNo,
-                                    createdBy: user['user_id'] ?? '',
-                                    createdByName: user['name'] ?? '',
-                                    createdByIP: ip,
-                                    progressCubit:
-                                    context.read<UploadProgressCubit>(),
-                                  ),
-                                );
-                              });
-                            });
-                          },
-                        ),
-                      );
-                    },
-                  );
+                  formCubit.updateAllUnitsValidated(allUnitsValidated);
+                  formCubit.recalculateFinalTempLimit();
                 }
-              }
-            },
-          ),
-
-          // 3. Listener Detail (Untuk validasi progress)
-          BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
-            listener: (context, detailState) {
-              if (detailState is ProofOfServiceDetailLoaded) {
-                final formCubit = context.read<PosFormCubit>();
-                final allUnitsValidated =
-                detailState.data.detail.every((detail) {
-                  final serialKey = detail.serialNo.trim().toUpperCase();
-                  return detailState.validationStatuses[serialKey] ==
-                      ValidationStatus.completed;
-                });
-                formCubit.updateAllUnitsValidated(allUnitsValidated);
-                formCubit.recalculateFinalTempLimit();
-              }
-            },
-          ),
-        ],
-
-        // 🔥 CHILD UTAMA ADA DISINI (BUKAN DI DALAM LISTENER)
-        child: Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage("assets/images/bg_app.png"),
-              fit: BoxFit.cover,
+              },
             ),
-          ),
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text(""),
+          ],
+          child: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/bg_app.png"),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: Scaffold(
               backgroundColor: Colors.transparent,
-              elevation: 0,
-              systemOverlayStyle: SystemUiOverlayStyle.light,
-              actions: [
-                BlocBuilder<PosSubmittedBloc, PosSubmittedState>(
-                  builder: (context, submitState) {
-                    if (submitState is! PosValidationUploadPartial) {
-                      return BlocBuilder<ProofOfServiceDetailBloc,
-                          ProofOfServiceDetailState>(
-                        builder: (context, detailState) {
-                          if (detailState is ProofOfServiceDetailLoaded) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 16.0),
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.warning_amber_rounded,
-                                    size: 16),
-                                label: const Text(
-                                    "Laporkan Masalah Jika Tidak Bisa Service"),
-                                style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.orange.shade900,
-                                  backgroundColor:
-                                  Colors.white.withOpacity(0.9),
-                                  shape: const StadiumBorder(),
-                                  elevation: 2,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                onPressed: () {
-                                  final List<NoteOption> rawReasons =
-                                      detailState.data.unserviceableReasons ??
-                                          [];
-                                  final List<String> reasons =
-                                  rawReasons.map((e) => e.label).toList();
-                                  final String transNo =
-                                      detailState.data.header.transNo;
-                                  final posUnserviceableBloc =
-                                  context.read<PosUnserviceableBloc>();
-                                  final uploadProgressCubit =
-                                  context.read<UploadProgressCubit>();
+              extendBodyBehindAppBar: true,
+              appBar: AppBar(
+                title: const Text(""),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                systemOverlayStyle: SystemUiOverlayStyle.light,
+                actions: [
+                  BlocBuilder<PosSubmittedBloc, PosSubmittedState>(
+                    builder: (context, submitState) {
+                      if (submitState is! PosValidationUploadPartial) {
+                        return BlocBuilder<ProofOfServiceDetailBloc,
+                            ProofOfServiceDetailState>(
+                          builder: (context, detailState) {
+                            if (detailState is ProofOfServiceDetailLoaded) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 16.0),
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.warning_amber_rounded,
+                                      size: 16),
+                                  label: const Text(
+                                      "Laporkan Masalah Jika Tidak Bisa Service"),
+                                  style: ElevatedButton.styleFrom(
+                                    foregroundColor: Colors.orange.shade900,
+                                    backgroundColor:
+                                    Colors.white.withOpacity(0.9),
+                                    shape: const StadiumBorder(),
+                                    elevation: 2,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  onPressed: () {
+                                    final List<NoteOption> rawReasons =
+                                        detailState.data.unserviceableReasons ??
+                                            [];
+                                    final List<String> reasons =
+                                    rawReasons.map((e) => e.label).toList();
+                                    final String transNo =
+                                        detailState.data.header.transNo;
+                                    final posUnserviceableBloc =
+                                    context.read<PosUnserviceableBloc>();
+                                    final uploadProgressCubit =
+                                    context.read<UploadProgressCubit>();
 
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => MultiBlocProvider(
-                                        providers: [
-                                          BlocProvider.value(
-                                              value: posUnserviceableBloc),
-                                          BlocProvider.value(
-                                              value: uploadProgressCubit),
-                                        ],
-                                        child: PosReportIssueScreen(
-                                          transNo: transNo,
-                                          reasons: reasons,
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => MultiBlocProvider(
+                                          providers: [
+                                            BlocProvider.value(
+                                                value: posUnserviceableBloc),
+                                            BlocProvider.value(
+                                                value: uploadProgressCubit),
+                                          ],
+                                          child: PosReportIssueScreen(
+                                            transNo: transNo,
+                                            reasons: reasons,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
+                                    );
+                                  },
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+              body: SafeArea(
+                child: ProofOfServiceDetailBodyMobile(
+                  transNo: widget.transNo,
                 ),
-              ],
-            ),
-            body: SafeArea(
-              child: ProofOfServiceDetailBodyMobile(
-                transNo: widget.transNo,
               ),
             ),
           ),
