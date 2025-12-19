@@ -44,7 +44,7 @@ class _AhoDialogState extends State<AhoDialog> {
       widget.onSubmit(ahoNumber);
 
       // 3. Tutup dialog AHO
-      Navigator.of(context).pop();
+      // Navigator.of(context).pop();
     }
   }
 

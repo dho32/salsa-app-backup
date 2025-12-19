@@ -15,6 +15,8 @@ enum SuccessAction { stayAndRefresh, popToHome }
 class FailedUploadsState extends Equatable {
   final FailedUploadsStatus status;
   final List<Map<String, dynamic>> failedTransactions;
+  final int zombieCount;
+  final int totalIssues;
   final String? uploadingTransNo;
   final String? errorMessage;
   final String? snackbarMessage;
@@ -29,6 +31,8 @@ class FailedUploadsState extends Equatable {
   const FailedUploadsState({
     this.status = FailedUploadsStatus.initial,
     this.failedTransactions = const [],
+    this.zombieCount = 0,
+    this.totalIssues = 0,
     this.uploadingTransNo,
     this.errorMessage,
     this.snackbarMessage,
@@ -44,6 +48,8 @@ class FailedUploadsState extends Equatable {
   FailedUploadsState copyWith({
     FailedUploadsStatus? status,
     List<Map<String, dynamic>>? failedTransactions,
+    int? zombieCount, // Added
+    int? totalIssues,  // Added
     String? uploadingTransNo,
     bool clearUploadingTransNo = false,
     String? errorMessage,
@@ -64,16 +70,18 @@ class FailedUploadsState extends Equatable {
     return FailedUploadsState(
       status: status ?? this.status,
       failedTransactions: failedTransactions ?? this.failedTransactions,
+      zombieCount: zombieCount ?? this.zombieCount,
+      totalIssues: totalIssues ?? this.totalIssues,
       uploadingTransNo: clearUploadingTransNo
           ? null
           : (uploadingTransNo ?? this.uploadingTransNo),
       errorMessage:
-          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
       snackbarMessage: clearSnackbarMessage
           ? null
           : (snackbarMessage ?? this.snackbarMessage),
       successMessage:
-          clearSuccessMessage ? null : (successMessage ?? this.successMessage),
+      clearSuccessMessage ? null : (successMessage ?? this.successMessage),
       successAction: successAction ?? this.successAction,
       retrySuccessCount: clearRetryResult
           ? null
@@ -82,30 +90,32 @@ class FailedUploadsState extends Equatable {
           ? null
           : (retryFailureCount ?? this.retryFailureCount),
       retryFailedFiles:
-          clearRetryResult ? null : (retryFailedFiles ?? this.retryFailedFiles),
+      clearRetryResult ? null : (retryFailedFiles ?? this.retryFailedFiles),
       lastSuccessfulRetryTransNo: clearLastSuccessfulRetry
           ? null
           : (lastSuccessfulRetryTransNo ?? this.lastSuccessfulRetryTransNo),
       lastSuccessfulRetryModuleType: clearLastSuccessfulRetry
           ? null
           : (lastSuccessfulRetryModuleType ??
-              this.lastSuccessfulRetryModuleType),
+          this.lastSuccessfulRetryModuleType),
     );
   }
 
   @override
   List<Object?> get props => [
-        status,
-        failedTransactions,
-        uploadingTransNo,
-        errorMessage,
-        snackbarMessage,
-        successMessage,
-        successAction,
-        retrySuccessCount,
-        retryFailureCount,
-        retryFailedFiles,
-        lastSuccessfulRetryTransNo,
-        lastSuccessfulRetryModuleType,
-      ];
+    status,
+    failedTransactions,
+    zombieCount,
+    totalIssues,
+    uploadingTransNo,
+    errorMessage,
+    snackbarMessage,
+    successMessage,
+    successAction,
+    retrySuccessCount,
+    retryFailureCount,
+    retryFailedFiles,
+    lastSuccessfulRetryTransNo,
+    lastSuccessfulRetryModuleType,
+  ];
 }

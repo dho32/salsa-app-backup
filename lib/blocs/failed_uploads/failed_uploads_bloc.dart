@@ -9,6 +9,7 @@ import '../../components/upload_s3_service.dart';
 import '../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../models/service_call/sc_unserviceable_model.dart';
 import '../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../models/task_maintenance/task_maintenance_model.dart'; // Import Model Suggestion
 import '../../screens/common/services/confirmation_service.dart';
 import 'failed_uploads_repository.dart';
 
@@ -17,7 +18,7 @@ part 'failed_uploads_state.dart';
 
 class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
   final UploadProgressCubit progressCubit;
-  final FailedUploadsRepository repository; // 🔥 Wajib ada
+  final FailedUploadsRepository repository;
   final List<StreamSubscription> _hiveSubscriptions = [];
 
   FailedUploadsBloc({
@@ -25,13 +26,41 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     required this.repository,
   }) : super(const FailedUploadsState()) {
     on<LoadFailedUploads>(_onLoadFailedUploads);
-    on<RetryTransaction>(_onRetryTransaction); // Handler baru
+    on<RetryTransaction>(_onRetryTransaction);
     on<ClearSnackbarMessage>(_onClearSnackbarMessage);
     on<ClearSuccessMessage>(_onClearSuccessMessage);
+
+    // 🔥 EVENT BARU: Untuk Sinkronisasi Zombie & Total Issues
+    on<SyncWithApiPending>(_onSyncWithApiPending);
+
     _listenToHiveChanges();
   }
 
-  // --- 1. LOAD DATA (TETAP SAMA) ---
+  // --- 1. SYNC LOGIC (OPTIMASI ZOMBIE) ---
+  void _onSyncWithApiPending(
+      SyncWithApiPending event, Emitter<FailedUploadsState> emit) {
+
+    // Ambil transNo dari Hive yang sudah ada di state saat ini
+    final localTransNos = state.failedTransactions
+        .map((t) => t['transNo'] as String)
+        .toSet();
+
+    int zombieCount = 0;
+    for (var apiTask in event.apiPendingList) {
+      // Jika di API ada status pending tapi di HP tidak ada datanya (Zombie)
+      if (!localTransNos.contains(apiTask.transNo)) {
+        zombieCount++;
+      }
+    }
+
+    // Update state dengan angka zombie dan total issues tanpa menghapus data lain
+    emit(state.copyWith(
+      zombieCount: zombieCount,
+      totalIssues: state.failedTransactions.length + zombieCount,
+    ));
+  }
+
+  // --- 2. LOAD DATA (DIPERBARUI) ---
   Future<void> _onLoadFailedUploads(
       LoadFailedUploads event, Emitter<FailedUploadsState> emit) async {
     final bool isInitialLoad = state.status == FailedUploadsStatus.initial;
@@ -59,9 +88,11 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       await loadFromBox(kPosUnserviceablePartialBox, 'POS_UNSERVICEABLE');
       await loadFromBox(kScUnserviceablePartialBox, 'SC_UNSERVICEABLE');
 
+      // Setelah load dari Hive, update total issues (Zombie tetap nol sampai SyncWithApiPending dipanggil)
       emit(state.copyWith(
         status: FailedUploadsStatus.loaded,
         failedTransactions: allFailedTyped,
+        totalIssues: allFailedTyped.length + state.zombieCount,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -72,7 +103,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     }
   }
 
-  // --- 2. LOGIC RETRY / RESET (INTI PERUBAHAN) ---
+  // --- 3. RETRY / RESET LOGIC ---
   Future<void> _onRetryTransaction(
       RetryTransaction event, Emitter<FailedUploadsState> emit) async {
 
@@ -87,39 +118,37 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     ));
 
     try {
-      // === KASUS 1: ZOMBIE (TIDAK MATCH) -> RESET SERVER ===
+      // === KASUS 1: ZOMBIE (RESET SERVER) ===
       if (event.isZombie) {
         await repository.resetTransactionData(event.transNo);
 
-        // Hapus dari list UI
         final updatedList = List<Map<String, dynamic>>.from(state.failedTransactions)
           ..removeWhere((t) => t['transNo'] == event.transNo);
 
         emit(state.copyWith(
           status: FailedUploadsStatus.success,
           failedTransactions: updatedList,
+          zombieCount: (state.zombieCount - 1).clamp(0, 999), // Kurangi zombie count
+          totalIssues: (state.totalIssues - 1).clamp(0, 999),
           clearUploadingTransNo: true,
           successMessage: "Status transaksi ${event.transNo} berhasil di-reset.",
         ));
         return;
       }
 
-      // === KASUS 2: MATCH (ADA DI HIVE) -> UPLOAD S3 (Logic Lama) ===
-
-      // Ambil data detail dari Hive (Local State)
+      // === KASUS 2: NORMAL RETRY (UPLOAD S3) ===
       final transactionData = state.failedTransactions.firstWhere(
             (t) => t['transNo'] == event.transNo,
         orElse: () => {},
       );
 
-      if (transactionData.isEmpty) throw Exception("Data lokal tidak ditemukan untuk upload ulang.");
+      if (transactionData.isEmpty) throw Exception("Data lokal tidak ditemukan.");
 
       final String moduleType = transactionData['module']?.toString() ?? 'UNKNOWN';
       final List<String> originalFailedFiles = (transactionData['failedFiles'] as List<dynamic>?)?.cast<String>() ?? [];
       final List<dynamic> presignedDetail = (transactionData['presignedDetail'] as List<dynamic>?) ?? [];
       final String storeName = transactionData['storeName']?.toString() ?? '';
 
-      // Eksekusi Service Upload S3 Lama
       UploadResult result;
       if (moduleType == 'POS') {
         result = await uploadPosImagesToS3(event.transNo, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles);
@@ -128,18 +157,17 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       } else if (moduleType == 'POS_UNSERVICEABLE') {
         if (!Hive.isBoxOpen(kPosUnserviceableDraftsBox)) await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
         final report = Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox).get(event.transNo);
-        if (report == null) throw Exception("Draft POS tidak ditemukan.");
+        if (report == null) throw Exception("Draft tidak ditemukan.");
         result = await uploadPOSUnserviceableImagesToS3(report, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'SC_UNSERVICEABLE') {
         if (!Hive.isBoxOpen(kScUnserviceableDraftsBox)) await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
         final report = Hive.box<SCUnserviceableModel>(kScUnserviceableDraftsBox).get(event.transNo);
-        if (report == null) throw Exception("Draft SC tidak ditemukan.");
+        if (report == null) throw Exception("Draft tidak ditemukan.");
         result = await uploadSCUnserviceableImagesToS3(report, presignedDetail, progressCubit: progressCubit, filter: originalFailedFiles);
       } else {
-        throw Exception('Tipe modul $moduleType tidak dikenali.');
+        throw Exception('Modul tidak dikenal.');
       }
 
-      // Handle Hasil Upload
       if (result.allSuccess) {
         await clearTransactionData(event.transNo);
         await _addToConfirmationQueueIfNeeded(event.transNo, moduleType);
@@ -150,18 +178,16 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         emit(state.copyWith(
           status: FailedUploadsStatus.success,
           failedTransactions: updatedList,
-          uploadingTransNo: null,
+          totalIssues: updatedList.length + state.zombieCount,
+          clearUploadingTransNo: true,
           successMessage: 'Upload ulang berhasil!',
         ));
       } else {
-        // Update sisa file gagal di Hive
         await _updateFailedTransactionInCache(event.transNo, moduleType, result.failedFiles, presignedDetail, storeName);
-
-        add(LoadFailedUploads()); // Refresh list
-
+        add(LoadFailedUploads());
         emit(state.copyWith(
           status: FailedUploadsStatus.loaded,
-          uploadingTransNo: null,
+          clearUploadingTransNo: true,
           snackbarMessage: "Masih ada ${result.failureCount} file gagal.",
         ));
       }
@@ -169,13 +195,13 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     } catch (e) {
       emit(state.copyWith(
         status: FailedUploadsStatus.loaded,
-        uploadingTransNo: null,
+        clearUploadingTransNo: true,
         errorMessage: "Gagal memproses: $e",
       ));
     }
   }
 
-  // --- HELPER FUNCTIONS (Sama seperti lama) ---
+  // --- SISA HELPER & LISTENER TETAP SAMA ---
   void _onClearSnackbarMessage(ClearSnackbarMessage event, Emitter<FailedUploadsState> emit) {
     emit(state.copyWith(clearSnackbarMessage: true, clearRetryResult: true));
   }
@@ -208,7 +234,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     return super.close();
   }
 
-  // Hive Helpers
+  // Helper Sync Cache
   Future<void> _updateFailedTransactionInCache(String transNo, String moduleType, List<String> files, List<dynamic> details, String store) async {
     String? boxName = _getBoxNameForModule(moduleType);
     if (boxName == null) return;

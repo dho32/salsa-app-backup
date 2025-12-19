@@ -4,7 +4,7 @@ abstract class FailedUploadsEvent extends Equatable {
   const FailedUploadsEvent();
 
   @override
-  List<Object> get props => [];
+  List<Object?> get props => [];
 }
 
 class LoadFailedUploads extends FailedUploadsEvent {}
@@ -19,7 +19,7 @@ class RetryTransaction extends FailedUploadsEvent {
   });
 
   @override
-  List<Object> get props => [transNo, isZombie];
+  List<Object?> get props => [transNo, isZombie];
 }
 
 class RetrySingleFailedUpload extends FailedUploadsEvent {
@@ -29,3 +29,12 @@ class RetrySingleFailedUpload extends FailedUploadsEvent {
 
 class ClearSnackbarMessage extends FailedUploadsEvent {}
 class ClearSuccessMessage extends FailedUploadsEvent {}
+
+class SyncWithApiPending extends FailedUploadsEvent {
+  final List<TransactionSuggestion> apiPendingList;
+
+  const SyncWithApiPending(this.apiPendingList);
+
+  @override
+  List<Object?> get props => [apiPendingList];
+}

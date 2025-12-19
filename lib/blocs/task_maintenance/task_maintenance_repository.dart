@@ -103,7 +103,9 @@ class TaskMaintenanceRepository {
       };
 
       Uri uri = getUrl(pathUrl: 'task_maintenance/pending_tasks', params: params);
+      print(uri);
       final response = await http.get(uri);
+      print("==============");
       print("Response Status Code: ${response.statusCode}");
       print("Response Body: ${response.body}");
 
