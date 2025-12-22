@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +9,6 @@ import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../../models/common/measurement_limits.dart';
 import '../services/watermark_service.dart';
-import '../shared_function.dart';
 import 'full_screen_image_viewer.dart';
 
 class MeasurementInputWidget extends StatefulWidget {

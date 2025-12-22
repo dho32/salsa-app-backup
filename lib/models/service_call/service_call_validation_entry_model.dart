@@ -73,6 +73,15 @@ class ServiceCallValidationEntryModel extends HiveObject {
   @HiveField(21)
   String? noteRemark;
 
+  @HiveField(22)
+  List<CapturedImageDetail>? remarkPhotosIndoorAfter;
+
+  @HiveField(23)
+  List<CapturedImageDetail>? remarkPhotosOutdoorAfter;
+
+  @HiveField(24)
+  List<CapturedImageDetail>? remarkPhotosOutdoorPsiAfter;
+
   ServiceCallValidationEntryModel({
     required this.unitType,
     required this.serialNo,
@@ -96,6 +105,9 @@ class ServiceCallValidationEntryModel extends HiveObject {
     this.noteRemarkOutdoor,
     this.noteRemarkPSI,
     this.noteRemark,
+    this.remarkPhotosIndoorAfter,
+    this.remarkPhotosOutdoorAfter,
+    this.remarkPhotosOutdoorPsiAfter,
   });
 
   factory ServiceCallValidationEntryModel.empty() {
@@ -122,6 +134,9 @@ class ServiceCallValidationEntryModel extends HiveObject {
       noteRemarkOutdoor: null,
       noteRemarkPSI: null,
       noteRemark: null,
+      remarkPhotosIndoorAfter: [],
+      remarkPhotosOutdoorAfter: [],
+      remarkPhotosOutdoorPsiAfter: [],
     );
   }
 }

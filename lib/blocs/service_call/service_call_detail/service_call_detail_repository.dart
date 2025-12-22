@@ -15,9 +15,6 @@ class ServiceCallDetailRepository {
     Uri uri = getUrl(pathUrl: 'service_call/detail/v2', params: params);
     final response = await http.get(uri);
 
-    print("=================================");
-    print(uri);
-
     try {
       // 1. Decode string JSON mentah menjadi Map/List dinamis
       final dynamic decodedBody = jsonDecode(response.body);

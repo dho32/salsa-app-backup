@@ -1,4 +1,4 @@
-import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../models/common/captured_image_detail.dart';

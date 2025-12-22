@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:bloc/bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -307,4 +306,8 @@ class ImageHelper {
           const Icon(Icons.broken_image, color: Colors.grey),
     );
   }
+}
+
+String getHiveKey(String transNo) {
+  return transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 }

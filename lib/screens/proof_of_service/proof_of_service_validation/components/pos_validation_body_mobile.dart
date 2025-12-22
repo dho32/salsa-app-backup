@@ -19,6 +19,7 @@ import '../../../../components/constants.dart';
 import '../../../../components/services/watermark_service.dart';
 import '../../../../components/widgets/generic_measurement_input_section.dart';
 import '../../../../components/widgets/photo_grid.dart';
+import '../../../../components/widgets/remark_photo_picker.dart';
 import '../../../../models/common/measurement_entry.dart';
 
 class PosValidationBodyMobile extends StatefulWidget {
@@ -50,6 +51,7 @@ class PosValidationBodyMobile extends StatefulWidget {
 
 class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   bool _isTakingPhoto = false;
+  bool _isTakingPhotoRemark = false;
   final Map<String, TextEditingController> _controllers = {};
   late final TextEditingController _remarkController;
   String labelUnitIndoor = "Foto Unit Indoor & Evaporator";
@@ -224,6 +226,97 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     }
   }
 
+  Future<void> _handleRemarkPhoto(BuildContext context) async {
+    final currentState = context.read<PosValidationBloc>().state;
+
+    // 1. Cek Limit Foto (Misal Max 2)
+    if (currentState is PosValidationLoaded) {
+      final currentPhotos = currentState.remarkPhotos ?? [];
+      if (currentPhotos.length >= 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Maksimal hanya bisa upload 2 foto remark.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() => _isTakingPhotoRemark = true);
+
+    try {
+      // 2. Bersihkan Cache Gambar
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
+      // 3. Ambil Foto
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        final userData = await AuthStorage.getUser();
+        final technicianName = userData['name'] ?? 'Unknown';
+        final deviceModel = userData['device_model'] ?? 'Unknown Device';
+        final timestamp = DateTime.now();
+
+        final appDir = await getApplicationDocumentsDirectory();
+        final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+        if (!await imagesDir.exists()) {
+          await imagesDir.create();
+        }
+
+        // 4. Proses Watermark (Sama seperti handlePhoto biasa)
+        final targetPath = p.join(
+            imagesDir.path, 'WM_REMARK_${timestamp.millisecondsSinceEpoch}.jpg');
+
+        final request = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: widget.transNo,
+          timestamp: timestamp,
+          technicianName: technicianName,
+          deviceModel: deviceModel,
+        );
+
+        final String? finalImagePath =
+        await WatermarkService.processImage(request);
+
+        if (finalImagePath == null) throw Exception("Gagal watermark");
+
+        final capturedImageDetail = CapturedImageDetail(
+          imagePath: finalImagePath,
+          timestamp: timestamp,
+          latitude: 0.0,
+          longitude: 0.0,
+          address: "",
+          technicianName: technicianName,
+          deviceModel: deviceModel,
+          transNo: widget.transNo,
+        );
+
+        if (mounted) {
+          // 5. Kirim Event AddRemarkPhoto ke BLoC
+          context.read<PosValidationBloc>().add(AddRemarkPhoto(capturedImageDetail));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memproses foto: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTakingPhotoRemark = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<PosValidationBloc, PosValidationState>(
@@ -386,6 +479,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   label: 'Catatan (Wajib jika skip pengukuran)',
                   controller: widget.noteController,
                   noteOptions: widget.noteOptions,
+                  remarkPhotos: state.remarkPhotos ?? [],
                   onChanged: (value) {
                     widget.noteController.text = value ?? '';
                     _remarkController.clear();
@@ -412,6 +506,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     required TextEditingController controller,
     required List<NoteOption> noteOptions,
     required ValueChanged<String?> onChanged,
+    required List<CapturedImageDetail> remarkPhotos,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
 
@@ -508,35 +603,50 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           },
         ),
         if (requireRemark)
-          Padding(
-            padding: const EdgeInsets.only(top: 12.0),
-            child: TextFormField(
-              controller: _remarkController,
-              // Gunakan controller state
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              decoration: const InputDecoration(
-                labelText: 'Keterangan Tambahan (*Wajib)',
-                hintText: 'Jelaskan detail masalah (Min. 20 huruf)...',
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding: EdgeInsets.all(12),
-                prefixIcon: Icon(Icons.edit_note),
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: TextFormField(
+                  controller: _remarkController,
+                  // Gunakan controller state
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  decoration: const InputDecoration(
+                    labelText: 'Keterangan Tambahan (*Wajib)',
+                    hintText: 'Jelaskan detail masalah (Min. 20 huruf)...',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: EdgeInsets.all(12),
+                    prefixIcon: Icon(Icons.edit_note),
+                  ),
+                  onChanged: (val) {
+                    // Simpan ke BLoC
+                    context.read<PosValidationBloc>().add(UpdateNoteRemark(val));
+                  },
+                  validator: (value) {
+                    final text = value ?? '';
+                    if (text.trim().isEmpty) return 'Wajib diisi';
+                    final int charCount = text.replaceAll(' ', '').length;
+                    if (charCount < 20) {
+                      return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
+                    }
+                    return null;
+                  },
+                  maxLines: 2,
+                ),
               ),
-              onChanged: (val) {
-                // Simpan ke BLoC
-                context.read<PosValidationBloc>().add(UpdateNoteRemark(val));
-              },
-              validator: (value) {
-                final text = value ?? '';
-                if (text.trim().isEmpty) return 'Wajib diisi';
-                final int charCount = text.replaceAll(' ', '').length;
-                if (charCount < 20) {
-                  return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
-                }
-                return null;
-              },
-              maxLines: 2,
-            ),
+              const SizedBox(height: 12),
+
+              RemarkPhotoPicker(
+                photos: remarkPhotos,
+                isLoading: _isTakingPhotoRemark,
+                isReadOnly: false, // Atau sesuaikan dengan logic isCompleted
+                onAddTap: () => _handleRemarkPhoto(context),
+                onRemoveTap: (path) {
+                  context.read<PosValidationBloc>().add(RemoveRemarkPhoto(path));
+                },
+              ),
+            ],
           ),
       ],
     );

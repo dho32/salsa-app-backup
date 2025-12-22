@@ -22,6 +22,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     on<PairOutdoorWithIndoor>(_onPairOutdoor);
     on<UpdateNoteAfter>(_onUpdateNoteAfter);
     on<UpdateNoteRemark>(_onUpdateNoteRemark);
+    on<AddRemarkPhoto>(_onAddRemarkPhoto);
+    on<RemoveRemarkPhoto>(_onRemoveRemarkPhoto);
   }
 
   // Helper untuk membuat daftar pengukuran default berdasarkan tipe unit
@@ -99,6 +101,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         availableIndoorSerials: availableIndoors,
         note: initialData.note,
         noteRemark: initialData.noteRemark,
+        remarkPhotos: initialData.remarkPhotos,
       ));
     } else {
       emit(PosValidationLoaded(
@@ -232,11 +235,45 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     }
   }
 
+  Future<void> _onAddRemarkPhoto(
+      AddRemarkPhoto event, Emitter<PosValidationState> emit) async {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+
+      // Best Practice: Selalu buat List baru (immutability)
+      final updatedPhotos =
+      List<CapturedImageDetail>.from(currentState.remarkPhotos ?? [])
+        ..add(event.imageDetail);
+
+      final newState = currentState.copyWith(remarkPhotos: updatedPhotos);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
+    }
+  }
+
+  Future<void> _onRemoveRemarkPhoto(
+      RemoveRemarkPhoto event, Emitter<PosValidationState> emit) async {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+
+      final updatedPhotos = currentState.remarkPhotos
+          ?.where((p) => p.imagePath != event.imagePath)
+          .toList();
+
+      final newState = currentState.copyWith(remarkPhotos: updatedPhotos);
+      emit(newState);
+
+      // 🔥 AUTO SAVE LANGSUNG
+      await _saveToHive(newState);
+    }
+  }
+
   Future<void> _saveToHive(PosValidationLoaded state) async {
     try {
       final box =
           await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-      // Buat entry baru atau ambil yg lama
       final entry = PosValidationEntryModel(
         transNo: state.transNo,
         serialNo: state.serialNo.trim().toUpperCase(),
@@ -244,16 +281,14 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         photosAfter: state.photosAfter,
         measurementsAfter: state.measurementsAfter,
         isCompleted: false,
-        // Kalau auto-save, belum completed
         note: state.note,
         noteRemark: state.noteRemark,
-        // <-- SIMPAN REMARK
+        remarkPhotos: state.remarkPhotos,
         articleNo: state.articleNo,
         articleDesc: state.articleDesc,
         articleUnitDesc: state.articleUnitDesc,
         capacity: 0,
         articleType: state.unitType,
-        // <-- Gunakan articleType
         pairedSerialNo: state.pairedIndoorSerial,
       );
       await box.put(state.serialNo.trim().toUpperCase(), entry);
@@ -268,43 +303,6 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
 
-      // =================================================================
-      // --- LOGIKA VALIDASI DITAMBAHKAN DI SINI ---
-      // =================================================================
-      // for (final measurement in currentState.measurementsAfter) {
-      //   // Jangan validasi jika pengukuran di-skip
-      //   if (measurement.isSkipped ?? false) continue;
-      //
-      //   // Ambil batas (limits) dari konstanta
-      //   final limits = kPOSMeasurementLimits[measurement.measurementId];
-      //
-      //   // Cek jika nilai yang diinput melebihi batas maksimal
-      //   if (limits != null) {
-      //     // Secara default, gunakan batas atas dari konstanta
-      //     double maxLimit = limits.max;
-      //
-      //     // TAPI, jika ini adalah pengukuran suhu ('temperature') DAN kita menerima
-      //     // nilai indoorTemp dari event, maka GUNAKAN nilai indoorTemp sebagai batas atas.
-      //     if (measurement.measurementId == 'temperature' &&
-      //         event.indoorTemp != null) {
-      //       maxLimit = event.indoorTemp!;
-      //     }
-      //
-      //     // // Lakukan validasi dengan batas atas (maxLimit) yang sudah dinamis
-      //     // if (measurement.value > maxLimit) {
-      //     //   final errorMessage =
-      //     //       'Nilai untuk "${limits.label}" (${measurement.value} ${limits.unit}) melebihi batas maksimal 3.';
-      //     //
-      //     //   emit(PosValidationSaveFailure(errorMessage, currentState));
-      //     //   return;
-      //     // }
-      //   }
-      // }
-      // =================================================================
-      // --- AKHIR DARI LOGIKA VALIDASI ---
-      // =================================================================
-
-      // Jika semua validasi lolos, lanjutkan proses penyimpanan ke Hive
       final entry = PosValidationEntryModel(
         transNo: event.transNo,
         serialNo: event.serialNo.trim().toUpperCase(),
@@ -314,6 +312,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         isCompleted: event.markAsCompleted,
         note: event.note,
         noteRemark: currentState.noteRemark,
+        remarkPhotos: currentState.remarkPhotos,
         articleNo: event.articleNo,
         articleDesc: event.articleDesc,
         articleUnitDesc: event.articleUnitDesc,
@@ -346,6 +345,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         measurementsAfter: currentState.measurementsAfter,
         isCompleted: false,
         note: event.note,
+        noteRemark: currentState.noteRemark,
+        remarkPhotos: currentState.remarkPhotos,
         articleNo: event.articleNo,
         articleDesc: event.articleDesc,
         articleUnitDesc: event.articleUnitDesc,

@@ -11,17 +11,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../../components/services/hive_clear_service.dart';
 import '../../../components/services/watermark_service.dart';
-import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
-import '../../../models/proof_of_service/pos_transaction_info_model.dart';
 import '../../../models/proof_of_service/pos_unserviceable_model.dart';
-import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../../screens/common/services/confirmation_service.dart';
+import '../../service/service_repository.dart';
 import 'pos_unserviceable_event.dart';
 import 'pos_unserviceable_repository.dart';
 import 'pos_unserviceable_state.dart';
@@ -33,6 +30,7 @@ class PosUnserviceableBloc
   final PosUnserviceableRepository _repository;
   late final String _userType;
   late final String _userName;
+  final serviceRepo = ServiceTaskRepository();
 
   PosUnserviceableBloc({required this.transNo})
       : _draftBox = Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox),
@@ -103,8 +101,8 @@ class PosUnserviceableBloc
         emit(state.copyWith(technicianName: initialTechnician1));
       }
     } catch (e) {
-      print(
-          "🔴 Draft lama untuk $transNo tidak kompatibel. Menghapus draft rusak...");
+      // print(
+      //     "🔴 Draft lama untuk $transNo tidak kompatibel. Menghapus draft rusak...");
       _draftBox.delete(transNo);
       final String initialTechnician1 = (_userType == 'WH') ? _userName : '';
       emit(state.copyWith(technicianName: initialTechnician1));
@@ -134,7 +132,7 @@ class PosUnserviceableBloc
           technicianName: state.technicianName,
         );
         _draftBox.put(transNo, draft);
-        print("💾 Draft untuk $transNo berhasil disimpan ke Hive.");
+        // print("💾 Draft untuk $transNo berhasil disimpan ke Hive.");
       },
     );
   }
@@ -200,7 +198,9 @@ class PosUnserviceableBloc
 
       // 5. Ambil GPS (Untuk Metadata)
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       // 6. Simpan ke State
@@ -302,8 +302,20 @@ class PosUnserviceableBloc
         );
 
         if (uploadResult.allSuccess) {
-          await _clearAllTransactionData();
-          emit(state.copyWith(status: UnserviceableStatus.success));
+          try {
+            final response = await serviceRepo.confirmUploadSuccess(transNo);
+            if (response['status'] == 'OK' || response['status'] == 'SUCCESS') {
+              await clearTransactionData(transNo);
+              emit(state.copyWith(status: UnserviceableStatus.success));
+            } else {
+              emit(state.copyWith(
+                status: UnserviceableStatus.failure,
+                errorMessage: "Foto terkirim, tapi gagal update status server: ${response['message']}",
+              ));
+            }
+          } catch (e) {
+            emit(state.copyWith(status: UnserviceableStatus.failure, errorMessage: "Gagal konfirmasi status: $e"));
+          }
         } else {
           final detailCacheBox =
               await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
@@ -361,11 +373,19 @@ class PosUnserviceableBloc
     );
 
     if (uploadResult.allSuccess) {
-      final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(
-          kPosValidationPartialHiveBox);
-      await retryBox.delete(transNo);
-      await _clearAllTransactionData();
-      emit(state.copyWith(status: UnserviceableStatus.success));
+      try {
+        final response = await serviceRepo.confirmUploadSuccess(transNo);
+        if (response['status'] == 'OK' || response['status'] == 'SUCCESS') {
+          final retryBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);
+          await retryBox.delete(transNo);
+          await clearTransactionData(transNo);
+          emit(state.copyWith(status: UnserviceableStatus.success));
+        } else {
+          emit(state.copyWith(status: UnserviceableStatus.failure, errorMessage: "Gagal update status server."));
+        }
+      } catch (e) {
+        emit(state.copyWith(status: UnserviceableStatus.failure, errorMessage: "Gagal konfirmasi: $e"));
+      }
     } else {
       final partialData = {
         'presignedDetail': event.presignedDetail,
@@ -376,40 +396,5 @@ class PosUnserviceableBloc
         partialUploadData: partialData,
       ));
     }
-  }
-
-  // Method baru untuk membersihkan semua data terkait transaksi ini
-  Future<void> _clearAllTransactionData() async {
-    // // 1. Hapus draft laporan unserviceable
-    // await _draftBox.delete(transNo);
-    //
-    // // 2. Hapus cache detail utama dari halaman sebelumnya
-    // final detailCacheBox =
-    //     await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-    // await detailCacheBox.delete(transNo);
-    //
-    // // 3. Hapus info transaksi (PIC, teknisi, dll)
-    // final infoBox =
-    //     await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-    // await infoBox.delete(getHiveKeyForTransaction(transNo));
-    //
-    // // 4. Hapus data validasi unit (jika teknisi sempat mengisinya)
-    // final validationBox =
-    //     await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    // final validationKeysToDelete = validationBox.keys.where((key) {
-    //   final entry = validationBox.get(key);
-    //   return entry != null && entry.transNo == transNo;
-    // }).toList();
-    // await validationBox.deleteAll(validationKeysToDelete);
-
-    await clearTransactionData(transNo);
-    final queueBox =
-        await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-    final task = ConfirmationTaskModel(transNo: transNo.trim().toUpperCase());
-    await queueBox.put(transNo.trim().toUpperCase(), task);
-
-    await ConfirmationService().processQueue();
-
-    print("🧹 Semua data Hive untuk transaksi $transNo telah dibersihkan.");
   }
 }

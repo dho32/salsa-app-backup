@@ -241,6 +241,14 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                             'Keterangan Tambahan minimal 20 huruf (tanpa spasi).');
                         return;
                       }
+
+                      // C. Cek Foto
+                      final photos = state.remarkPhotos ?? [];
+                      if (photos.isEmpty) {
+                        _showValidationErrorSnackbar(
+                            'Wajib melampirkan minimal 1 foto untuk Remark.');
+                        return;
+                      }
                     }
                   }
 
@@ -290,32 +298,32 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
             ),
           ] else if (state.currentStep == 0) ...[
             // Tombol di Step 1 (Sebelum)
-            Expanded(
-              child: OutlinedButton.icon(
-                label: const Text('Simpan Draft'),
-                onPressed: () {
-                  bloc.add(SavePosValidationData(
-                    transNo: widget.transNo,
-                    serialNo: widget.serialNo,
-                    markAsCompleted: false,
-                    note: _noteController.text,
-                    articleNo: widget.articleNo,
-                    articleDesc: widget.articleDesc,
-                    articleUnitDesc: widget.articleUnitDesc,
-                    capacity: widget.capacity,
-                    articleType: widget.unitType,
-                  ));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Draft berhasil disimpan'),
-                    backgroundColor: Colors.blue,
-                    behavior: SnackBarBehavior.floating,
-                  ));
-                },
-                style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: primary), foregroundColor: primary),
-              ),
-            ),
-            const SizedBox(width: 12),
+            // Expanded(
+            //   child: OutlinedButton.icon(
+            //     label: const Text('Simpan Draft'),
+            //     onPressed: () {
+            //       bloc.add(SavePosValidationData(
+            //         transNo: widget.transNo,
+            //         serialNo: widget.serialNo,
+            //         markAsCompleted: false,
+            //         note: _noteController.text,
+            //         articleNo: widget.articleNo,
+            //         articleDesc: widget.articleDesc,
+            //         articleUnitDesc: widget.articleUnitDesc,
+            //         capacity: widget.capacity,
+            //         articleType: widget.unitType,
+            //       ));
+            //       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            //         content: Text('Draft berhasil disimpan'),
+            //         backgroundColor: Colors.blue,
+            //         behavior: SnackBarBehavior.floating,
+            //       ));
+            //     },
+            //     style: OutlinedButton.styleFrom(
+            //         side: BorderSide(color: primary), foregroundColor: primary),
+            //   ),
+            // ),
+            // const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
                 child: const Text('Lanjut'),

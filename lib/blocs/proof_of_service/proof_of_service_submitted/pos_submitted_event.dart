@@ -1,10 +1,11 @@
 import 'package:equatable/equatable.dart';
 
 import '../../upload_progress/upload_progress_cubit.dart';
-
+import '../pos_form/pos_form_state.dart';
 
 abstract class PosSubmittedEvent extends Equatable {
   const PosSubmittedEvent();
+
   @override
   List<Object?> get props => [];
 }
@@ -41,14 +42,19 @@ class RetryPosUpload extends PosSubmittedEvent {
 
 class LoadPosValidationPartial extends PosSubmittedEvent {
   final String transNo;
+
   const LoadPosValidationPartial(this.transNo);
 }
 
 class FinalValidationRequested extends PosSubmittedEvent {
   final String transNo;
+  final PosFormState formState;
   final String customerCode;
 
-  const FinalValidationRequested({required this.transNo, required this.customerCode});
+  const FinalValidationRequested(
+      {required this.transNo,
+      required this.formState,
+      required this.customerCode});
 
   @override
   List<Object?> get props => [transNo, customerCode];

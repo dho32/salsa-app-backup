@@ -15,11 +15,13 @@ import '../../../models/service_call/problem_source_model.dart';
 import '../../../models/service_call/transaction_info_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../../screens/common/services/confirmation_service.dart';
+import '../../service/service_repository.dart';
 
 class ServiceCallSubmittedBloc
     extends Bloc<ServiceCallSubmittedEvent, ServiceCallSubmittedState> {
   final ServiceCallSubmittedRepository repository;
   String _cachedAhoNumber = '';
+  final serviceRepo = ServiceTaskRepository();
 
   String _normalizeHiveKey(String key) =>
       key.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
@@ -97,19 +99,17 @@ class ServiceCallSubmittedBloc
     ScFinalValidationRequested event,
     Emitter<ServiceCallSubmittedState> emit,
   ) async {
+    emit(ScFinalValidationLoading());
     final bool needsAho = await _checkIfAhoIsNeeded(
       event.transNo,
       event.problemSources,
     );
 
-    log("--- Hasil Pengecekan AHO: needsAho = $needsAho ---");
     if (needsAho) {
-      log("--- EMITTING ScProceedToAhoDialog ---");
       emit(ScProceedToAhoDialog(event.formState, initialAho: _cachedAhoNumber));
     } else {
-      log("--- EMITTING ScProceedToOtpDialog (karena needsAho false) ---");
       emit(ScProceedToOtpDialog(event.formState,
-          ahoNumber: null)); // <-- Lanjut ke OTP
+          ahoNumber: null));
     }
   }
 
@@ -165,14 +165,20 @@ class ServiceCallSubmittedBloc
             progressCubit: event.progressCubit);
 
         if (uploadResult.allSuccess) {
-          _cachedAhoNumber = '';
-          await clearTransactionData(event.transNo);
-          final queueBox =
-              await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-          final task = ConfirmationTaskModel(transNo: event.transNo);
-          await queueBox.put(event.transNo, task);
-          await ConfirmationService().processQueue();
-          emit(ValidationSuccess(transNo: event.transNo, presignedDetail: []));
+          try {
+            final response = await serviceRepo.confirmUploadSuccess(event.transNo);
+
+            if (response['status'] == 'OK') {
+              _cachedAhoNumber = '';
+              await clearTransactionData(event.transNo);
+
+              emit(ValidationSuccess(transNo: event.transNo, presignedDetail: []));
+            } else {
+              emit(ValidationFailure("Foto terunggah, tapi gagal update status server: ${response['message']}"));
+            }
+          } catch (e) {
+            emit(ValidationFailure("Gagal konfirmasi status ke server: $e"));
+          }
         } else {
           final cacheBox = Hive.box<Map<dynamic, dynamic>>(
               kServiceCallValidationPartialHiveBox);
@@ -194,7 +200,7 @@ class ServiceCallSubmittedBloc
       } else {
         emit(ValidationFailure(result['message'] ?? 'Gagal submit'));
       }
-    } catch (e, stacktrace) {
+    } catch (e) {
       emit(ValidationFailure("Error: ${e.toString()}"));
     }
   }
@@ -214,32 +220,35 @@ class ServiceCallSubmittedBloc
       );
 
       if (result.allSuccess) {
-        _cachedAhoNumber = '';
-        await clearTransactionData(event.transNo);
-        final queueBox =
-            await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-        final task = ConfirmationTaskModel(transNo: event.transNo);
-        await queueBox.put(event.transNo, task);
-        await ConfirmationService().processQueue();
+        try {
+          final response = await serviceRepo.confirmUploadSuccess(event.transNo);
 
-        emit(ValidationSuccess(
-          transNo: event.transNo,
-          presignedDetail: event.presignedDetail,
-        ));
+          if (response['status'] == 'OK') {
+            _cachedAhoNumber = '';
+            await clearTransactionData(event.transNo);
+
+            // Berhasil total
+            emit(ValidationSuccess(
+              transNo: event.transNo,
+              presignedDetail: event.presignedDetail,
+            ));
+          } else {
+            // S3 Berhasil tapi API Gagal
+            emit(ValidationFailure("Foto terunggah, tapi gagal update status server: ${response['message']}"));
+          }
+        } catch (e) {
+          emit(ValidationFailure("Gagal konfirmasi ke server: $e"));
+        }
       } else {
         final cacheBox = Hive.box<Map<dynamic, dynamic>>(
-            kServiceCallValidationPartialHiveBox); // Use Hive.box
-        // Ambil data lama untuk mempertahankan field lain jika ada
+            kServiceCallValidationPartialHiveBox);
         final oldData =
             Map<String, dynamic>.from(cacheBox.get(event.transNo) ?? {});
         await cacheBox.put(event.transNo, {
           ...oldData,
-          // Pertahankan data lama
           'transNo': event.transNo,
           'failedFiles': result.failedFiles,
-          // Update file gagal
           'presignedDetail': event.presignedDetail,
-          // Mungkin tidak perlu update presigned?
         });
 
         emit(ValidationUploadPartial(

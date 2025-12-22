@@ -1,19 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/common/measurement_limits.dart';
 import 'package:salsa/screens/service_call/service_call_validation/components/invalid_unit_screen/sc_invalid_unit_screen.dart';
-import '../../../blocs/auth/auth_storage.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import '../../../components/constants.dart';
-import '../../../components/services/watermark_service.dart';
 import '../../../models/common/measurement_entry.dart';
 import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
@@ -368,50 +361,50 @@ class _ServiceCallValidationScreenState
               ),
             ),
           ] else if (state.currentStep == 0) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  FocusScope.of(context).unfocus();
-                  await Future.delayed(const Duration(milliseconds: 200));
-
-                  bool hasDataToSave = state.capturedPhotosBefore.isNotEmpty ||
-                      state.capturedMeasurementsBefore
-                          .any((m) => m.value != 0.0);
-
-                  if (!hasDataToSave) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Belum ada data untuk disimpan'),
-                        backgroundColor: Colors.orange,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    return;
-                  }
-
-                  final measurementError = _validateMeasurements(
-                    state.capturedMeasurementsBefore,
-                    state.limitsScBefore,
-                  );
-                  if (measurementError != null) {
-                    _showErrorSnackbar(measurementError);
-                    return;
-                  }
-
-                  bloc.add(SaveValidationData(
-                    transNo: widget.transNo,
-                    serialNo: widget.serialNo,
-                    showNotification: true,
-                  ));
-                },
-                label: const Text('Simpan Draft'),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: primary),
-                  foregroundColor: primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
+            // Expanded(
+            //   child: OutlinedButton.icon(
+            //     onPressed: () async {
+            //       FocusScope.of(context).unfocus();
+            //       await Future.delayed(const Duration(milliseconds: 200));
+            //
+            //       bool hasDataToSave = state.capturedPhotosBefore.isNotEmpty ||
+            //           state.capturedMeasurementsBefore
+            //               .any((m) => m.value != 0.0);
+            //
+            //       if (!hasDataToSave) {
+            //         ScaffoldMessenger.of(context).showSnackBar(
+            //           const SnackBar(
+            //             content: Text('Belum ada data untuk disimpan'),
+            //             backgroundColor: Colors.orange,
+            //             behavior: SnackBarBehavior.floating,
+            //           ),
+            //         );
+            //         return;
+            //       }
+            //
+            //       final measurementError = _validateMeasurements(
+            //         state.capturedMeasurementsBefore,
+            //         state.limitsScBefore,
+            //       );
+            //       if (measurementError != null) {
+            //         _showErrorSnackbar(measurementError);
+            //         return;
+            //       }
+            //
+            //       bloc.add(SaveValidationData(
+            //         transNo: widget.transNo,
+            //         serialNo: widget.serialNo,
+            //         showNotification: true,
+            //       ));
+            //     },
+            //     label: const Text('Simpan Draft'),
+            //     style: OutlinedButton.styleFrom(
+            //       side: BorderSide(color: primary),
+            //       foregroundColor: primary,
+            //     ),
+            //   ),
+            // ),
+            // const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
                 onPressed: () async {
@@ -476,6 +469,7 @@ class _ServiceCallValidationScreenState
       required List<NoteOption> options,
       required String? selectedNoteLabel,
       required String groupName,
+      required NoteType noteType,
     }) {
       // 1. Cek apakah ada item di grup ini yang di-skip
       final skippedItems = measurements
@@ -505,6 +499,10 @@ class _ServiceCallValidationScreenState
             if (charCount < 20) {
               return 'Keterangan $groupName minimal 20 huruf (tanpa spasi). Saat ini: $charCount.';
             }
+            final photos = state.remarkPhotosAfter[noteType] ?? [];
+            if (photos.isEmpty) {
+              return 'Wajib melampirkan minimal 1 foto untuk Remark $groupName.';
+            }
           }
         }
       }
@@ -521,6 +519,7 @@ class _ServiceCallValidationScreenState
           ? state.selectedIndoorNoteBefore
           : state.selectedIndoorNoteAfter,
       groupName: 'Indoor',
+      noteType: NoteType.indoor,
     );
     if (indoorError != null) return indoorError;
 
@@ -534,6 +533,7 @@ class _ServiceCallValidationScreenState
           ? state.selectedOutdoorNoteBefore
           : state.selectedOutdoorNoteAfter,
       groupName: 'Outdoor (Volt/Ampere)',
+      noteType: NoteType.outdoor,
     );
     if (outdoorError != null) return outdoorError;
 
@@ -547,6 +547,7 @@ class _ServiceCallValidationScreenState
           ? state.selectedOutdoorPSINoteBefore
           : state.selectedOutdoorPSINoteAfter,
       groupName: 'Outdoor (Tekanan)',
+      noteType: NoteType.outdoorPsi,
     );
     if (psiError != null) return psiError;
 
@@ -570,7 +571,7 @@ class _ServiceCallValidationScreenState
       final limits = limitsMap[mEntry.measurementId];
       if (limits == null) continue;
       if (mEntry.value < limits.min || mEntry.value > limits.max) {
-        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar (Min: ${limits.min}, Maks: ${limits.max}).';
+        return 'Nilai untuk "${limits.label}" (${mEntry.value}) di luar batas wajar.';
       }
     }
     return null;

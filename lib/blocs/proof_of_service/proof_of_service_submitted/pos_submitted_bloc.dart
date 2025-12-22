@@ -6,16 +6,18 @@ import 'package:salsa/blocs/proof_of_service/proof_of_service_submitted/pos_subm
 import 'package:salsa/components/constants.dart';
 import 'package:salsa/components/upload_s3_service.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
-import 'package:salsa/models/proof_of_service/pos_validasion_entry_model_ext.dart';
+import 'package:salsa/models/proof_of_service/pos_validation_entry_model_ext.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
 
 import '../../../components/services/hive_clear_service.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
 import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../../screens/common/services/confirmation_service.dart';
+import '../../service/service_repository.dart';
 
 class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
   final PosSubmittedRepository repository;
+  final serviceRepo = ServiceTaskRepository();
 
   PosSubmittedBloc({required this.repository}) : super(PosValidationInitial()) {
     on<SubmitPosValidation>(_onSubmitValidation);
@@ -56,7 +58,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
       }
 
       // Jika semua pengecekan lolos, beri perintah untuk lanjut ke OTP
-      emit(ProceedToOtpDialog());
+      emit(ProceedToOtpDialog(event.formState));
 
     } catch (e) {
       emit(PosValidationFailure("Gagal melakukan validasi akhir: ${e.toString()}"));
@@ -132,22 +134,18 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             progressCubit: event.progressCubit);
 
         if (uploadResult.allSuccess) {
-          // 5. Jika semua sukses, hapus data dari Hive
-          // for (var entry in entries) {
-          //   await validationBox.delete(entry.serialNo.trim().toUpperCase());
-          // }
-          // await infoBox.delete(
-          //     getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
+          try {
+            final response = await serviceRepo.confirmUploadSuccess(event.transNo);
 
-          await clearTransactionData(event.transNo);
-          final queueBox =
-              await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-          final task = ConfirmationTaskModel(
-              transNo: event.transNo.trim().toUpperCase());
-          await queueBox.put(event.transNo.trim().toUpperCase(), task);
-          await ConfirmationService().processQueue();
-
-          emit(PosValidationSuccess());
+            if (response['status'] == 'OK') {
+              await clearTransactionData(event.transNo);
+              emit(PosValidationSuccess());
+            } else {
+              emit(PosValidationFailure("Foto terunggah, tapi gagal update status server: ${response['message']}"));
+            }
+          } catch (e) {
+            emit(PosValidationFailure("Gagal konfirmasi status ke server: $e"));
+          }
         } else {
           final cleanFailedFiles = uploadResult.failedFiles.map((fullErrorString) {
             return fullErrorString.split(' (').first;
@@ -180,6 +178,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             result['message'] ?? 'Gagal mengirim data validasi.'));
       }
     } catch (e) {
+      print("masuk sini");
       emit(PosValidationFailure("Terjadi error: ${e.toString()}"));
     }
   }
@@ -203,24 +202,18 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
       //     kPosTransactionInfoHiveBox);
 
       if (result.allSuccess) {
-        // Jika retry berhasil, hapus semua data
-        // final toDelete =
-        //     validationBox.values.where((e) => e.transNo == event.transNo);
-        // for (var entry in toDelete) {
-        //   await validationBox.delete(entry.serialNo.trim().toUpperCase());
-        // }
-        // await infoBox.delete(getHiveKeyForTransaction(event.transNo));
-        // await cacheBox.delete(event.transNo);
+        try {
+          final response = await serviceRepo.confirmUploadSuccess(event.transNo);
 
-        await clearTransactionData(event.transNo);
-        final queueBox =
-            await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
-        final task =
-            ConfirmationTaskModel(transNo: event.transNo.trim().toUpperCase());
-        await queueBox.put(event.transNo.trim().toUpperCase(), task);
-        await ConfirmationService().processQueue();
-
-        emit(PosValidationSuccess());
+          if (response['status'] == 'OK') {
+            await clearTransactionData(event.transNo);
+            emit(PosValidationSuccess());
+          } else {
+            emit(PosValidationFailure("Gagal update status server: ${response['message']}"));
+          }
+        } catch (e) {
+          emit(PosValidationFailure("Gagal konfirmasi ke server: $e"));
+        }
       } else {
         // Jika masih gagal, update cache dengan sisa file yang masih gagal
         final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox);

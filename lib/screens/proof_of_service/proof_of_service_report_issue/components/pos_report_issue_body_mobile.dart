@@ -1,11 +1,9 @@
 import 'dart:io';
-import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/blocs/proof_of_service/pos_unserviceable/pos_unserviceable_bloc.dart';
 import 'package:salsa/blocs/proof_of_service/pos_unserviceable/pos_unserviceable_event.dart';
 import 'package:salsa/blocs/proof_of_service/pos_unserviceable/pos_unserviceable_state.dart';
-import 'package:salsa/models/common/captured_image_detail.dart';
 
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/shared_function.dart';

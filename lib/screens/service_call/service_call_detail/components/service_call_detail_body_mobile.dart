@@ -10,10 +10,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hive/hive.dart';
 
-// --- Impor BLoC & State yang relevan ---
+// --- Impor BLoC & State ---
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../blocs/location_validation/location_validation_bloc.dart';
+import '../../../../blocs/location_validation/location_validation_event.dart';
+import '../../../../blocs/location_validation/location_validation_state.dart';
 import '../../../../blocs/otp/otp_bloc.dart';
+import '../../../../blocs/otp/otp_event.dart';
 import '../../../../blocs/otp/otp_repository.dart';
 import '../../../../blocs/service_call/sc_form/sc_form_cubit.dart';
 import '../../../../blocs/service_call/sc_form/sc_form_state.dart';
@@ -35,13 +38,11 @@ import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/common/note_option.dart';
-import '../../../../models/schedule/proof_of_service/proof_of_service_detail_data.dart'; // Untuk MeasurementLimits
 import '../../../../models/service_call/problem_source_model.dart';
-import '../../../../models/service_call/service_call_detail_model.dart'; // Untuk Header & Detail
+import '../../../../models/service_call/service_call_detail_model.dart';
 import '../../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../../../models/service_call/transaction_info_model.dart';
 import '../../../../models/service_call/validation_status.dart';
-import '../../../common/services/confirmation_service.dart';
 import '../../service_call_validation/components/remote_validation/remote_validation_screen.dart';
 import '../../service_call_validation/service_call_validation_screen.dart';
 
@@ -54,8 +55,7 @@ class ValidationLoadResult {
 
 class ServiceCallDetailBodyMobile extends StatefulWidget {
   final String transNo;
-  final Box<TransactionInfoModel>
-      transactionInfoBox; // Mungkin tidak lagi dipakai
+  final Box<TransactionInfoModel> transactionInfoBox;
 
   const ServiceCallDetailBodyMobile({
     super.key,
@@ -70,7 +70,6 @@ class ServiceCallDetailBodyMobile extends StatefulWidget {
 
 class _ServiceCallDetailBodyMobileState
     extends State<ServiceCallDetailBodyMobile> {
-  // --- Kelola Semua Controller di Sini ---
   late final TextEditingController _picNameController;
   late final TextEditingController _picPhoneController;
   late final TextEditingController _picNikController;
@@ -79,7 +78,7 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _technician3Controller;
   late final TextEditingController _finalTempController;
   final TextEditingController _finalTempNoteSearchController =
-      TextEditingController();
+  TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
@@ -92,11 +91,12 @@ class _ServiceCallDetailBodyMobileState
   void initState() {
     super.initState();
     _loadUserInfoAndIP();
+    _syncSavedPhoto();
 
     final configBox = Hive.box(kAppConfigBox);
     final Map<String, MeasurementLimits> headerLimits =
-        Map<String, MeasurementLimits>.from(
-            configBox.get('limits_temp_header') ?? {});
+    Map<String, MeasurementLimits>.from(
+        configBox.get('limits_temp_header') ?? {});
 
     _scFinalTempBaseLimits = headerLimits['sc_final_temp_in'] ??
         const MeasurementLimits(
@@ -110,7 +110,6 @@ class _ServiceCallDetailBodyMobileState
 
     final initialFormState = context.read<ScFormCubit>().state;
 
-    // Inisialisasi controller dari state Cubit
     _picNameController = TextEditingController(text: initialFormState.picName);
     _picPhoneController =
         TextEditingController(text: initialFormState.picPhone);
@@ -126,7 +125,6 @@ class _ServiceCallDetailBodyMobileState
 
     _showTechnician3 = initialFormState.showTechnician3;
 
-    // Tambahkan Listener UI -> Cubit
     _addListeners();
   }
 
@@ -194,15 +192,32 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
+  // ✅ Helper Key yang Konsisten
+  String _getHiveKey(String transNo) {
+    return transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+  }
+
+  void _syncSavedPhoto() {
+    try {
+      // ✅ Gunakan widget.transactionInfoBox & Helper Key
+      final String hiveKey = _getHiveKey(widget.transNo);
+      final data = widget.transactionInfoBox.get(hiveKey);
+
+      if (data != null && data.picImageDetail != null) {
+        context.read<ScFormCubit>().picImageChanged(data.picImageDetail!);
+      }
+    } catch (e) {
+      print("⚠️ Gagal sync foto dari Hive: $e");
+    }
+  }
+
   Future<ValidationLoadResult> _loadValidationData(String transNo) async {
     try {
       final box =
-          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       final statuses = <String, ValidationStatus>{};
-
-      // Kita .toList() agar bisa digunakan ulang
       final List<ServiceCallValidationEntryModel> relevantEntries =
-          box.values.where((e) => e.transNo == transNo).toList();
+      box.values.where((e) => e.transNo == transNo).toList();
 
       for (final entry in relevantEntries) {
         final serial = entry.serialNo.trim().toUpperCase();
@@ -210,14 +225,8 @@ class _ServiceCallDetailBodyMobileState
             ? ValidationStatus.completed
             : ValidationStatus.inProgress;
       }
-      print(
-          "✅ Selesai _loadValidationData. Ditemukan ${statuses.length} status.");
-
-      // Kembalikan objek baru yang berisi KEDUANYA
       return ValidationLoadResult(statuses: statuses, entries: relevantEntries);
     } catch (e) {
-      print("🔴 ERROR di _loadValidationData: $e");
-      // Kembalikan data kosong jika error
       return ValidationLoadResult(statuses: {}, entries: []);
     }
   }
@@ -228,30 +237,23 @@ class _ServiceCallDetailBodyMobileState
       final formCubit = context.read<ScFormCubit>();
       final List<ServiceCallUnitDetail> allUnits = blocState.data.detail;
 
-      // Panggil fungsi BARU
       _loadValidationData(blocState.data.header.transNo).then((result) {
         if (mounted) {
-          // 1. Update UI (FutureBuilder) dengan 'statuses'
           setState(() {
             _validationStatusFuture = Future.value(result.statuses);
           });
-
-          // 2. Update Cubit (Business Logic) dengan 'entries'
           formCubit.updateValidationProgress(allUnits, result.entries);
         }
       }).catchError((error) {
-        print("🔴 Gagal me-refresh status validasi: $error");
         if (mounted) {
           _showValidationSnackbar(
               context, "Gagal memuat status validasi unit.");
           setState(() {
-            _validationStatusFuture =
-                Future.value({}); // Beri nilai default jika error
+            _validationStatusFuture = Future.value({});
           });
         }
       });
     } else {
-      print("ℹ️ _refreshSerials dipanggil TAPI detailState bukan Loaded.");
       if (mounted) {
         setState(() {
           _validationStatusFuture = Future.value({});
@@ -260,369 +262,417 @@ class _ServiceCallDetailBodyMobileState
     }
   }
 
-  // --- BUILD METHOD UTAMA ---
   @override
   Widget build(BuildContext context) {
-    return BlocListener<ScFormCubit, ScFormState>(
-      listenWhen: (prev, current) =>
-          prev.picName != current.picName ||
-          prev.picPhone != current.picPhone ||
-          prev.picNik != current.picNik ||
-          prev.picPosition != current.picPosition ||
-          prev.technician1 != current.technician1 ||
-          prev.technician2 != current.technician2 ||
-          prev.technician3 != current.technician3 ||
-          prev.finalTempIn != current.finalTempIn ||
-          prev.showTechnician3 != current.showTechnician3,
-      listener: (context, state) {
-        if (_picNameController.text != state.picName) {
-          _picNameController.text = state.picName;
-        }
-        if (_picPhoneController.text != state.picPhone) {
-          _picPhoneController.text = state.picPhone;
-        }
-        if (_picNikController.text != state.picNik) {
-          _picNikController.text = state.picNik;
-        }
-        if (_technician1Controller.text != state.technician1) {
-          _technician1Controller.text = state.technician1;
-        }
-        if (_technician2Controller.text != state.technician2) {
-          _technician2Controller.text = state.technician2;
-        }
-        if (_technician3Controller.text != state.technician3) {
-          _technician3Controller.text = state.technician3;
-        }
-        if (_finalTempController.text != state.finalTempIn) {
-          _finalTempController.text = state.finalTempIn;
-        }
-        if (_showTechnician3 != state.showTechnician3) {
-          setState(() => _showTechnician3 = state.showTechnician3);
-        }
-      },
-      child: BlocConsumer<ServiceCallDetailBloc, ServiceCallDetailState>(
-        listener: (context, detailState) {
-          // Panggil _refreshSerials SETELAH data detail berhasil dimuat
-          log("### UI LISTENER MENERIMA STATE: ${detailState.runtimeType} ###");
-          if (detailState is ServiceCallDetailLoaded) {
-            print(
-                "🚀 ServiceCallDetailBloc Loaded. Memanggil _refreshSerials...");
-            _refreshSerials();
-          } else if (detailState is ServiceCallDetailError) {
-            print("🔴 ServiceCallDetailBloc Error: ${detailState.message}");
-            // Set future ke nilai default agar FutureBuilder tidak loading terus
-            if (mounted) {
-              setState(() {
-                _validationStatusFuture = Future.value({});
-              });
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (context) {
+            return OtpBloc(repository: OtpRepository())
+              ..add(CheckOtpStatus(widget.transNo));
+          },
+        ),
+        BlocProvider(
+          lazy: false, // ✅ Wajib False
+          create: (context) {
+            final detailState = context.read<ServiceCallDetailBloc>().state;
+            double lat = 0;
+            double long = 0;
+            if (detailState is ServiceCallDetailLoaded) {
+              lat = double.tryParse(detailState.data.header.storeLat) ?? 0;
+              long = double.tryParse(detailState.data.header.storeLong) ?? 0;
             }
-          }
-        },
-        builder: (context, detailState) {
-          if (detailState is ServiceCallDetailLoading) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (detailState is ServiceCallDetailError) {
-            return Center(child: Text("Error: ${detailState.message}"));
-          } else if (detailState is ServiceCallDetailLoaded) {
-            final detailList = detailState.data.detail;
 
-            final sortedDetailList =
-                List<ServiceCallUnitDetail>.from(detailList); // Salin list
-            sortedDetailList.sort((a, b) {
-              // Cek apakah item adalah 'REMOTE'
-              bool isARemote =
-                  a.articleNameUnit.toUpperCase().contains('REMOTE');
-              bool isBRemote =
-                  b.articleNameUnit.toUpperCase().contains('REMOTE');
-
-              // Jika a REMOTE dan b BUKAN, a ditaruh di bawah (return 1)
-              if (isARemote && !isBRemote) {
-                return 1;
+            return LocationValidationBloc(transactionBox: widget.transactionInfoBox)
+              ..add(LoadLocationPhoto(widget.transNo, lat, long));
+          },
+        ),
+      ],
+      // 🔥 TAMBAHAN LISTENER UNTUK SYNC FOTO
+      child: MultiBlocListener(
+        listeners: [
+          // 1. Sync Foto dari LocationBloc ke ScFormCubit
+          BlocListener<LocationValidationBloc, LocationValidationState>(
+            listener: (context, state) {
+              if (state is LocationPhotoLoaded && state.photo != null) {
+                print("🔄 [Sync] Foto baru diterima, update ScFormCubit!");
+                context.read<ScFormCubit>().picImageChanged(state.photo!);
               }
-              // Jika a BUKAN dan b REMOTE, a ditaruh di atas (return -1)
-              else if (!isARemote && isBRemote) {
-                return -1;
+            },
+          ),
+
+          // 2. Listener Form (Pindahkan logika lama kesini)
+          BlocListener<ScFormCubit, ScFormState>(
+            listenWhen: (prev, current) =>
+            prev.picName != current.picName ||
+                prev.picPhone != current.picPhone ||
+                prev.picNik != current.picNik ||
+                prev.picPosition != current.picPosition ||
+                prev.technician1 != current.technician1 ||
+                prev.technician2 != current.technician2 ||
+                prev.technician3 != current.technician3 ||
+                prev.finalTempIn != current.finalTempIn ||
+                prev.showTechnician3 != current.showTechnician3,
+            listener: (context, state) {
+              if (_picNameController.text != state.picName) {
+                _picNameController.text = state.picName;
               }
-              // Jika keduanya REMOTE atau keduanya BUKAN REMOTE, sort by serialNo
-              else {
-                return a.serialNo.compareTo(b.serialNo);
+              if (_picPhoneController.text != state.picPhone) {
+                _picPhoneController.text = state.picPhone;
               }
-            });
+              if (_picNikController.text != state.picNik) {
+                _picNikController.text = state.picNik;
+              }
+              if (_technician1Controller.text != state.technician1) {
+                _technician1Controller.text = state.technician1;
+              }
+              if (_technician2Controller.text != state.technician2) {
+                _technician2Controller.text = state.technician2;
+              }
+              if (_technician3Controller.text != state.technician3) {
+                _technician3Controller.text = state.technician3;
+              }
+              if (_finalTempController.text != state.finalTempIn) {
+                _finalTempController.text = state.finalTempIn;
+              }
+              if (_showTechnician3 != state.showTechnician3) {
+                setState(() => _showTechnician3 = state.showTechnician3);
+              }
+            },
+          ),
+        ],
+        child: BlocConsumer<ServiceCallDetailBloc, ServiceCallDetailState>(
+          listener: (context, detailState) {
+            if (detailState is ServiceCallDetailLoaded) {
+              _refreshSerials();
+            } else if (detailState is ServiceCallDetailError) {
+              if (mounted) {
+                setState(() {
+                  _validationStatusFuture = Future.value({});
+                });
+              }
+            }
+          },
+          builder: (context, detailState) {
+            if (detailState is ServiceCallDetailLoading) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (detailState is ServiceCallDetailError) {
+              return Center(child: Text("Error: ${detailState.message}"));
+            } else if (detailState is ServiceCallDetailLoaded) {
+              final detailList = detailState.data.detail;
+              final sortedDetailList =
+              List<ServiceCallUnitDetail>.from(detailList);
 
-            final List<NoteOption> noteOptions =
-                detailState.data.noteIndoorAfterOptions;
+              sortedDetailList.sort((a, b) {
+                bool isARemote =
+                a.articleNameUnit.toUpperCase().contains('REMOTE');
+                bool isBRemote =
+                b.articleNameUnit.toUpperCase().contains('REMOTE');
 
-            return BlocBuilder<ScFormCubit, ScFormState>(
-              builder: (context, formState) {
-                if (_validationStatusFuture == null) {
-                  return const Center(
-                      child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation(Colors.orange)));
-                }
-                return FutureBuilder<Map<String, ValidationStatus>>(
-                  future: _validationStatusFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(
-                          child: CircularProgressIndicator(
-                              valueColor:
-                                  AlwaysStoppedAnimation(Colors.green)));
-                    }
+                if (isARemote && !isBRemote) return 1;
+                else if (!isARemote && isBRemote) return -1;
+                else return a.serialNo.compareTo(b.serialNo);
+              });
 
-                    if (snapshot.hasError) {
-                      return Center(
-                          child: Text(
-                              "Error memuat status unit: ${snapshot.error}"));
-                    }
+              final List<NoteOption> noteOptions =
+                  detailState.data.noteIndoorAfterOptions;
 
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final validationStatuses = snapshot.data ?? {};
-                    final header = detailState.data.header;
-                    final problems = detailState.data.problems;
+              return BlocBuilder<ScFormCubit, ScFormState>(
+                builder: (context, formState) {
+                  if (_validationStatusFuture == null) {
+                    return const Center(
+                        child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation(Colors.orange)));
+                  }
+                  return FutureBuilder<Map<String, ValidationStatus>>(
+                    future: _validationStatusFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(
+                            child: CircularProgressIndicator(
+                                valueColor:
+                                AlwaysStoppedAnimation(Colors.green)));
+                      }
 
-                    return BlocListener<ServiceCallSubmittedBloc,
-                        ServiceCallSubmittedState>(
-                      listener: (context, state) async {
-                        if (state is ScProceedToAhoDialog) {
-                          log(">>> LISTENER: Masuk ke blok 'if (state is ScProceedToAhoDialog)' <<<");
-                          try {
-                            // Tampilkan dialog AHO baru Anda
-                            await showDialog<void>(
-                              // Gunakan await
+                      if (snapshot.hasError) {
+                        return Center(
+                            child: Text(
+                                "Error memuat status validasi: ${snapshot.error}"));
+                      }
+
+                      final validationStatuses = snapshot.data ?? {};
+                      final header = detailState.data.header;
+                      final problems = detailState.data.problems;
+
+                      return BlocListener<ServiceCallSubmittedBloc,
+                          ServiceCallSubmittedState>(
+                        listener: (context, state) async {
+                          if (state is ScFinalValidationLoading) {
+                            showDialog(
                               context: context,
                               barrierDismissible: false,
-                              // Disarankan false agar tidak mudah tertutup
-                              builder: (_) {
-                                log(">>> LISTENER: Membangun AhoDialog... <<<");
-                                // Pastikan AhoDialog sudah di-import di atas file ini
-                                return AhoDialog(
-                                  formState: state.formState,
-                                  initialAho: state.initialAho,
-                                  onSubmit: (String ahoNumber) {
-                                    log(">>> AhoDialog onSubmit: Mengirim AhoInputCompleted <<<");
-                                    // Kirim event AhoInputCompleted
-                                    context
-                                        .read<ServiceCallSubmittedBloc>()
-                                        .add(
-                                          AhoInputCompleted(
-                                            formState: state.formState,
-                                            ahoNumber: ahoNumber,
-                                          ),
-                                        );
-                                  },
-                                );
-                              },
+                              builder: (_) => const Center(
+                                  child: CircularProgressIndicator()),
                             );
-                            log(">>> LISTENER: showDialog AHO selesai. <<<");
-                          } catch (e, stacktrace) {
-                            log("🔴 ERROR saat menampilkan AhoDialog: $e",
-                                error: e, stackTrace: stacktrace);
-                          }
-                        } else if (state is ScProceedToOtpDialog) {
-                          // Ambil formState yang sudah divalidasi dari BLoC state
-                          final formState = state.formState;
-                          final double storeLat =
-                              double.tryParse(header.storeLat) ?? 0.0;
-                          final double storeLong =
-                              double.tryParse(header.storeLong) ?? 0.0;
-
-                          showDialog<void>(
-                            context: context,
-                            builder: (_) {
-                              return MultiBlocProvider(
-                                providers: [
-                                  BlocProvider(
-                                      create: (_) =>
-                                          OtpBloc(repository: OtpRepository())),
-                                  BlocProvider(
-                                    create: (context) {
-                                      // 1. Ambil box yang SUDAH DIBUKA oleh ScFormCubit
-                                      final Box scBox =
-                                          Hive.box<TransactionInfoModel>(
-                                              kTransactionInfoHiveBox);
-
-                                      // 2. Inject box tersebut ke dalam BLoC
-                                      return LocationValidationBloc(
-                                          transactionBox: scBox);
+                          } else if (state is ScProceedToAhoDialog) {
+                            Navigator.of(context, rootNavigator: true).pop();
+                            try {
+                              await showDialog<void>(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) {
+                                  return AhoDialog(
+                                    formState: state.formState,
+                                    initialAho: state.initialAho,
+                                    onSubmit: (String ahoNumber) {
+                                      context
+                                          .read<ServiceCallSubmittedBloc>()
+                                          .add(
+                                        AhoInputCompleted(
+                                          formState: state.formState,
+                                          ahoNumber: ahoNumber,
+                                        ),
+                                      );
                                     },
-                                  ),
-                                  BlocProvider.value(
-                                      value:
-                                          context.read<UploadProgressCubit>()),
-                                ],
-                                child: OtpDialog(
-                                  transNo: header.transNo,
-                                  shipTo: header.storeId,
-                                  // Sesuaikan field
-                                  email: header.storeEmail,
-                                  // Sesuaikan field
-                                  storeLat: storeLat,
-                                  storeLong: storeLong,
-                                  onVerified: () {
-                                    // SAAT OTP BERHASIL, BARU KIRIM EVENT SUBMIT SEBENARNYA
-                                    final progressCubit =
-                                        context.read<UploadProgressCubit>();
-                                    context
-                                        .read<ServiceCallSubmittedBloc>()
-                                        .add(
-                                          SubmitValidation(
-                                            transNo: header.transNo,
-                                            createdBy: maintenanceBy,
-                                            createdByName:
-                                                formState.technician1,
-                                            createdByIP: maintenanceByIP,
-                                            pathAttachment:
-                                                header.pathAttachment,
-                                            progressCubit: progressCubit,
-                                            formState: formState,
-                                            storeName: header.storeName,
-                                            ahoNumber: state.ahoNumber,
-                                          ),
-                                        );
-                                  },
-                                ),
+                                  );
+                                },
                               );
-                            },
-                          );
-                        } else if (state is ValidationUploadPartial) {
-                          // Tampilkan dialog HANYA JIKA GAGAL
-                          if (state.failureCount > 0) {
-                            showPartialUploadDialog(
-                              context,
-                              state.successCount,
-                              state.failureCount,
-                              state.failedFiles,
-                            );
-                          }
-                        } else if (state is ValidationSuccess) {
-                          // Jika 100% sukses, langsung tutup halaman detail
-                          ConfirmationService().processQueue();
-                          showSuccessDialog(
-                            context,
-                            "Data berhasil dikirim.",
-                            onOk: () {
-                              Navigator.of(context)
-                                  .popUntil((route) => route.isFirst);
-                            },
-                          );
-                        }
-                      },
-                      child: Stack(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 65.0),
-                            child: SingleChildScrollView(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 16, 16, 35),
-                              child: Column(
-                                children: [
-                                  _buildCustomerSection(header),
-                                  _buildSection(
-                                      title: 'Tiket Service Call',
-                                      child: _buildTicketSection(header)),
-                                  _buildPicPanel(context, formState),
-                                  _buildSection(
-                                      title: 'Teknisi Bertugas',
-                                      child: _buildTechnicianPanel(
-                                          context, formState)),
-                                  _buildSection(
-                                    title: 'Validasi Unit',
-                                    child: Column(
-                                      children: [
-                                        _buildScanQRButton(
-                                            context, detailState),
-                                        const SizedBox(height: 8),
-                                        ...sortedDetailList.map((item) =>
-                                            _buildDetailCard(header, item,
-                                                validationStatuses)),
-                                      ],
-                                    ),
-                                  ),
-                                  // Widget Suhu Akhir (Kondisional)
-                                  BlocBuilder<ScFormCubit, ScFormState>(
-                                    buildWhen: (prev, current) {
-                                      return prev.allUnitsValidated !=
-                                              current
-                                                  .allUnitsValidated || // (status aktif/nonaktif berubah)
-                                          prev.isFinalTempSkipped !=
-                                              current
-                                                  .isFinalTempSkipped || // (status skip berubah)
-                                          prev.finalTempNote !=
-                                              current
-                                                  .finalTempNote; // (note berubah)
-                                    },
-                                    builder: (context, formStateForTemp) {
-                                      final bool isEnabled =
-                                          formStateForTemp.allUnitsValidated;
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 16.0),
-                                        child: Stack(
-                                          children: [
-                                            Opacity(
-                                              opacity: isEnabled ? 1.0 : 0.5,
-                                              child: AbsorbPointer(
-                                                absorbing: !isEnabled,
-                                                child: _buildFinalTempSection(
-                                                    context,
-                                                    formStateForTemp,
-                                                    noteOptions),
-                                              ),
-                                            ),
-                                            if (!isEnabled)
-                                              Positioned.fill(
-                                                child: InkWell(
-                                                  onTap: () =>
-                                                      _showValidationSnackbar(
-                                                          context,
-                                                          'Selesaikan validasi semua unit dahulu.'),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  child: Container(
-                                                      color:
-                                                          Colors.transparent),
-                                                ),
-                                              ),
-                                          ],
+                            } catch (e, stacktrace) {
+                              log("🔴 ERROR AhoDialog: $e",
+                                  error: e, stackTrace: stacktrace);
+                            }
+                          } else if (state is ScProceedToOtpDialog) {
+                            Navigator.of(context, rootNavigator: true).pop();
+                            final formState = state.formState;
+                            final double storeLat =
+                                double.tryParse(header.storeLat) ?? 0.0;
+                            final double storeLong =
+                                double.tryParse(header.storeLong) ?? 0.0;
+
+                            final otpBloc = context.read<OtpBloc>();
+                            final locationBloc =
+                            context.read<LocationValidationBloc>();
+
+                            // 🔥 Logic Cek Foto Robust (Fallback Hive)
+                            bool isPhotoReady = false;
+
+                            final locState = locationBloc.state;
+                            if (locState is LocationPhotoLoaded &&
+                                locState.photo != null) {
+                              isPhotoReady = true;
+                              print("✅ SC: Foto ditemukan di BLoC State");
+                            } else if (locState is LocationValidationFailure &&
+                                locState.photo != null) {
+                              isPhotoReady = true;
+                              print("⚠️ SC: Foto ditemukan di BLoC Failure State");
+                            }
+
+                            if (!isPhotoReady) {
+                              try {
+                                final String hiveKey = _getHiveKey(widget.transNo);
+                                final info = widget.transactionInfoBox.get(hiveKey);
+
+                                if (info?.picImageDetail != null) {
+                                  isPhotoReady = true;
+                                  print("✅ SC: Foto ditemukan via Fallback Hive (Key: $hiveKey)");
+                                  // Opsional: Refresh Bloc biar sinkron
+                                  locationBloc.add(LoadLocationPhoto(widget.transNo, 0, 0));
+                                } else {
+                                  print("❌ SC: Foto TIDAK ditemukan di Hive. Key: $hiveKey");
+                                }
+                              } catch (e) {
+                                print("❌ SC: Gagal cek Hive manual: $e");
+                              }
+                            }
+
+                            showDialog<void>(
+                              context: context,
+                              builder: (_) {
+                                return MultiBlocProvider(
+                                  providers: [
+                                    BlocProvider.value(value: otpBloc),
+                                    BlocProvider.value(value: locationBloc),
+                                    BlocProvider.value(
+                                        value: context
+                                            .read<UploadProgressCubit>()),
+                                  ],
+                                  child: OtpDialog(
+                                    transNo: widget.transNo,
+                                    shipTo: header.storeId,
+                                    email: header.storeEmail,
+                                    storeLat: storeLat,
+                                    storeLong: storeLong,
+                                    isPhotoExisting: isPhotoReady,
+                                    onVerified: () {
+                                      Navigator.pop(context);
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (_) => const Center(
+                                            child: CircularProgressIndicator()),
+                                      );
+
+                                      final progressCubit =
+                                      context.read<UploadProgressCubit>();
+                                      context
+                                          .read<ServiceCallSubmittedBloc>()
+                                          .add(
+                                        SubmitValidation(
+                                          transNo: header.transNo,
+                                          createdBy: maintenanceBy,
+                                          createdByName:
+                                          formState.technician1,
+                                          createdByIP: maintenanceByIP,
+                                          pathAttachment:
+                                          header.pathAttachment,
+                                          progressCubit: progressCubit,
+                                          formState: formState,
+                                          storeName: header.storeName,
+                                          ahoNumber: state.ahoNumber,
                                         ),
                                       );
                                     },
                                   ),
-                                ],
+                                );
+                              },
+                            );
+                          } else if (state is ValidationUploadPartial) {
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                            if (state.failureCount > 0) {
+                              showPartialUploadDialog(
+                                context,
+                                state.successCount,
+                                state.failureCount,
+                                state.failedFiles,
+                              );
+                            }
+                          } else if (state is ValidationSuccess) {
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                            showSuccessDialog(
+                              context,
+                              "Data berhasil dikirim.",
+                              onOk: () {
+                                Navigator.of(context)
+                                    .popUntil((route) => route.isFirst);
+                              },
+                            );
+                          }
+                        },
+                        child: Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 65.0),
+                              child: SingleChildScrollView(
+                                padding:
+                                const EdgeInsets.fromLTRB(16, 16, 16, 35),
+                                child: Column(
+                                  children: [
+                                    _buildCustomerSection(header),
+                                    _buildSection(
+                                        title: 'Tiket Service Call',
+                                        child: _buildTicketSection(header)),
+                                    _buildPicPanel(context, formState),
+                                    _buildSection(
+                                        title: 'Teknisi Bertugas',
+                                        child: _buildTechnicianPanel(
+                                            context, formState)),
+                                    _buildSection(
+                                      title: 'Validasi Unit',
+                                      child: Column(
+                                        children: [
+                                          _buildScanQRButton(
+                                              context, detailState),
+                                          const SizedBox(height: 8),
+                                          ...sortedDetailList.map((item) =>
+                                              _buildDetailCard(header, item,
+                                                  validationStatuses)),
+                                        ],
+                                      ),
+                                    ),
+                                    BlocBuilder<ScFormCubit, ScFormState>(
+                                      buildWhen: (prev, current) {
+                                        return prev.allUnitsValidated !=
+                                            current.allUnitsValidated ||
+                                            prev.isFinalTempSkipped !=
+                                                current.isFinalTempSkipped ||
+                                            prev.finalTempNote !=
+                                                current.finalTempNote;
+                                      },
+                                      builder: (context, formStateForTemp) {
+                                        final bool isEnabled =
+                                            formStateForTemp.allUnitsValidated;
+                                        return Padding(
+                                          padding:
+                                          const EdgeInsets.only(top: 16.0),
+                                          child: Stack(
+                                            children: [
+                                              Opacity(
+                                                opacity: isEnabled ? 1.0 : 0.5,
+                                                child: AbsorbPointer(
+                                                  absorbing: !isEnabled,
+                                                  child: _buildFinalTempSection(
+                                                      context,
+                                                      formStateForTemp,
+                                                      noteOptions),
+                                                ),
+                                              ),
+                                              if (!isEnabled)
+                                                Positioned.fill(
+                                                  child: InkWell(
+                                                    onTap: () =>
+                                                        _showValidationSnackbar(
+                                                            context,
+                                                            'Selesaikan validasi semua unit dahulu.'),
+                                                    borderRadius:
+                                                    BorderRadius.circular(
+                                                        12),
+                                                    child: Container(
+                                                        color:
+                                                        Colors.transparent),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          _buildSubmitButton(
-                              context, header, problems, formState),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          }
-          return const Center(child: Text("Data belum dimuat"));
-        },
+                            _buildSubmitButton(
+                                context, header, problems, formState),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+            return const Center(child: Text("Data belum dimuat"));
+          },
+        ),
       ),
     );
   }
 
-  // --- Helper Widgets ---
-
+  // --- Widget Helper Tetap Sama ---
   Widget _buildSection({required String title, required Widget child}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
+        color: Colors.white.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 6,
             offset: const Offset(0, 2),
           )
@@ -634,7 +684,7 @@ class _ServiceCallDetailBodyMobileState
           if (title.isNotEmpty)
             Text(title,
                 style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           if (title.isNotEmpty) const SizedBox(height: 8),
           child,
         ],
@@ -650,7 +700,7 @@ class _ServiceCallDetailBodyMobileState
         children: [
           Text('Toko: ${header.storeName} (${header.storeId})',
               style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 4),
           Text('Alamat: ${header.storeAddress}',
               style: const TextStyle(fontSize: 13)),
@@ -666,33 +716,33 @@ class _ServiceCallDetailBodyMobileState
   }
 
   Widget _buildTicketSection(ServiceCallHeader header) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.confirmation_number_outlined,
-                size: 20, color: Colors.black54),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Text('No: ${header.transNo}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)))
-          ]),
-          const SizedBox(height: 4),
-          Row(children: [
-            const Icon(Icons.calendar_today_outlined,
-                size: 16, color: Colors.black54),
-            const SizedBox(width: 8),
-            Text('Posted: ${header.postedDate.split('T')[0]}') // Asumsi format
-          ]),
-          const SizedBox(height: 4),
-          Text('Status: ${header.status}',
-              style: const TextStyle(
-                  color: Colors.blue, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          Text('Kategori: ${header.complaintCategory}'),
-          Text('Keluhan: ${header.complaintSubject}',
-              style: const TextStyle(fontStyle: FontStyle.italic)),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        const Icon(Icons.confirmation_number_outlined,
+            size: 20, color: Colors.black54),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text('No: ${header.transNo}',
+                style: const TextStyle(fontWeight: FontWeight.bold)))
+      ]),
+      const SizedBox(height: 4),
+      Row(children: [
+        const Icon(Icons.calendar_today_outlined,
+            size: 16, color: Colors.black54),
+        const SizedBox(width: 8),
+        Text('Posted: ${header.postedDate.split('T')[0]}')
+      ]),
+      const SizedBox(height: 4),
+      Text('Status: ${header.status}',
+          style: const TextStyle(
+              color: Colors.blue, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      Text('Kategori: ${header.complaintCategory}'),
+      Text('Keluhan: ${header.complaintSubject}',
+          style: const TextStyle(fontStyle: FontStyle.italic)),
+    ],
+  );
 
   Widget _buildPicPanel(BuildContext context, ScFormState formState) {
     context.read<ScFormCubit>();
@@ -724,7 +774,6 @@ class _ServiceCallDetailBodyMobileState
               ),
               const SizedBox(width: 12),
               Expanded(
-                // ✅ GANTI DENGAN WIDGET DROPDOWN BARU
                 child: scPositionDropdown(context, formState),
               ),
             ],
@@ -757,32 +806,26 @@ class _ServiceCallDetailBodyMobileState
               hintText: 'Teknisi 2',
               icon: Icons.engineering,
               onTap: () {},
-              // Kosongkan onTap
               onChanged: (value) {
-                // <-- Tambahkan onChanged
                 formCubit.technician2Changed(value);
                 formCubit.onFieldChanged();
               }),
           const SizedBox(height: 8),
-          if (formState.showTechnician3) // <-- Gunakan state dari Cubit
+          if (formState.showTechnician3)
             _buildCustomTextField(
               controller: _technician3Controller,
-              // <-- Gunakan Controller
               hintText: 'Teknisi 3',
               icon: Icons.engineering,
               onTap: () {},
-              // Kosongkan onTap
               onChanged: (value) {
-                // <-- Tambahkan onChanged
                 formCubit.technician3Changed(value);
                 formCubit.onFieldChanged();
               },
               iconBtn: IconButton(
-                  // <-- Ganti nama prop
                   onPressed: () {
                     formCubit.technician3Changed('');
                     formCubit.toggleTechnician3(false);
-                    formCubit.onFieldChanged(); // <-- Tambahkan
+                    formCubit.onFieldChanged();
                   },
                   icon: const Icon(Icons.cancel, color: Colors.red)),
             )
@@ -816,18 +859,18 @@ class _ServiceCallDetailBodyMobileState
             if (scannedSerialNo == null || !mounted) return;
 
             final matchingItem = detailState.data.detail.firstWhereOrNull(
-              (e) => e.serialNo.trim().toUpperCase().startsWith(
-                    scannedSerialNo.trim().toUpperCase(),
-                  ),
+                  (e) => e.serialNo.trim().toUpperCase().startsWith(
+                scannedSerialNo.trim().toUpperCase(),
+              ),
             );
 
             if (matchingItem != null) {
               final box = Hive.box<ServiceCallValidationEntryModel>(
                   kServiceCallHiveBox);
               final existingData = box.values.firstWhereOrNull(
-                (entry) =>
-                    entry.serialNo.trim().toUpperCase() ==
-                        scannedSerialNo.trim().toUpperCase() &&
+                    (entry) =>
+                entry.serialNo.trim().toUpperCase() ==
+                    scannedSerialNo.trim().toUpperCase() &&
                     entry.transNo == widget.transNo,
               );
 
@@ -858,7 +901,7 @@ class _ServiceCallDetailBodyMobileState
               );
 
               if (result == true && mounted) {
-                _refreshSerials(); // JALANKAN REFRESH DI SINI
+                _refreshSerials();
               }
             } else {
               _showValidationSnackbar(
@@ -876,11 +919,10 @@ class _ServiceCallDetailBodyMobileState
       Map<String, ValidationStatus> validationStatuses) {
     final box = Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
     final existingEntry = box.values.firstWhereOrNull((e) =>
-        e.serialNo.trim().toUpperCase() ==
-            detail.serialNo.trim().toUpperCase() &&
+    e.serialNo.trim().toUpperCase() ==
+        detail.serialNo.trim().toUpperCase() &&
         e.transNo == header.transNo);
 
-    // Tentukan serial number mana yang akan ditampilkan
     String displaySerial = detail.serialNo;
     bool isSwapped = false;
 
@@ -945,7 +987,6 @@ class _ServiceCallDetailBodyMobileState
                       fontSize: 10,
                       color: Colors.deepOrange,
                       fontStyle: FontStyle.italic)),
-
             Text('Keluhan: ${detail.complaintDetails}',
                 style: const TextStyle(fontSize: 12)),
           ],
@@ -953,23 +994,22 @@ class _ServiceCallDetailBodyMobileState
         trailing: Icon(iconData, color: iconColor, size: 28),
         onTap: () async {
           final box =
-              Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+          Hive.box<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
           final existingEntry = box.values.firstWhereOrNull((e) =>
-              e.serialNo.trim().toUpperCase() == serialKey &&
+          e.serialNo.trim().toUpperCase() == serialKey &&
               e.transNo == header.transNo);
-          // Ambil detail state terbaru
           final detailState = context.read<ServiceCallDetailBloc>().state;
-          if (detailState is! ServiceCallDetailLoaded) return; // Guard clause
+          if (detailState is! ServiceCallDetailLoaded) return;
 
           final outdoorSerials =
-              detailState.data.outdoor.map((unit) => unit.serialNo).toList();
+          detailState.data.outdoor.map((unit) => unit.serialNo).toList();
           final problemSources = detailState.data.problems;
 
-          String serialForDisplay = detail.serialNo; // Default Lama
+          String serialForDisplay = detail.serialNo;
           if (existingEntry != null &&
               existingEntry.correctSerialNo != null &&
               existingEntry.correctSerialNo!.isNotEmpty) {
-            serialForDisplay = existingEntry.correctSerialNo!; // Serial Baru
+            serialForDisplay = existingEntry.correctSerialNo!;
           }
 
           if (isRemote) {
@@ -979,12 +1019,10 @@ class _ServiceCallDetailBodyMobileState
                 builder: (_) => RemoteValidationScreen(
                   transNo: header.transNo,
                   uniqueId: detail.serialNo,
-                  // Gunakan serialNo sebagai uniqueId
                   articleName: detail.articleNameUnit,
                   initialData: existingEntry,
                   complaintDetails: detail.complaintDetails,
                   imageFile: header.pathAttachment,
-                  // Mungkin imageFile dari detail? Sesuaikan
                   problemSources: problemSources,
                 ),
               ),
@@ -996,7 +1034,7 @@ class _ServiceCallDetailBodyMobileState
             }
           } else {
             final detailData = (context.read<ServiceCallDetailBloc>().state
-                    as ServiceCallDetailLoaded)
+            as ServiceCallDetailLoaded)
                 .data;
 
             await Navigator.push(
@@ -1022,14 +1060,6 @@ class _ServiceCallDetailBodyMobileState
 
             if (mounted) {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // ScaffoldMessenger.of(context).showSnackBar(
-              //   const SnackBar(
-              //     content: Text('Validasi berhasil disimpan!'),
-              //     backgroundColor: Colors.green,
-              //     behavior: SnackBarBehavior.floating,
-              //   ),
-              // );
-
               _refreshSerials();
             }
           }
@@ -1127,12 +1157,12 @@ class _ServiceCallDetailBodyMobileState
 
               if (latestFormState.isFormReadyToSubmit) {
                 context.read<ServiceCallSubmittedBloc>().add(
-                      ScFinalValidationRequested(
-                        transNo: widget.transNo,
-                        formState: latestFormState,
-                        problemSources: problems,
-                      ),
-                    );
+                  ScFinalValidationRequested(
+                    transNo: widget.transNo,
+                    formState: latestFormState,
+                    problemSources: problems,
+                  ),
+                );
               } else {
                 // Tampilkan pesan error spesifik
                 if (!latestFormState.isPicStoreValid) {
@@ -1189,7 +1219,7 @@ class _ServiceCallDetailBodyMobileState
       ),
       inputFormatters: [
         TextInputFormatter.withFunction(
-          (oldValue, newValue) =>
+              (oldValue, newValue) =>
               newValue.copyWith(text: newValue.text.toUpperCase()),
         ),
       ],
@@ -1213,10 +1243,6 @@ class _ServiceCallDetailBodyMobileState
         filteredOptions.where((opt) => opt.label == selectedValue).firstOrNull;
     final bool isReadOnlySystemValue = selectedOptionObj?.isSystemOnly ?? false;
 
-    // ... (Sisa kode _buildNoteDropdown persis sama seperti
-    //      yang ada di ScMeasurementInputSection: Padding, DropdownButtonFormField2, dll.)
-
-    // Pastikan Anda menyalin seluruh method _buildNoteDropdown ke sini
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16.0),
       // Sesuaikan padding
@@ -1227,21 +1253,21 @@ class _ServiceCallDetailBodyMobileState
           labelText: '$label (*Wajib)',
           border: const OutlineInputBorder(),
           contentPadding:
-              const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         ),
         hint: Text('Pilih Alasan', style: const TextStyle(fontSize: 14)),
         items: options
             .map((item) => DropdownMenuItem<String>(
-                  value: item.label,
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(item.label,
-                          style: const TextStyle(fontSize: 14)),
-                    ),
-                  ),
-                ))
+          value: item.label,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(item.label,
+                  style: const TextStyle(fontSize: 14)),
+            ),
+          ),
+        ))
             .toList(),
         onChanged: onChanged,
         selectedItemBuilder: (context) {
@@ -1274,10 +1300,10 @@ class _ServiceCallDetailBodyMobileState
               decoration: InputDecoration(
                 isDense: true,
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 hintText: 'Cari alasan...',
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),

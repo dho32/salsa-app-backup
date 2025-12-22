@@ -1,7 +1,5 @@
 import 'dart:ui';
 
-import 'package:salsa/components/shared_function.dart';
-
 import '../models/common/measurement_limits.dart';
 
 ///path url
@@ -36,6 +34,7 @@ const kScUnserviceableDraftsBox = 'sc_unserviceable_drafts';
 const String kPosUnserviceablePartialBox = 'pos_unserviceable_partial_cache';
 const String kScUnserviceablePartialBox = 'sc_unserviceable_partial_cache';
 const kAppConfigBox = 'app_config_cache_box';
+const kOtpTrackingBox = 'otp_tracking_box';
 
 ///string
 const kStringDialogUnitProblem = """
