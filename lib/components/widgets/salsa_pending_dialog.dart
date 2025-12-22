@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 
 class SalsaPendingDialog extends StatelessWidget {
   final String transNo;
+  final String customerCode;
+  final String customerName;
   final VoidCallback onUploadPressed;
   final VoidCallback onContinuePressed;
 
   const SalsaPendingDialog({
     super.key,
     required this.transNo,
+    required this.customerCode,
+    required this.customerName,
     required this.onUploadPressed,
     required this.onContinuePressed,
   });
@@ -57,7 +61,7 @@ class SalsaPendingDialog extends StatelessWidget {
                         text: transNo,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      const TextSpan(text: " masih memiliki status "),
+                      TextSpan(text: " dari Toko $customerName ($customerCode) masih memiliki status "),
                       const TextSpan(
                         text: "Upload Gagal / Pending",
                         style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),

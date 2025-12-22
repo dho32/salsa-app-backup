@@ -84,7 +84,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthAuthenticated());
       }
     } catch (e) {
-      await Hive.deleteFromDisk();
       final message = e.toString().replaceAll(RegExp(r'Exception:\s*'), '');
       emit(AuthFailure(message));
     }

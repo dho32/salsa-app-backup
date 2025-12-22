@@ -86,6 +86,8 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       barrierDismissible: false,
       builder: (dialogContext) => SalsaPendingDialog(
         transNo: _apiPendingList.first.transNo,
+        customerCode: _apiPendingList.first.customerCode,
+        customerName: _apiPendingList.first.customerName,
         onUploadPressed: () {
           Navigator.pop(dialogContext);
           Navigator.push(
@@ -247,8 +249,7 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
 
                             return InkWell(
                               onTap: () async {
-                                final bool? shouldRefresh =
-                                    await Navigator.push(
+                                await Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => BlocProvider.value(
@@ -260,13 +261,9 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                                   ),
                                 );
 
-                                if (shouldRefresh == true) {
-                                  context.read<TaskMaintenanceBloc>().add(
-                                        FetchPendingTasks(
-                                            widget.userData['maintenance_by']!,
-                                            widget.userData['user_id']!),
-                                      );
-                                }
+                                context.read<TaskMaintenanceBloc>().add(
+                                  FetchPendingTasks(widget.userData['maintenance_by']!, widget.userData['user_id']!),
+                                );
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Card(
@@ -303,7 +300,7 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                                             const SizedBox(height: 4),
                                             Text(
                                               hasCriticalError
-                                                  ? "$zombieCount Transaksi gagal di proses. Ketuk untuk memproses."
+                                                  ? "$zombieCount Transaksi gagal di proses. Ketuk untuk memprosesr."
                                                   : "Beberapa foto gagal di-upload. Ketuk untuk memperbaiki.",
                                               style: const TextStyle(
                                                   fontSize: 12,
@@ -499,14 +496,18 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       context,
       MaterialPageRoute(builder: (_) => destinationScreen!),
     ).then((_) {
-      print('✅ Kembali ke Task Maintenance, memuat ulang daftar gagal...');
-      context.read<FailedUploadsBloc>().add(LoadFailedUploads());
-      // Refresh API juga
       if (widget.userData['maintenance_by'] != null) {
-        context.read<TaskMaintenanceBloc>().add(FetchPendingTasks(
-            widget.userData['maintenance_by']!,
-            widget.userData['user_id'] ?? ''));
+        context.read<TaskMaintenanceBloc>().add(
+            FetchPendingTasks(
+                widget.userData['maintenance_by']!,
+                widget.userData['user_id'] ?? ''
+            )
+        );
       }
+
+      context.read<FailedUploadsBloc>().add(LoadFailedUploads());
+
+      print('✅ Kembali ke Task Maintenance: Data API & Local di refresh.');
     });
   }
 
