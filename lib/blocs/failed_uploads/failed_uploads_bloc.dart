@@ -6,6 +6,7 @@ import 'package:salsa/blocs/upload_progress/upload_progress_cubit.dart';
 import 'package:salsa/components/constants.dart';
 import '../../components/services/hive_clear_service.dart';
 import '../../components/upload_s3_service.dart';
+import '../../models/installation/installation_model.dart';
 import '../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../models/service_call/sc_unserviceable_model.dart';
 import '../../models/task_maintenance/confirmation_task_queue.dart';
@@ -73,8 +74,9 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     final List<Map<String, dynamic>> allFailedTyped = [];
     try {
       Future<void> loadFromBox(String boxName, String moduleHint) async {
-        if (!Hive.isBoxOpen(boxName))
+        if (!Hive.isBoxOpen(boxName)) {
           await Hive.openBox<Map<dynamic, dynamic>>(boxName);
+        }
         final box = Hive.box<Map<dynamic, dynamic>>(boxName);
         final values = box.values.map((map) {
           final typedMap = Map<String, dynamic>.from(map);
@@ -88,6 +90,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       await loadFromBox(kServiceCallValidationPartialHiveBox, 'SC');
       await loadFromBox(kPosUnserviceablePartialBox, 'POS_UNSERVICEABLE');
       await loadFromBox(kScUnserviceablePartialBox, 'SC_UNSERVICEABLE');
+      await loadFromBox(kFailedUploadsBox, 'INSTALLATION');
 
       // Setelah load dari Hive, update total issues (Zombie tetap nol sampai SyncWithApiPending dipanggil)
       emit(state.copyWith(
@@ -174,13 +177,41 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         result = await uploadPOSUnserviceableImagesToS3(report, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'SC_UNSERVICEABLE') {
-        if (!Hive.isBoxOpen(kScUnserviceableDraftsBox))
+        if (!Hive.isBoxOpen(kScUnserviceableDraftsBox)) {
           await Hive.openBox<SCUnserviceableModel>(kScUnserviceableDraftsBox);
+        }
         final report = Hive.box<SCUnserviceableModel>(kScUnserviceableDraftsBox)
             .get(event.transNo);
         if (report == null) throw Exception("Draft tidak ditemukan.");
         result = await uploadSCUnserviceableImagesToS3(report, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
+      } else if (moduleType == 'INSTALLATION') {
+        // A. Ambil Data Draft
+        if (!Hive.isBoxOpen(kInstallationDraftBox)) {
+          await Hive.openBox<InstallationEntryModel>(kInstallationDraftBox);
+        }
+
+        final draftBox = Hive.box<InstallationEntryModel>(kInstallationDraftBox);
+        final draft = draftBox.get(event.transNo);
+
+        if (draft == null) throw Exception("Draft Instalasi tidak ditemukan.");
+
+        final apiResultMock = {
+          'result': {'detail': presignedDetail}
+        };
+
+        final uploadRes = await uploadInstallationFiles(
+            apiResult: apiResultMock,
+            progressCubit: progressCubit,
+            draft: draft
+        );
+
+        result = UploadResult(
+            successCount: uploadRes.successCount,
+            failureCount: uploadRes.failureCount,
+            failedFiles: uploadRes.failedFiles
+        );
+
       } else {
         throw Exception('Modul tidak dikenal.');
       }
@@ -255,12 +286,14 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       kPosValidationPartialHiveBox,
       kServiceCallValidationPartialHiveBox,
       kPosUnserviceablePartialBox,
-      kScUnserviceablePartialBox
+      kScUnserviceablePartialBox,
+      kFailedUploadsBox
     ];
     for (final boxName in boxNames) {
       try {
-        if (!Hive.isBoxOpen(boxName))
+        if (!Hive.isBoxOpen(boxName)) {
           await Hive.openBox<Map<dynamic, dynamic>>(boxName);
+        }
         final box = Hive.box<Map<dynamic, dynamic>>(boxName);
         final subscription = box.watch().listen((event) {
           if (event.deleted && !isClosed) {
@@ -320,6 +353,8 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         return kPosUnserviceablePartialBox;
       case 'SC_UNSERVICEABLE':
         return kScUnserviceablePartialBox;
+      case 'INSTALLATION':
+        return kFailedUploadsBox;
       default:
         return null;
     }

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/service_call/validation_dropdown/validation_dropdown_bloc.dart';
@@ -15,6 +15,7 @@ import 'package:salsa/screens/service_call/service_call_validation/components/wi
 import 'package:image_picker/image_picker.dart';
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/services/watermark_service.dart';
+import '../../../../components/shared_function.dart';
 import '../../../../components/widgets/sc_measurement_input_section.dart';
 import '../../../../models/common/captured_image_detail.dart';
 
@@ -103,6 +104,13 @@ class _ServiceCallValidationBodyMobileState
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
+        // Ambil timezone dari device
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+        // Format tanggal pakai locale (AMAN)
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
         // 3. Siapkan Direktori Penyimpanan
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
@@ -119,7 +127,7 @@ class _ServiceCallValidationBodyMobileState
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );

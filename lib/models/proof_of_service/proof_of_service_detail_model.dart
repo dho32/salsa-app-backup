@@ -2,8 +2,7 @@
 library;
 
 import 'package:hive/hive.dart';
-
-import '../common/note_option.dart';
+import '../common/note_option.dart'; // Pastikan path ini sesuai dengan project Akang
 
 part 'proof_of_service_detail_model.g.dart';
 
@@ -14,15 +13,6 @@ class ProofOfServiceDetailModel {
 
   @HiveField(1)
   final List<ProofOfServiceItemDetail> detail;
-
-  // @HiveField(2)
-  // final List<String>? noteIndoorOptions;
-  //
-  // @HiveField(3)
-  // final List<String>? noteOutdoorOptions;
-  //
-  // @HiveField(4)
-  // final List<String>? unserviceableReasons;
 
   @HiveField(5)
   final List<NoteOption>? noteIndoorOptions;
@@ -41,16 +31,13 @@ class ProofOfServiceDetailModel {
     this.unserviceableReasons,
   });
 
-  // Biarkan factory fromJson tetap ada untuk parsing data dari API
   factory ProofOfServiceDetailModel.fromJson(Map<String, dynamic> json) {
     List<NoteOption> _parseNotes(dynamic list) {
       if (list == null || list is! List) return [];
       return list.map((item) {
         if (item is Map) {
-          // Format Baru (Object)
           return NoteOption.fromJson(Map<String, dynamic>.from(item));
         } else if (item is String) {
-          // Format Lama (String) - Fallback safety
           return NoteOption.fromJson({'label': item});
         }
         return NoteOption(label: item.toString());
@@ -62,9 +49,6 @@ class ProofOfServiceDetailModel {
       detail: (json['detail'] as List<dynamic>? ?? [])
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
-      // noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
-      // noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
-      // unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
       noteIndoorOptions: _parseNotes(json['note_indoor_options']),
       noteOutdoorOptions: _parseNotes(json['note_outdoor_options']),
       unserviceableReasons: _parseNotes(json['unserviceable_reasons']),
@@ -124,7 +108,7 @@ class ProofOfServiceHeader {
   }
 }
 
-@HiveType(typeId: 12) // <-- ID unik lainnya
+@HiveType(typeId: 12)
 class ProofOfServiceItemDetail {
   @HiveField(0)
   final String articleNo;
@@ -137,12 +121,17 @@ class ProofOfServiceItemDetail {
   @HiveField(4)
   final String unitType;
 
+  // [NEW] Penambahan Reff Line No sesuai API baru
+  @HiveField(5)
+  final String reffLineNo;
+
   ProofOfServiceItemDetail({
     required this.articleNo,
     required this.articleDesc,
     required this.unitDesc,
     required this.serialNo,
     required this.unitType,
+    required this.reffLineNo,
   });
 
   factory ProofOfServiceItemDetail.fromJson(Map<String, dynamic> json) {
@@ -152,6 +141,8 @@ class ProofOfServiceItemDetail {
       unitDesc: json['article_name_unit'] ?? '',
       serialNo: json['serial_no'] ?? '',
       unitType: json['unit_type'] ?? '',
+      // Parsing reff_line_no dari JSON
+      reffLineNo: json['reff_line_no']?.toString() ?? '',
     );
   }
 }

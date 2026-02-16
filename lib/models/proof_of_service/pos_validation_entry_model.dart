@@ -4,7 +4,7 @@ import 'package:salsa/models/common/measurement_entry.dart';
 
 part 'pos_validation_entry_model.g.dart';
 
-@HiveType(typeId: 8) // Pastikan typeId ini unik
+@HiveType(typeId: 8)
 class PosValidationEntryModel extends HiveObject {
   @HiveField(0)
   String transNo;
@@ -51,6 +51,10 @@ class PosValidationEntryModel extends HiveObject {
   @HiveField(14)
   List<CapturedImageDetail>? remarkPhotos;
 
+  // [NEW] Field untuk Reference Line Number dari Backend
+  @HiveField(15)
+  String? reffLineNo;
+
   PosValidationEntryModel({
     required this.transNo,
     required this.serialNo,
@@ -67,6 +71,7 @@ class PosValidationEntryModel extends HiveObject {
     this.pairedSerialNo,
     this.noteRemark,
     this.remarkPhotos,
+    this.reffLineNo, // Add to constructor
   });
 
   factory PosValidationEntryModel.empty() {
@@ -86,6 +91,46 @@ class PosValidationEntryModel extends HiveObject {
       pairedSerialNo: '',
       noteRemark: '',
       remarkPhotos: [],
+      reffLineNo: '',
+    );
+  }
+
+  // [NEW] Method CopyWith (Wajib untuk BLoC pattern)
+  PosValidationEntryModel copyWith({
+    String? transNo,
+    String? serialNo,
+    List<CapturedImageDetail>? photosBefore,
+    List<CapturedImageDetail>? photosAfter,
+    List<MeasurementEntry>? measurementsAfter,
+    bool? isCompleted,
+    String? note,
+    String? articleNo,
+    String? articleDesc,
+    String? articleUnitDesc,
+    int? capacity,
+    String? articleType,
+    String? pairedSerialNo,
+    String? noteRemark,
+    List<CapturedImageDetail>? remarkPhotos,
+    String? reffLineNo,
+  }) {
+    return PosValidationEntryModel(
+      transNo: transNo ?? this.transNo,
+      serialNo: serialNo ?? this.serialNo,
+      photosBefore: photosBefore ?? this.photosBefore,
+      photosAfter: photosAfter ?? this.photosAfter,
+      measurementsAfter: measurementsAfter ?? this.measurementsAfter,
+      isCompleted: isCompleted ?? this.isCompleted,
+      note: note ?? this.note,
+      articleNo: articleNo ?? this.articleNo,
+      articleDesc: articleDesc ?? this.articleDesc,
+      articleUnitDesc: articleUnitDesc ?? this.articleUnitDesc,
+      capacity: capacity ?? this.capacity,
+      articleType: articleType ?? this.articleType,
+      pairedSerialNo: pairedSerialNo ?? this.pairedSerialNo,
+      noteRemark: noteRemark ?? this.noteRemark,
+      remarkPhotos: remarkPhotos ?? this.remarkPhotos,
+      reffLineNo: reffLineNo ?? this.reffLineNo,
     );
   }
 }

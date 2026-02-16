@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../components/shared_function.dart';
@@ -125,6 +126,13 @@ class LocationValidationBloc
       final deviceModel = userData['device_model'] ?? 'Unknown Device';
       final timestamp = DateTime.now();
 
+      // Ambil timezone dari device
+      final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+      // Format tanggal pakai locale (AMAN)
+      final formattedDate =
+          '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
       final appDir = await getApplicationDocumentsDirectory();
       final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
       if (!await imagesDir.exists()) {
@@ -138,7 +146,7 @@ class LocationValidationBloc
         originalPath: image.path,
         targetPath: targetPath,
         transNo: event.transNo,
-        timestamp: timestamp,
+        formattedDate: formattedDate,
         technicianName: technicianName,
         deviceModel: deviceModel,
         location: locationString,

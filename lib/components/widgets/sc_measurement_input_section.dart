@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/components/widgets/remark_photo_picker.dart';
@@ -18,6 +19,7 @@ import '../../../../../models/common/measurement_limits.dart';
 import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../services/watermark_service.dart';
+import '../shared_function.dart';
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
@@ -153,6 +155,13 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
+        // Ambil timezone dari device
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+        // Format tanggal pakai locale (AMAN)
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'remark_photos'));
         if (!await imagesDir.exists()) await imagesDir.create();
@@ -165,7 +174,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
@@ -17,6 +18,7 @@ import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_valid
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_state.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/services/watermark_service.dart';
+import '../../../../components/shared_function.dart';
 import '../../../../components/widgets/generic_measurement_input_section.dart';
 import '../../../../components/widgets/photo_grid.dart';
 import '../../../../components/widgets/remark_photo_picker.dart';
@@ -164,6 +166,13 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
+        // Ambil timezone dari device
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+        // Format tanggal pakai locale (AMAN)
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
         if (!await imagesDir.exists()) {
@@ -179,7 +188,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );
@@ -266,6 +275,13 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
+        // Ambil timezone dari device
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+        // Format tanggal pakai locale (AMAN)
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
         if (!await imagesDir.exists()) {
@@ -273,20 +289,20 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         }
 
         // 4. Proses Watermark (Sama seperti handlePhoto biasa)
-        final targetPath = p.join(
-            imagesDir.path, 'WM_REMARK_${timestamp.millisecondsSinceEpoch}.jpg');
+        final targetPath = p.join(imagesDir.path,
+            'WM_REMARK_${timestamp.millisecondsSinceEpoch}.jpg');
 
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );
 
         final String? finalImagePath =
-        await WatermarkService.processImage(request);
+            await WatermarkService.processImage(request);
 
         if (finalImagePath == null) throw Exception("Gagal watermark");
 
@@ -303,7 +319,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
         if (mounted) {
           // 5. Kirim Event AddRemarkPhoto ke BLoC
-          context.read<PosValidationBloc>().add(AddRemarkPhoto(capturedImageDetail));
+          context
+              .read<PosValidationBloc>()
+              .add(AddRemarkPhoto(capturedImageDetail));
         }
       }
     } catch (e) {
@@ -621,7 +639,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   ),
                   onChanged: (val) {
                     // Simpan ke BLoC
-                    context.read<PosValidationBloc>().add(UpdateNoteRemark(val));
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateNoteRemark(val));
                   },
                   validator: (value) {
                     final text = value ?? '';
@@ -636,14 +656,16 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                 ),
               ),
               const SizedBox(height: 12),
-
               RemarkPhotoPicker(
                 photos: remarkPhotos,
                 isLoading: _isTakingPhotoRemark,
-                isReadOnly: false, // Atau sesuaikan dengan logic isCompleted
+                isReadOnly: false,
+                // Atau sesuaikan dengan logic isCompleted
                 onAddTap: () => _handleRemarkPhoto(context),
                 onRemoveTap: (path) {
-                  context.read<PosValidationBloc>().add(RemoveRemarkPhoto(path));
+                  context
+                      .read<PosValidationBloc>()
+                      .add(RemoveRemarkPhoto(path));
                 },
               ),
             ],

@@ -53,8 +53,8 @@ class TaskMaintenanceRepository {
         'updated_by': updatedBy,
         'customer_code': customerCode,
         'email': email,
-        'latitude': latitude.toString(), // API mungkin mengharapkan String
-        'longitude': longitude.toString(), // API mungkin mengharapkan String
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
       };
 
       JsonEncoder encoder = const JsonEncoder.withIndent('  ');

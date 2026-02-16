@@ -131,13 +131,14 @@ class ProofOfServiceItemDetailAdapter
       unitDesc: fields[2] as String,
       serialNo: fields[3] as String,
       unitType: fields[4] as String,
+      reffLineNo: fields[5] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceItemDetail obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.articleNo)
       ..writeByte(1)
@@ -147,7 +148,9 @@ class ProofOfServiceItemDetailAdapter
       ..writeByte(3)
       ..write(obj.serialNo)
       ..writeByte(4)
-      ..write(obj.unitType);
+      ..write(obj.unitType)
+      ..writeByte(5)
+      ..write(obj.reffLineNo);
   }
 
   @override

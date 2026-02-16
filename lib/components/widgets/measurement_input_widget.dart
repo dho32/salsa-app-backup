@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -9,6 +10,7 @@ import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../../models/common/measurement_limits.dart';
 import '../services/watermark_service.dart';
+import '../shared_function.dart';
 import 'full_screen_image_viewer.dart';
 
 class MeasurementInputWidget extends StatefulWidget {
@@ -140,6 +142,13 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
+        // Ambil timezone dari device
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+        // Format tanggal pakai locale (AMAN)
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
         if (!await imagesDir.exists()) {
@@ -152,12 +161,13 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );
 
-        final String? finalImagePath = await WatermarkService.processImage(request);
+        final String? finalImagePath =
+            await WatermarkService.processImage(request);
 
         if (finalImagePath != null) {
           _currentImage = CapturedImageDetail(
@@ -223,7 +233,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
                         fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
-          const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey),
+          const Divider(
+              height: 1, indent: 16, endIndent: 16, color: Colors.grey),
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -231,7 +242,9 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               absorbing: !isEnabled,
               child: Opacity(
                 opacity: isEnabled ? 1.0 : 0.4,
-                child: !isEnabled ? const SizedBox(height: 16) : _buildInputContent(primary),
+                child: !isEnabled
+                    ? const SizedBox(height: 16)
+                    : _buildInputContent(primary),
               ),
             ),
           ),
@@ -248,12 +261,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         children: [
           _isLoading
               ? const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.0),
-            child: Center(child: CircularProgressIndicator()),
-          )
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
               : _currentImage != null
-              ? _buildPhotoPreview()
-              : _buildPhotoButton(primary),
+                  ? _buildPhotoPreview()
+                  : _buildPhotoButton(primary),
           const SizedBox(height: 16),
           _buildSliderAndTextfield(),
           const Padding(
@@ -291,7 +304,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => FullScreenImageViewer(imageDetail: _currentImage!),
+              builder: (_) =>
+                  FullScreenImageViewer(imageDetail: _currentImage!),
             ),
           ),
           child: Hero(
@@ -372,7 +386,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             child: TextFormField(
               focusNode: _focusNode,
               controller: widget.controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
               onChanged: widget.onChanged,
               decoration: InputDecoration(

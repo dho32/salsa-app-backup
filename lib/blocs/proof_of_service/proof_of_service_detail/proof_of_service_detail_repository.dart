@@ -12,7 +12,7 @@ class ProofOfServiceDetailRepository {
     final params = {'trans_no': transNo};
 
     // Ganti 'proof_of_service/detail' dengan endpoint API Anda yang sebenarnya
-    Uri uri = getUrl(pathUrl: 'proof_of_service/detail/v2', params: params);
+    Uri uri = getUrl(pathUrl: 'proof_of_service/detail/v3', params: params);
 
     final response = await http.get(uri);
     print("=================================");

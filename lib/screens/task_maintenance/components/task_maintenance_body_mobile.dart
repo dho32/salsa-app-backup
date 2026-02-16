@@ -15,6 +15,7 @@ import '../../../components/widgets/salsa_pending_dialog.dart';
 import '../../../components/widgets/scan_qr.dart';
 import '../../../models/task_maintenance/task_maintenance_model.dart';
 import '../../common/failed_uploads/failed_uploads_screen.dart';
+import '../../installation/installation_detail/installation_detail_screen.dart';
 import '../../proof_of_service/proof_of_service_detail/proof_of_service_detail_screen.dart';
 import '../../service_call/service_call_detail/service_call_detail_screen.dart';
 
@@ -262,8 +263,10 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                                 );
 
                                 context.read<TaskMaintenanceBloc>().add(
-                                  FetchPendingTasks(widget.userData['maintenance_by']!, widget.userData['user_id']!),
-                                );
+                                      FetchPendingTasks(
+                                          widget.userData['maintenance_by']!,
+                                          widget.userData['user_id']!),
+                                    );
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Card(
@@ -479,11 +482,12 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     } else if (suggestion.type == 'CUCI') {
       destinationScreen =
           ProofOfServiceDetailScreen(transNo: suggestion.transNo);
-    } else if (suggestion.type == 'PASANG') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Modul Pasang AC segera hadir!")),
+    } else if (suggestion.type == 'INSTALLATION' ||
+        suggestion.type == 'INSTALLATION_WH') {
+      destinationScreen = InstallationDetailScreen(
+        transNo: suggestion.transNo,
+        vendorId: widget.userData['maintenance_by']!,
       );
-      return;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -497,12 +501,9 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       MaterialPageRoute(builder: (_) => destinationScreen!),
     ).then((_) {
       if (widget.userData['maintenance_by'] != null) {
-        context.read<TaskMaintenanceBloc>().add(
-            FetchPendingTasks(
-                widget.userData['maintenance_by']!,
-                widget.userData['user_id'] ?? ''
-            )
-        );
+        context.read<TaskMaintenanceBloc>().add(FetchPendingTasks(
+            widget.userData['maintenance_by']!,
+            widget.userData['user_id'] ?? ''));
       }
 
       context.read<FailedUploadsBloc>().add(LoadFailedUploads());
@@ -512,73 +513,280 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
   }
 
   Future<void> _showUpdateInfoDialog(TransactionSuggestion suggestion) async {
-    // ... Logic update info toko Akang (tetap sama) ...
-    // Placeholder function call untuk mempersingkat chat, gunakan yang lama.
-    // Tapi karena sudah ada di file paste Akang sebelumnya, bisa dipertahankan.
     final emailController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+
+    // Definisikan Domain-nya di sini (bisa juga ditaruh di constant file)
+    const String fixedDomain = "@STORE.SAT.CO.ID";
+
+    // State variables moved inside StatefulBuilder logic below
     bool isLoading = false;
     String? errorMessage;
 
     await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return StatefulBuilder(builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Update Info Toko'),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                          'Email dan lokasi untuk toko "${suggestion.customerName}" belum terdaftar.'),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: emailController,
-                        decoration: const InputDecoration(labelText: 'Email'),
-                        validator: (val) => val!.isEmpty ? 'Isi email' : null,
-                      ),
-                      if (isLoading)
-                        const CircularProgressIndicator()
-                      else if (errorMessage != null)
-                        Text(errorMessage!, style: TextStyle(color: Colors.red))
-                    ],
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              elevation: 5,
+              backgroundColor: Colors.white,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- HEADER ICON ---
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.store_mall_directory_rounded,
+                              size: 40,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // --- TITLE ---
+                        const Text(
+                          "Update Data Toko",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // --- INSTRUCTION CARD ---
+                        // ... (Bagian Instruction Card tetap sama, saya skip biar ringkas) ...
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      size: 20, color: Colors.orange.shade800),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Data Belum Lengkap",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange.shade900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                "Email dan Titik Lokasi untuk toko \"${suggestion.customerName}\" belum terdaftar.\n\n"
+                                """Silahkan tanyakan Email Toko kepada Pejabat Toko, lalu masukan USERNAME email saja (tanpa @STORE....) untuk proses pengkinian data.
+
+Pastikan berada ditoko saat akan memproses data.""",
+                                // Update instruksi sedikit
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.black87,
+                                    height: 1.4),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // --- [PERUBAHAN UTAMA DI SINI] INPUT FIELD ---
+                        TextFormField(
+                          controller: emailController,
+
+                          // 1. Minta keyboard HP otomatis Capslock
+                          textCapitalization: TextCapitalization.characters,
+
+                          // 2. Paksa text jadi Uppercase (Huruf Besar) secara real-time
+                          inputFormatters: [
+                            TextInputFormatter.withFunction((oldValue, newValue) {
+                              return newValue.copyWith(
+                                text: newValue.text.toUpperCase(),
+                                selection: newValue.selection,
+                              );
+                            }),
+
+                            // (Opsional) Kalau mau melarang spasi sekalian:
+                            FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                          ],
+
+                          keyboardType: TextInputType.text, // Tetap text biasa
+                          decoration: InputDecoration(
+                            labelText: 'Username Email Toko',
+                            hintText: 'CONTOH: SATBABAKAN.MLG', // Hint text sesuaikan jadi besar jg
+                            prefixIcon: const Icon(Icons.email_outlined),
+
+                            // Suffix domain otomatis
+                            suffixText: fixedDomain,
+                            suffixStyle: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.bold
+                            ),
+
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+
+                          validator: (val) {
+                            if (val == null || val.isEmpty) {
+                              return 'Username email wajib diisi';
+                            }
+                            if (val.contains('@')) {
+                              return 'Cukup masukkan username, hapus tanda @';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        // --- ERROR MESSAGE ---
+                        if (errorMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12.0),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.error_outline,
+                                      color: Colors.red, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      errorMessage!,
+                                      style: const TextStyle(
+                                          color: Colors.red, fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        const SizedBox(height: 24),
+
+                        // --- ACTION BUTTONS ---
+                        if (isLoading)
+                          const Center(child: CircularProgressIndicator())
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => Navigator.pop(dialogContext),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Text("Batal"),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (formKey.currentState!.validate()) {
+                                      setStateDialog(() {
+                                        isLoading = true;
+                                        errorMessage = null;
+                                      });
+
+                                      try {
+                                        final pos = await _getCurrentLocation();
+
+                                        // --- [LOGIC UTAMA PENGGABUNGAN] ---
+                                        // Gabungkan input user + domain sebelum kirim API
+                                        final rawUsername = emailController.text
+                                            .trim()
+                                            .toUpperCase(); // Biasa email toko uppercase
+                                        final finalEmail =
+                                            "$rawUsername$fixedDomain";
+                                        // ----------------------------------
+
+                                        // Panggil API Update dengan finalEmail
+                                        await _callUpdateApi(
+                                          widget.userData['user_id']!,
+                                          suggestion.customerCode,
+                                          finalEmail, // Kirim hasil gabungan
+                                          pos.latitude,
+                                          pos.longitude,
+                                        );
+
+                                        if (mounted) {
+                                          Navigator.pop(dialogContext);
+                                          _navigateToDetail(suggestion);
+                                        }
+                                      } catch (e) {
+                                        setStateDialog(() {
+                                          errorMessage =
+                                              "Gagal update: ${e.toString()}";
+                                        });
+                                      } finally {
+                                        if (mounted) {
+                                          setStateDialog(
+                                              () => isLoading = false);
+                                        }
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade700,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    elevation: 2,
+                                  ),
+                                  child: const Text("Simpan & Lanjut"),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text("Batal")),
-                ElevatedButton(
-                    onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        setStateDialog(() => isLoading = true);
-                        try {
-                          final pos = await _getCurrentLocation();
-                          await _callUpdateApi(
-                              widget.userData['user_id']!,
-                              suggestion.customerCode,
-                              emailController.text,
-                              pos.latitude,
-                              pos.longitude);
-                          Navigator.pop(dialogContext);
-                          _navigateToDetail(suggestion);
-                        } catch (e) {
-                          setStateDialog(() => errorMessage = e.toString());
-                        } finally {
-                          setStateDialog(() => isLoading = false);
-                        }
-                      }
-                    },
-                    child: const Text("Update"))
-              ],
             );
-          });
-        });
+          },
+        );
+      },
+    );
   }
 
   Future<Position> _getCurrentLocation() async {

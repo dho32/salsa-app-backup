@@ -35,6 +35,11 @@ const String kPosUnserviceablePartialBox = 'pos_unserviceable_partial_cache';
 const String kScUnserviceablePartialBox = 'sc_unserviceable_partial_cache';
 const kAppConfigBox = 'app_config_cache_box';
 const kOtpTrackingBox = 'otp_tracking_box';
+// Box untuk menyimpan Data Tugas dari Server (Read Only)
+const String kInstallationDetailBox = 'installation_detail_box';
+// Box untuk menyimpan Inputan/Draft User (Write)
+const String kInstallationDraftBox = 'installation_draft_box';
+const String kFailedUploadsBox = 'failed_uploads_box';
 
 ///string
 const kStringDialogUnitProblem = """
@@ -59,7 +64,7 @@ final kColorBackgroundDefault = Color(0xFFD3E2ED);
 final Map<String, MeasurementLimits> kSCMeasurementLimitsBefore = {
   'temperature': MeasurementLimits(
     id: 'temperature',
-    label: 'Suhu Pipa Indoor (°C)',
+    label: 'Suhu Indoor AC',
     min: 4,
     max: 25,
     unit: '°C',
