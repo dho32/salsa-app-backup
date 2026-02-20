@@ -51,9 +51,15 @@ class PosValidationEntryModel extends HiveObject {
   @HiveField(14)
   List<CapturedImageDetail>? remarkPhotos;
 
-  // [NEW] Field untuk Reference Line Number dari Backend
   @HiveField(15)
   String? reffLineNo;
+
+  // 🔥 FIELD BARU KHUSUS GENERIC UNIT 🔥
+  @HiveField(16)
+  bool? isGeneric;
+
+  @HiveField(17)
+  int? unitIndex;
 
   PosValidationEntryModel({
     required this.transNo,
@@ -71,7 +77,9 @@ class PosValidationEntryModel extends HiveObject {
     this.pairedSerialNo,
     this.noteRemark,
     this.remarkPhotos,
-    this.reffLineNo, // Add to constructor
+    this.reffLineNo,
+    this.isGeneric = false, // Default false
+    this.unitIndex = 0,     // Default 0
   });
 
   factory PosValidationEntryModel.empty() {
@@ -92,10 +100,12 @@ class PosValidationEntryModel extends HiveObject {
       noteRemark: '',
       remarkPhotos: [],
       reffLineNo: '',
+      isGeneric: false,
+      unitIndex: 0,
     );
   }
 
-  // [NEW] Method CopyWith (Wajib untuk BLoC pattern)
+  // Method CopyWith Updated
   PosValidationEntryModel copyWith({
     String? transNo,
     String? serialNo,
@@ -113,6 +123,8 @@ class PosValidationEntryModel extends HiveObject {
     String? noteRemark,
     List<CapturedImageDetail>? remarkPhotos,
     String? reffLineNo,
+    bool? isGeneric, // 🔥
+    int? unitIndex,  // 🔥
   }) {
     return PosValidationEntryModel(
       transNo: transNo ?? this.transNo,
@@ -131,6 +143,27 @@ class PosValidationEntryModel extends HiveObject {
       noteRemark: noteRemark ?? this.noteRemark,
       remarkPhotos: remarkPhotos ?? this.remarkPhotos,
       reffLineNo: reffLineNo ?? this.reffLineNo,
+      isGeneric: isGeneric ?? this.isGeneric, // 🔥
+      unitIndex: unitIndex ?? this.unitIndex, // 🔥
     );
+  }
+
+  // Method toJson (diperlukan untuk submit data ke API)
+  Map<String, dynamic> toJson() {
+    return {
+      'trans_no': transNo,
+      'serial_no': serialNo,
+      'article_no': articleNo,
+      'description': articleDesc,
+      'article_name_unit': articleUnitDesc,
+      'unit_type': articleType,
+      'reff_line_no': reffLineNo,
+      'paired_serial_no': pairedSerialNo,
+      'is_completed': isCompleted,
+      'note': note,
+      'note_remark': noteRemark,
+      // Mapping detail foto & measurement biasanya di-handle terpisah di BLoC submit
+      // tapi struktur dasar item ada di sini.
+    };
   }
 }

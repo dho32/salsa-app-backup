@@ -10,6 +10,7 @@ import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validati
 import '../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_state.dart';
 import '../../../components/constants.dart';
 import 'components/pos_validation_body_mobile.dart';
+import 'package:hive/hive.dart';
 
 class PosValidationScreen extends StatefulWidget {
   final String transNo;
@@ -24,6 +25,10 @@ class PosValidationScreen extends StatefulWidget {
   final List<String> allIndoorSerials;
   final List<NoteOption> noteOptions;
 
+  // 🔥 PARAMETER BARU KHUSUS GENERIC
+  final bool isGeneric;
+  final int unitIndex;
+
   const PosValidationScreen({
     super.key,
     required this.transNo,
@@ -37,6 +42,8 @@ class PosValidationScreen extends StatefulWidget {
     required this.indoorTemp,
     required this.allIndoorSerials,
     required this.noteOptions,
+    this.isGeneric = false, // Default false
+    this.unitIndex = 0,
   });
 
   @override
@@ -45,33 +52,23 @@ class PosValidationScreen extends StatefulWidget {
 
 class _PosValidationScreenState extends State<PosValidationScreen> {
   final _noteController = TextEditingController();
+  bool _isSaving = false;
 
   /// Fungsi debug yang mencetak status setiap elemen
-  /// DAN mengembalikan 'true' HANYA JIKA semua elemen lolos.
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
     bool allItemsPassed = true;
 
     for (int i = 0; i < measurements.length; i++) {
       var m = measurements[i];
-
-      // Evaluasi logika
       bool isSkippedCheck = m.isSkipped ?? false;
       bool isFilledCheck = (m.capturedImage != null && m.value != 0);
       bool didPass = isSkippedCheck || isFilledCheck;
 
-      if (didPass) {
-        print('>>> Status: LOLOS');
-      } else {
-        print('>>> !!! STATUS: GAGAL !!! <<<');
-        print(
-            'Alasan Gagal: isSkipped bukan true DAN (gambar/nilai tidak lengkap)');
-
-        // 2. Jika SATU SAJA gagal, tandai hasil akhirnya sebagai 'false'
+      if (!didPass) {
+        print('>>> Status: GAGAL pada ${m.measurementId}');
         allItemsPassed = false;
       }
     }
-
-    // 3. Kembalikan hasil akhir
     return allItemsPassed;
   }
 
@@ -111,20 +108,18 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
           allIndoorSerials: widget.allIndoorSerials,
           serialNo: widget.serialNo,
           transNo: widget.transNo,
+
+          // 🔥 TERUSKAN KE BLOC
+          isGeneric: widget.isGeneric,
+          unitIndex: widget.unitIndex,
         )),
       child: BlocListener<PosValidationBloc, PosValidationState>(
         listener: (context, state) {
           if (state is PosValidationSaveFailure) {
-            ScaffoldMessenger.of(context).removeCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red.shade700,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            _showValidationErrorSnackbar(state.message);
+            setState(() { _isSaving = false; });
           } else if (state is PosValidationSaveSuccess) {
-            Navigator.of(context).pop(true); // Kembali ke halaman sebelumnya
+            Navigator.of(context).pop(true);
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Data berhasil disimpan'),
               backgroundColor: Colors.green,
@@ -133,6 +128,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
           }
         },
         child: BlocBuilder<PosValidationBloc, PosValidationState>(
+          buildWhen: (previous, current) => current is! PosValidationSaveSuccess,
           builder: (context, state) {
             PosValidationLoaded? uiState;
             if (state is PosValidationLoaded) {
@@ -151,7 +147,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 noteController: _noteController,
                 indoorTemp: widget.indoorTemp,
                 noteOptions: widget.noteOptions,
-              ),
+              ), // Body ambil data dari Bloc langsung
               bottomNavigationBar: (uiState != null)
                   ? _buildFloatingButtons(context, uiState)
                   : null,
@@ -170,7 +166,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
     return Container(
       padding: const EdgeInsets.all(16.0)
           .copyWith(bottom: MediaQuery.of(context).padding.bottom + 8),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.transparent,
       ),
       child: Row(
@@ -179,6 +175,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
             Expanded(
               child: OutlinedButton.icon(
                 label: const Text('Kembali'),
+                icon: const Icon(Icons.arrow_back),
                 onPressed: () => bloc.add(const ChangePosValidationStep(0)),
                 style: OutlinedButton.styleFrom(
                     side: BorderSide(color: primary), foregroundColor: primary),
@@ -188,8 +185,8 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text('Simpan'),
-                onPressed: () async {
+                onPressed: _isSaving ? null : () async {
+                  setState(() { _isSaving = true; });
                   FocusScope.of(context).unfocus();
                   await Future.delayed(const Duration(milliseconds: 200));
 
@@ -201,64 +198,62 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                       .any((m) => m.isSkipped ?? false);
 
                   if (latestState.photosAfter.isEmpty) {
+                    setState(() { _isSaving = false; });
                     _showValidationErrorSnackbar(
                         'Foto unit sesudah cuci wajib dilengkapi.');
                     return;
                   }
 
                   if (!checkMeasurementDetails(latestState.measurementsAfter)) {
+                    setState(() { _isSaving = false; });
                     _showValidationErrorSnackbar(
                         'Harap isi semua nilai & foto hasil pengukuran.');
                     return;
                   }
 
                   if (isAnyMeasurementSkipped) {
-                    // 1. Cek Note Dropdown
                     if (_noteController.text.trim().isEmpty) {
+                      setState(() { _isSaving = false; });
                       _showValidationErrorSnackbar(
                           'Catatan wajib diisi, jika unit tidak bisa diukur.');
                       return;
                     }
 
-                    // 2. Cek Remark Manual (Logic Baru)
+                    // Logic Validasi Remark
                     final selectedOption = widget.noteOptions.firstWhereOrNull(
                         (o) => o.label == _noteController.text);
 
-                    // Jika opsi tersebut mewajibkan remark
                     if (selectedOption?.requireRemark == true) {
                       final remark = latestState.noteRemark ?? '';
-
-                      // A. Cek Kosong
                       if (remark.trim().isEmpty) {
+                        setState(() { _isSaving = false; });
                         _showValidationErrorSnackbar(
                             'Keterangan Tambahan wajib diisi.');
                         return;
                       }
-
-                      // B. Cek Panjang Karakter (Tanpa Spasi)
                       if (remark.replaceAll(' ', '').length < 20) {
+                        setState(() { _isSaving = false; });
                         _showValidationErrorSnackbar(
-                            'Keterangan Tambahan minimal 20 huruf (tanpa spasi).');
+                            'Keterangan Tambahan minimal 20 huruf.');
                         return;
                       }
-
-                      // C. Cek Foto
                       final photos = state.remarkPhotos ?? [];
                       if (photos.isEmpty) {
+                        setState(() { _isSaving = false; });
                         _showValidationErrorSnackbar(
-                            'Wajib melampirkan minimal 1 foto untuk Remark.');
+                            'Wajib melampirkan foto untuk Remark.');
                         return;
                       }
                     }
                   }
 
+                  // Validasi Limit Suhu
                   for (final measurement in latestState.measurementsAfter) {
                     if (measurement.isSkipped ?? false) continue;
 
                     final limits =
                         kPOSMeasurementLimits[measurement.measurementId];
                     if (limits != null) {
-                      // Tentukan batas atas dinamis untuk suhu
                       double maxLimit = limits.max;
                       double minLimit = limits.min;
                       if (measurement.measurementId == 'temperature' &&
@@ -266,24 +261,23 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                         maxLimit = widget.indoorTemp!;
                       }
 
-                      // Lakukan pengecekan
                       if (measurement.value > maxLimit) {
-                        final errorMessage =
-                            'Nilai "${limits.label}" yang anda input melebihi batas.';
-                        _showValidationErrorSnackbar(errorMessage);
-                        return; // Hentikan proses jika ada yang tidak valid
+                        setState(() { _isSaving = false; });
+                        _showValidationErrorSnackbar(
+                            'Nilai "${limits.label}" melebihi batas.');
+                        return;
                       } else if (measurement.value < minLimit) {
-                        final errorMessage =
-                            'Nilai "${limits.label}" yang anda input dibawah batas.';
-                        _showValidationErrorSnackbar(errorMessage);
-                        return; // Hentikan proses jika ada yang tidak valid
+                        setState(() { _isSaving = false; });
+                        _showValidationErrorSnackbar(
+                            'Nilai "${limits.label}" dibawah batas.');
+                        return;
                       }
                     }
                   }
 
                   bloc.add(SavePosValidationData(
                     transNo: widget.transNo,
-                    serialNo: widget.serialNo,
+                    serialNo: latestState.serialNo,
                     markAsCompleted: true,
                     note: _noteController.text,
                     articleNo: widget.articleNo,
@@ -292,63 +286,82 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                     capacity: widget.capacity,
                     articleType: widget.unitType,
                     indoorTemp: widget.indoorTemp,
+
+                    // 🔥 TERUSKAN KE EVENT SIMPAN
+                    isGeneric: widget.isGeneric,
+                    unitIndex: widget.unitIndex,
                   ));
                 },
+                child: _isSaving
+                    ? const SizedBox(
+                    height: 20, width: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                )
+                    : const Text('Simpan'),
               ),
             ),
           ] else if (state.currentStep == 0) ...[
-            // Tombol di Step 1 (Sebelum)
-            // Expanded(
-            //   child: OutlinedButton.icon(
-            //     label: const Text('Simpan Draft'),
-            //     onPressed: () {
-            //       bloc.add(SavePosValidationData(
-            //         transNo: widget.transNo,
-            //         serialNo: widget.serialNo,
-            //         markAsCompleted: false,
-            //         note: _noteController.text,
-            //         articleNo: widget.articleNo,
-            //         articleDesc: widget.articleDesc,
-            //         articleUnitDesc: widget.articleUnitDesc,
-            //         capacity: widget.capacity,
-            //         articleType: widget.unitType,
-            //       ));
-            //       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            //         content: Text('Draft berhasil disimpan'),
-            //         backgroundColor: Colors.blue,
-            //         behavior: SnackBarBehavior.floating,
-            //       ));
-            //     },
-            //     style: OutlinedButton.styleFrom(
-            //         side: BorderSide(color: primary), foregroundColor: primary),
-            //   ),
-            // ),
-            // const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
                 child: const Text('Lanjut'),
-                onPressed: () {
-                  if (state.photosBefore.isEmpty) {
+                onPressed: () async {
+                  final latestState = context.read<PosValidationBloc>().state;
+                  if (latestState is! PosValidationLoaded) return;
+
+                  if (latestState.photosBefore.isEmpty) {
                     _showValidationErrorSnackbar(
-                        'Foto unit sebelum cuci wajib dilengkapi untuk melanjutkan.');
+                        'Foto unit sebelum cuci wajib dilengkapi.');
                     return;
                   }
-                  if (state.unitType.toUpperCase() == 'OUT' &&
-                      state.pairedIndoorSerial == null) {
+
+                  // 🔥 VALIDASI GENERIC SERIAL NUMBER
+                  if (widget.isGeneric) {
+                    final snUpperCase = latestState.serialNo.trim().toUpperCase();
+                    if (snUpperCase.isEmpty || snUpperCase.startsWith('AC')) {
+                      _showValidationErrorSnackbar('Serial Number Unit Wajib Diisi/Scan!');
+                      return;
+                    }
+
+                    // 🔥 LOGIC BARU: CEK DUPLIKAT SN DI HIVE 🔥
+                    final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+                    final isDuplicate = box.values.any((entry) {
+                      // Cari apakah ada data dengan No Tiket & SN yang sama...
+                      return entry.transNo == widget.transNo &&
+                          entry.serialNo.toUpperCase() == snUpperCase &&
+                          // ...TAPI bukan unit yang sedang dibuka ini (berdasarkan index & tipe)
+                          !(entry.unitIndex == widget.unitIndex && entry.articleType == widget.unitType);
+                    });
+
+                    if (isDuplicate) {
+                      // Blokir jika duplikat!
+                      _showValidationErrorSnackbar('Serial Number "$snUpperCase" sudah dipakai di unit lain!');
+                      return;
+                    }
+                  }
+
+                  if (latestState.unitType.toUpperCase() == 'OUT' &&
+                      latestState.pairedIndoorSerial == null) {
                     _showValidationErrorSnackbar(
-                        'Anda wajib memilih pasangan unit indoor untuk melanjutkan.');
+                        'Anda wajib memilih pasangan unit indoor.');
                     return;
                   }
+
+                  // Auto Save Draft saat pindah step
                   bloc.add(SavePosValidationData(
                     transNo: widget.transNo,
-                    serialNo: widget.serialNo,
+                    serialNo: latestState.serialNo,
+                    // Gunakan SN terbaru
                     note: _noteController.text,
                     articleNo: widget.articleNo,
                     articleDesc: widget.articleDesc,
                     articleUnitDesc: widget.articleUnitDesc,
                     capacity: widget.capacity,
                     articleType: widget.unitType,
+                    isGeneric: widget.isGeneric,
+                    // 🔥
+                    unitIndex: widget.unitIndex, // 🔥
                   ));
+
                   bloc.add(const ChangePosValidationStep(1));
                 },
               ),

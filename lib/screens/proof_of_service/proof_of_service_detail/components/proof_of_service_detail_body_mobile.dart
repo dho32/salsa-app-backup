@@ -2,6 +2,7 @@
 
 import 'dart:math';
 
+import 'package:collection/collection.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -133,8 +134,10 @@ class _ProofOfServiceDetailBodyMobileState
           listener: (context, detailState) {
             if (detailState is ProofOfServiceDetailLoaded) {
               final allUnitsValidated = detailState.data.detail.every((detail) {
-                final serialKey = detail.serialNo.trim().toUpperCase();
-                return detailState.validationStatuses[serialKey] ==
+                final mapKey = detail.isGeneric
+                    ? '${detail.unitType}_${detail.unitIndex}'
+                    : detail.serialNo.trim().toUpperCase();
+                return detailState.validationStatuses[mapKey] ==
                     ValidationStatus.completed;
               });
               context
@@ -492,8 +495,8 @@ class _ProofOfServiceDetailBodyMobileState
     );
   }
 
-  Widget _buildServiceInfoAfterPanel(
-      BuildContext context, PosFormState formState, List<NoteOption> noteOptions) {
+  Widget _buildServiceInfoAfterPanel(BuildContext context,
+      PosFormState formState, List<NoteOption> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
 
     // Batasan untuk suhu akhir, bisa sama atau beda dari suhu awal
@@ -1011,9 +1014,19 @@ class _ProofOfServiceDetailBodyMobileState
     ProofOfServiceItemDetail detail,
     Map<String, ValidationStatus> validationStatuses,
   ) {
-    final serialKey = detail.serialNo.trim().toUpperCase();
-    final status = validationStatuses[serialKey] ?? ValidationStatus.notStarted;
+    final mapKey = detail.isGeneric
+        ? '${detail.unitType}_${detail.unitIndex}'
+        : detail.serialNo.trim().toUpperCase();
+    final status = validationStatuses[mapKey] ?? ValidationStatus.notStarted;
     final formState = context.read<PosFormCubit>().state;
+
+    // 🔥 Ganti tulisan "AC - 1" dengan SN Asli dari Hive (jika ada)
+    final detailState = context.read<ProofOfServiceDetailBloc>().state;
+    String displaySerial = detail.serialNo;
+    if (detailState is ProofOfServiceDetailLoaded &&
+        detailState.savedSerials.containsKey(mapKey)) {
+      displaySerial = detailState.savedSerials[mapKey]!;
+    }
 
     IconData iconData;
     Color iconColor;
@@ -1033,23 +1046,28 @@ class _ProofOfServiceDetailBodyMobileState
     }
 
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      title: Text(detail.articleDesc,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 4),
-          Text(detail.unitDesc),
-          Text('Serial No: ${detail.serialNo}'),
-        ],
-      ),
-      trailing: Icon(iconData, color: iconColor, size: 28),
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        _navigateToValidation(context, header, detail, formState.tempIn);
-      }
-    );
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        title: Text(detail.articleDesc,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(detail.unitDesc),
+            // 🔥 Tampilkan SN Asli di sini
+            Text('Serial No: $displaySerial',
+                style: TextStyle(
+                    color: detail.isGeneric
+                        ? Colors.blue.shade700
+                        : Colors.black87,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+        trailing: Icon(iconData, color: iconColor, size: 28),
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          _navigateToValidation(context, header, detail, formState.tempIn);
+        });
   }
 
   Widget _buildSubmitButton(BuildContext context, ProofOfServiceHeader header,
@@ -1277,27 +1295,48 @@ class _ProofOfServiceDetailBodyMobileState
       ProofOfServiceHeader header,
       ProofOfServiceItemDetail detail,
       String tempIn) async {
-    final box =
-        await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
-    final existingData = box.get(detail.serialNo.trim().toUpperCase());
+
+    final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+    PosValidationEntryModel? existingData;
+
+    if (detail.isGeneric) {
+      existingData = box.values.firstWhereOrNull((e) =>
+      e.transNo == header.transNo &&
+          e.unitIndex == detail.unitIndex &&
+          e.articleType == detail.unitType);
+    } else {
+      existingData = box.get(detail.serialNo.trim().toUpperCase());
+    }
+
     final double? indoorTemp = double.tryParse(tempIn);
     final detailState = context.read<ProofOfServiceDetailBloc>().state;
     List<String> allIndoorSerials = [];
     List<NoteOption> noteOptionsToSend = [];
 
     if (detailState is ProofOfServiceDetailLoaded) {
-      // 3. Filter hanya unit indoor, lalu ambil serial number-nya
-      allIndoorSerials = detailState.data.detail
-          .where((d) => d.unitType.toUpperCase() == 'IN')
-          .map((d) => d.serialNo)
-          .toList();
+
+      // 🔥 SMART DROPDOWN LOGIC 🔥
+      final indoorUnits = detailState.data.detail.where((d) => d.unitType.toUpperCase() == 'IN');
+      for (var indoor in indoorUnits) {
+        if (indoor.isGeneric) {
+          final mapKey = '${indoor.unitType}_${indoor.unitIndex}';
+          final realSn = detailState.savedSerials[mapKey];
+
+          // HANYA MASUKKAN KE DROPDOWN JIKA TEKNISI SUDAH INPUT SN (Dan bukan "AC")
+          if (realSn != null && realSn.isNotEmpty && !realSn.toUpperCase().startsWith('AC')) {
+            allIndoorSerials.add(realSn);
+          }
+        } else {
+          // Untuk unit sewa, langsung masukin SN dari API
+          allIndoorSerials.add(indoor.serialNo);
+        }
+      }
 
       final rawOptions = detail.unitType == 'IN'
           ? detailState.data.noteIndoorOptions ?? []
           : detailState.data.noteOutdoorOptions ?? [];
 
       noteOptionsToSend = rawOptions ?? [];
-
     }
 
     if (!context.mounted) return;
@@ -1315,16 +1354,16 @@ class _ProofOfServiceDetailBodyMobileState
           articleUnitDesc: detail.unitDesc,
           capacity: 0,
           indoorTemp: indoorTemp,
-          allIndoorSerials: allIndoorSerials,
+          allIndoorSerials: allIndoorSerials, // Dropdown udah bersih
           noteOptions: noteOptionsToSend,
+          isGeneric: detail.isGeneric,
+          unitIndex: detail.unitIndex,
         ),
       ),
     );
 
     if (context.mounted) {
-      context
-          .read<ProofOfServiceDetailBloc>()
-          .add(FetchProofOfServiceDetail(header.transNo.trim().toUpperCase()));
+      context.read<ProofOfServiceDetailBloc>().add(FetchProofOfServiceDetail(header.transNo.trim().toUpperCase()));
     }
   }
 

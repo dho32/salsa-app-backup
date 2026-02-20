@@ -2,7 +2,7 @@
 library;
 
 import 'package:hive/hive.dart';
-import '../common/note_option.dart'; // Pastikan path ini sesuai dengan project Akang
+import '../common/note_option.dart';
 
 part 'proof_of_service_detail_model.g.dart';
 
@@ -120,10 +120,15 @@ class ProofOfServiceItemDetail {
   final String serialNo;
   @HiveField(4)
   final String unitType;
-
-  // [NEW] Penambahan Reff Line No sesuai API baru
   @HiveField(5)
   final String reffLineNo;
+
+  // 🔥 NEW FIELDS FOR GENERIC UNIT 🔥
+  @HiveField(6)
+  final bool isGeneric;
+
+  @HiveField(7)
+  final int unitIndex;
 
   ProofOfServiceItemDetail({
     required this.articleNo,
@@ -132,6 +137,8 @@ class ProofOfServiceItemDetail {
     required this.serialNo,
     required this.unitType,
     required this.reffLineNo,
+    this.isGeneric = false,
+    this.unitIndex = 0,
   });
 
   factory ProofOfServiceItemDetail.fromJson(Map<String, dynamic> json) {
@@ -141,8 +148,12 @@ class ProofOfServiceItemDetail {
       unitDesc: json['article_name_unit'] ?? '',
       serialNo: json['serial_no'] ?? '',
       unitType: json['unit_type'] ?? '',
-      // Parsing reff_line_no dari JSON
       reffLineNo: json['reff_line_no']?.toString() ?? '',
+
+      // 🔥 Parsing Logic 🔥
+      // Mengantisipasi format boolean (true/false) atau integer (1/0)
+      isGeneric: json['is_generic'] == true || json['is_generic'] == 1 || json['is_generic'] == '1',
+      unitIndex: int.tryParse(json['unit_index']?.toString() ?? '0') ?? 0,
     );
   }
 }

@@ -5,20 +5,25 @@ import '../../../models/service_call/validation_status.dart';
 abstract class ProofOfServiceDetailState extends Equatable {
   const ProofOfServiceDetailState();
 
-  // 3. Tambahkan override ini
   @override
   List<Object> get props => [];
 }
 
 class ProofOfServiceDetailInitial extends ProofOfServiceDetailState {}
-
 class ProofOfServiceDetailLoading extends ProofOfServiceDetailState {}
 
 class ProofOfServiceDetailLoaded extends ProofOfServiceDetailState {
   final ProofOfServiceDetailModel data;
   final Map<String, ValidationStatus> validationStatuses;
 
-  const ProofOfServiceDetailLoaded(this.data, this.validationStatuses);
+  // 🔥 KERANJANG BARU UNTUK NYIMPEN SN HASIL INPUTAN
+  final Map<String, String> savedSerials;
+
+  const ProofOfServiceDetailLoaded(
+      this.data,
+      this.validationStatuses,
+      {this.savedSerials = const {}}
+      );
 }
 
 class ProofOfServiceDetailError extends ProofOfServiceDetailState {
