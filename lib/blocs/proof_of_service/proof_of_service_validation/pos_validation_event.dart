@@ -24,6 +24,8 @@ class FetchPosValidationData extends PosValidationEvent {
   final bool isGeneric;
   final int unitIndex;
 
+  final String? reffLineNo;
+
   const FetchPosValidationData({
     this.initialData,
     required this.unitType,
@@ -35,6 +37,7 @@ class FetchPosValidationData extends PosValidationEvent {
     required this.allIndoorSerials,
     this.isGeneric = false, // Default false (Existing)
     this.unitIndex = 0,
+    this.reffLineNo,
   });
 
   @override
@@ -42,7 +45,8 @@ class FetchPosValidationData extends PosValidationEvent {
     transNo, serialNo, unitType,
     articleNo, articleDesc, articleUnitDesc,
     initialData, allIndoorSerials,
-    isGeneric, unitIndex // 🔥
+    isGeneric, unitIndex,
+    reffLineNo
   ];
 }
 
@@ -247,4 +251,13 @@ class RemoveRemarkPhoto extends PosValidationEvent {
 
   @override
   List<Object?> get props => [imagePath];
+}
+
+class UpdateExcludeQtyFlag extends PosValidationEvent {
+  final bool excludeQty;
+
+  const UpdateExcludeQtyFlag(this.excludeQty);
+
+  @override
+  List<Object?> get props => [excludeQty];
 }

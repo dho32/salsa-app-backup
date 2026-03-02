@@ -61,6 +61,9 @@ class PosValidationEntryModel extends HiveObject {
   @HiveField(17)
   int? unitIndex;
 
+  @HiveField(18)
+  bool? excludeQty;
+
   PosValidationEntryModel({
     required this.transNo,
     required this.serialNo,
@@ -80,6 +83,7 @@ class PosValidationEntryModel extends HiveObject {
     this.reffLineNo,
     this.isGeneric = false, // Default false
     this.unitIndex = 0,     // Default 0
+    this.excludeQty = false,
   });
 
   factory PosValidationEntryModel.empty() {
@@ -102,6 +106,7 @@ class PosValidationEntryModel extends HiveObject {
       reffLineNo: '',
       isGeneric: false,
       unitIndex: 0,
+      excludeQty: false,
     );
   }
 
@@ -125,6 +130,7 @@ class PosValidationEntryModel extends HiveObject {
     String? reffLineNo,
     bool? isGeneric, // 🔥
     int? unitIndex,  // 🔥
+    bool? excludeQty,
   }) {
     return PosValidationEntryModel(
       transNo: transNo ?? this.transNo,
@@ -145,6 +151,7 @@ class PosValidationEntryModel extends HiveObject {
       reffLineNo: reffLineNo ?? this.reffLineNo,
       isGeneric: isGeneric ?? this.isGeneric, // 🔥
       unitIndex: unitIndex ?? this.unitIndex, // 🔥
+      excludeQty: excludeQty ?? this.excludeQty,
     );
   }
 
@@ -162,8 +169,7 @@ class PosValidationEntryModel extends HiveObject {
       'is_completed': isCompleted,
       'note': note,
       'note_remark': noteRemark,
-      // Mapping detail foto & measurement biasanya di-handle terpisah di BLoC submit
-      // tapi struktur dasar item ada di sini.
+      'exclude_qty': excludeQty,
     };
   }
 }

@@ -13,10 +13,14 @@ class NoteOption extends HiveObject {
   @HiveField(2)
   final bool isSystemOnly;
 
+  @HiveField(3)
+  final bool excludeQty;
+
   NoteOption({
     required this.label,
     this.requireRemark = false,
     this.isSystemOnly = false,
+    this.excludeQty = false,
   });
 
   // Factory untuk parsing dari JSON API
@@ -25,10 +29,14 @@ class NoteOption extends HiveObject {
       label: json['label'] as String? ?? '',
       requireRemark: json['require_remark'] as bool? ?? false,
       isSystemOnly: json['is_system_only'] as bool? ?? false,
+      excludeQty: json['exclude_qty'] as bool? ?? false,
     );
   }
 
   factory NoteOption.fromString(String text) {
-    return NoteOption(label: text);
+    return NoteOption(
+      label: text,
+      excludeQty: false,
+    );
   }
 }

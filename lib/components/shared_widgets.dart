@@ -251,6 +251,7 @@ Future<void> showSuccessDialog(BuildContext context, String message,
     {VoidCallback? onOk}) async {
   await showDialog(
     context: context,
+    barrierDismissible: false,
     builder: (_) => AlertDialog(
       title: const Text("Berhasil"),
       content: Text(message),

@@ -36,7 +36,7 @@ class RemarkPhotoPicker extends StatelessWidget {
                     color: Colors.black87),
               ),
               // Tombol Tambah (Muncul jika belum read-only & slot masih ada)
-              if (!isReadOnly && photos.length < 2)
+              if (!isReadOnly && photos.length < 5)
                 InkWell(
                   onTap: isLoading ? null : onAddTap,
                   borderRadius: BorderRadius.circular(4),

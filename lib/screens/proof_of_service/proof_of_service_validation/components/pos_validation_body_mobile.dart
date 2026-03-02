@@ -234,13 +234,12 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   }
 
   Future<void> _handleRemarkPhoto(BuildContext context) async {
-    // (Isi sama dengan yang Akang kirim, dipersingkat di sini agar muat)
     final currentState = context.read<PosValidationBloc>().state;
     if (currentState is PosValidationLoaded) {
       final currentPhotos = currentState.remarkPhotos ?? [];
-      if (currentPhotos.length >= 2) {
+      if (currentPhotos.length >= 5) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Maksimal hanya bisa upload 2 foto remark.')));
+            content: Text('Maksimal hanya bisa upload 5 foto remark.')));
         return;
       }
     }
@@ -433,6 +432,8 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
                   if (!anyOtherSkipped) {
                     widget.noteController.clear();
+                    // 🔥 Reset juga excludeQty jika tidak ada yang diskip
+                    context.read<PosValidationBloc>().add(UpdateExcludeQtyFlag(false));
                   }
                 }
               },
@@ -458,6 +459,11 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                         .add(UpdateNoteAfter(value ?? ''));
 
                     setState(() {});
+                  },
+                  // 🔥 TANGKAP FLAG EXCLUDE QTY DI SINI
+                  onExcludeQtyChanged: (bool excludeValue) {
+                    // Kirim ke BLoC untuk disimpan ke model Hive yang baru
+                    context.read<PosValidationBloc>().add(UpdateExcludeQtyFlag(excludeValue));
                   },
                 ),
               ),
@@ -579,6 +585,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     required List<NoteOption> noteOptions,
     required ValueChanged<String?> onChanged,
     required List<CapturedImageDetail> remarkPhotos,
+    ValueChanged<bool>? onExcludeQtyChanged,
   }) {
     // (Kode sama persis seperti file Akang, saya singkat agar muat)
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
@@ -608,6 +615,15 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
               ? null
               : (value) {
             onChanged(value);
+
+            if (value != null && onExcludeQtyChanged != null) {
+              final selectedOpt = noteOptions.firstWhere(
+                    (opt) => opt.label == value,
+                orElse: () => NoteOption(label: '', excludeQty: false),
+              );
+              onExcludeQtyChanged(selectedOpt.excludeQty);
+            }
+
             FocusScope.of(context).unfocus();
           },
           items: filteredOptions

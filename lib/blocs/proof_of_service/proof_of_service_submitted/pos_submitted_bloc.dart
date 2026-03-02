@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_submitted/pos_submitted_event.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_submitted/pos_submitted_repository.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_submitted/pos_submitted_state.dart';
@@ -8,6 +9,7 @@ import 'package:salsa/components/upload_s3_service.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model_ext.dart';
 import 'package:salsa/models/proof_of_service/pos_validation_entry_model.dart';
+import 'package:salsa/models/service_call/service_call_validation_entry_model_ext.dart';
 
 import '../../../components/services/hive_clear_service.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
@@ -35,8 +37,13 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
       final validationBox = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       final entries = validationBox.values.where((e) => e.transNo == event.transNo).toList();
 
-      print("test");
       final bool hasBrokenUnit = entries.any((entry) {
+
+        // Jika isGeneric == true, langsung return false
+        if (entry.isGeneric == true) {
+          return false;
+        }
+
         // Kondisi 1: Cek catatan
         final bool isNoteBroken = entry.note?.trim().toLowerCase().contains('ac rusak / bermasalah') ?? false;
 
@@ -66,18 +73,18 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
   }
 
   Future<void> _onSubmitValidation(
-    SubmitPosValidation event,
-    Emitter<PosSubmittedState> emit,
-  ) async {
+      SubmitPosValidation event,
+      Emitter<PosSubmittedState> emit,
+      ) async {
+    print("masuk validate");
     emit(PosValidationSubmitting());
     try {
       // 1. Ambil data validasi unit dari Hive
-      final validationBox =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      final validationBox = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+
+      // Filter sesuai Trans No
       final entries = validationBox.values
-          .where((e) =>
-              e.transNo.trim().toUpperCase() ==
-              event.transNo.trim().toUpperCase())
+          .where((e) => e.transNo.trim().toUpperCase() == event.transNo.trim().toUpperCase())
           .toList();
 
       if (entries.isEmpty) {
@@ -85,34 +92,77 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         return;
       }
 
+      // --- LOGIC PAIRING (Pemetaan Indoor <-> Outdoor) ---
       final pairingMap = <String, String>{};
       for (final entry in entries) {
+        // Jika Outdoor punya pasangan, catat: [SN_Indoor] = SN_Outdoor
         if (entry.articleType?.toUpperCase() == 'OUT' && entry.pairedSerialNo != null) {
           pairingMap[entry.pairedSerialNo!] = entry.serialNo;
         }
       }
 
+      // --- 🔥 MAPPING MANUAL PAYLOAD (Biar Format Konsisten) 🔥 ---
       final itemsPayload = entries.map((entry) {
-        // Ambil data JSON dasar dari model
-        final json = entry.toJson();
-
-        // Jika unit ini adalah INDOOR...
+        // Tentukan pasangan jika ini unit Indoor
+        String? pairedSerial;
         if (entry.articleType?.toUpperCase() == 'IN') {
-          // ...cek di peta apakah ada outdoor yang memilihnya.
-          final outdoorPairSerialNo = pairingMap[entry.serialNo];
-          if (outdoorPairSerialNo != null) {
-            // Jika ada, isi field 'paired_serial_no' dengan SN outdoor pasangannya.
-            json['paired_serial_no'] = outdoorPairSerialNo;
-          }
+          pairedSerial = pairingMap[entry.serialNo];
+        } else {
+          pairedSerial = entry.pairedSerialNo;
         }
-        return json;
+
+        return {
+          "serial_no": entry.serialNo,
+          "article_no": entry.articleNo ?? "",
+          "article_desc": entry.articleDesc ?? "",
+          "article_unit_desc": entry.articleUnitDesc ?? "",
+
+          "article_type": entry.articleType,
+          "note": entry.note ?? "",
+          "remark": entry.noteRemark,
+          "remark_photos": (entry.remarkPhotos ?? []).map((e) => e.toJson()).toList(),
+
+          "images_before": entry.photosBefore.map((p) => {
+            "image_file_name": p.imagePath.split('/').last,
+            "timestamp": DateFormat("yyyy-MM-dd HH:mm:ss").format(p.timestamp),
+            "latitude": p.latitude ?? 0.0,
+            "longitude": p.longitude ?? 0.0,
+            "device": p.deviceModel
+          }).toList(),
+
+          "images_after": entry.photosAfter.map((p) => {
+            "image_file_name": p.imagePath.split('/').last,
+            "timestamp": DateFormat("yyyy-MM-dd HH:mm:ss").format(p.timestamp),
+            "latitude": p.latitude ?? 0.0,
+            "longitude": p.longitude ?? 0.0,
+            "device": p.deviceModel
+          }).toList(),
+
+          "measurements_after": entry.measurementsAfter.map((m) => {
+            "measurement_id": m.measurementId,
+            "value": m.value,
+            "unit": m.unit,
+            "is_skipped": m.isSkipped ?? false,
+            if (m.capturedImage != null)
+              "image": {
+                "image_file_name": m.capturedImage?.imagePath.split('/').last,
+                // Ambil timestamp foto, atau fallback ke jam sekarang (tanpa milidetik)
+                //DateFormat("yyyy-MM-dd HH:mm:ss").format(timestamp)
+                "timestamp": DateFormat("yyyy-MM-dd HH:mm:ss").format(m.capturedImage!.timestamp) ,
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "device": m.capturedImage?.deviceModel
+              }
+          }).toList(),
+          "exclude_qty": entry.excludeQty ?? false,
+          "paired_serial_no": pairedSerial,
+          "reff_line_no": entry.reffLineNo
+        };
       }).toList();
 
       // 2. Ambil data PIC & Teknisi dari Hive
-      final infoBox = await Hive.openBox<PosTransactionInfoModel>(
-          kPosTransactionInfoHiveBox);
-      final transactionInfo = infoBox
-          .get(getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
+      final infoBox = await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+      final transactionInfo = infoBox.get(getHiveKeyForTransaction(event.transNo.trim().toUpperCase()));
 
       // 3. Panggil repository untuk mengirim data
       final result = await repository.submitPosValidation(
@@ -147,6 +197,7 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             emit(PosValidationFailure("Gagal konfirmasi status ke server: $e"));
           }
         } else {
+          // --- LOGIC PARTIAL FAILURE (CACHE) ---
           final cleanFailedFiles = uploadResult.failedFiles.map((fullErrorString) {
             return fullErrorString.split(' (').first;
           }).toList();
@@ -164,7 +215,6 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
             'module': 'POS',
           });
 
-          // Pancarkan state gagal sebagian
           emit(PosValidationUploadPartial(
             successCount: uploadResult.successCount,
             failureCount: uploadResult.failureCount,
@@ -174,11 +224,10 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
           ));
         }
       } else {
-        emit(PosValidationFailure(
-            result['message'] ?? 'Gagal mengirim data validasi.'));
+        emit(PosValidationFailure(result['message'] ?? 'Gagal mengirim data validasi.'));
       }
     } catch (e) {
-      print("masuk sini");
+      print("ERROR SUBMIT POS: $e"); // Print error biar kebaca di debug console
       emit(PosValidationFailure("Terjadi error: ${e.toString()}"));
     }
   }

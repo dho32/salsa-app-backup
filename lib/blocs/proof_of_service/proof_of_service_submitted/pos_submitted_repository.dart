@@ -59,7 +59,7 @@ class PosSubmittedRepository {
       log("================================");
 
       // Ganti dengan endpoint API Proof of Service Anda
-      Uri uri = getUrl(pathUrl: '/proof_of_service/submitted/v2');
+      Uri uri = getUrl(pathUrl: '/proof_of_service/submitted/v3');
 
       final response = await http.post(
         uri,

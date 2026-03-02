@@ -26,13 +26,15 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     on<UpdateNoteRemark>(_onUpdateNoteRemark);
     on<AddRemarkPhoto>(_onAddRemarkPhoto);
     on<RemoveRemarkPhoto>(_onRemoveRemarkPhoto);
+
+    // 🔥 1. DAFTARKAN EVENT BARU
+    on<UpdateExcludeQtyFlag>(_onUpdateExcludeQtyFlag);
   }
 
   // --- HELPER UNTUK KUNCI HIVE ANTI BENTROK ---
   String _getSafeHiveKey(String serialNo, String transNo, int unitIndex,
       String unitType, bool isGeneric) {
     if (isGeneric) {
-      // 🔥 KUNCI MUTLAK: Biar draft gak beranak-pinak pas ngetik SN
       return 'GEN_${transNo}_${unitIndex}_$unitType';
     }
     return serialNo.trim().toUpperCase();
@@ -76,7 +78,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
 
     if (event.isGeneric) {
       final existingDraft = box.values.firstWhereOrNull((e) =>
-          e.transNo == event.transNo &&
+      e.transNo == event.transNo &&
           e.unitIndex == event.unitIndex &&
           e.articleType == event.unitType);
 
@@ -102,7 +104,6 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       ));
     }
 
-    // 🔥 LOGIC BARU YANG LEBIH AKURAT
     final allOtherEntries = box.values.where((e) {
       return e.transNo == event.transNo &&
           !(e.articleType == event.unitType && e.unitIndex == event.unitIndex);
@@ -136,6 +137,9 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         note: loadedData.note,
         noteRemark: loadedData.noteRemark,
         remarkPhotos: loadedData.remarkPhotos,
+        // 🔥 PASTIKAN STATE MEMILIKI FIELD INI DI FILE STATE-NYA YA KANG
+        excludeQty: loadedData.excludeQty ?? false,
+        reffLineNo: event.reffLineNo ?? loadedData.reffLineNo,
       ));
     } else {
       emit(PosValidationLoaded(
@@ -151,7 +155,20 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         measurementsAfter: _getDefaultMeasurements(event.unitType),
         availableIndoorSerials: availableIndoors,
         pairedIndoorSerial: pairedSerial,
+        excludeQty: false, // 🔥 Default
+        reffLineNo: event.reffLineNo,
       ));
+    }
+  }
+
+  // 🔥 2. FUNGSI BARU UNTUK MENANGKAP EVENT EXCLUDE QTY
+  Future<void> _onUpdateExcludeQtyFlag(
+      UpdateExcludeQtyFlag event, Emitter<PosValidationState> emit) async {
+    if (state is PosValidationLoaded) {
+      final currentState = state as PosValidationLoaded;
+      final newState = currentState.copyWith(excludeQty: event.excludeQty);
+      emit(newState);
+      await _saveToHive(newState);
     }
   }
 
@@ -168,7 +185,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
   Future<void> _saveToHive(PosValidationLoaded state) async {
     try {
       final box =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
 
       final hiveKey = _getSafeHiveKey(state.serialNo, state.transNo,
           state.unitIndex, state.unitType, state.isGeneric);
@@ -191,6 +208,9 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         pairedSerialNo: state.pairedIndoorSerial,
         isGeneric: state.isGeneric,
         unitIndex: state.unitIndex,
+        // 🔥 3. SIMPAN KE HIVE
+        excludeQty: state.excludeQty,
+        reffLineNo: state.reffLineNo,
       );
 
       await box.put(hiveKey, entry);
@@ -211,8 +231,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-          List<CapturedImageDetail>.from(currentState.photosBefore)
-            ..add(event.imageDetail);
+      List<CapturedImageDetail>.from(currentState.photosBefore)
+        ..add(event.imageDetail);
       final newState = currentState.copyWith(photosBefore: updatedPhotos);
       emit(newState);
       await _saveToHive(newState);
@@ -237,8 +257,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-          List<CapturedImageDetail>.from(currentState.photosAfter)
-            ..add(event.imageDetail);
+      List<CapturedImageDetail>.from(currentState.photosAfter)
+        ..add(event.imageDetail);
       final newState = currentState.copyWith(photosAfter: updatedPhotos);
       emit(newState);
       await _saveToHive(newState);
@@ -263,14 +283,14 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedMeasurements =
-          List<MeasurementEntry>.from(currentState.measurementsAfter);
+      List<MeasurementEntry>.from(currentState.measurementsAfter);
       final index = updatedMeasurements.indexWhere(
-          (m) => m.measurementId == event.measurement.measurementId);
+              (m) => m.measurementId == event.measurement.measurementId);
       if (index != -1) {
         updatedMeasurements[index] = event.measurement;
       }
       final newState =
-          currentState.copyWith(measurementsAfter: updatedMeasurements);
+      currentState.copyWith(measurementsAfter: updatedMeasurements);
       emit(newState);
       await _saveToHive(newState);
     }
@@ -299,8 +319,8 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final updatedPhotos =
-          List<CapturedImageDetail>.from(currentState.remarkPhotos ?? [])
-            ..add(event.imageDetail);
+      List<CapturedImageDetail>.from(currentState.remarkPhotos ?? [])
+        ..add(event.imageDetail);
       final newState = currentState.copyWith(remarkPhotos: updatedPhotos);
       emit(newState);
       await _saveToHive(newState);
@@ -325,7 +345,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final newState =
-          currentState.copyWith(pairedIndoorSerial: event.indoorSerialNo);
+      currentState.copyWith(pairedIndoorSerial: event.indoorSerialNo);
       emit(newState);
       _saveToHive(newState);
     }
@@ -336,11 +356,10 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final box =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       final hiveKey = _getSafeHiveKey(event.serialNo, event.transNo,
           currentState.unitIndex, event.articleType, currentState.isGeneric);
 
-      // 🔥 LOGIC CASCADE UPDATE (BEST PRACTICE) 🔥
       if (currentState.isGeneric && event.articleType == 'IN') {
         final oldSerial = currentState.originalSerialNo;
         final newSerial = event.serialNo.trim().toUpperCase();
@@ -349,28 +368,22 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
             oldSerial.isNotEmpty &&
             !oldSerial.startsWith('AC') &&
             oldSerial != newSerial) {
-          // Cari unit Outdoor di tiket ini yang masih pakai SN lama
           final affectedOutdoors = box.values
               .where((e) =>
-                  e.transNo == event.transNo &&
-                  e.articleType == 'OUT' &&
-                  e.pairedSerialNo == oldSerial)
+          e.transNo == event.transNo &&
+              e.articleType == 'OUT' &&
+              e.pairedSerialNo == oldSerial)
               .toList();
 
-          // Update Outdoor tersebut dengan SN yang baru
           for (var outUnit in affectedOutdoors) {
             final updatedOut = outUnit.copyWith(pairedSerialNo: newSerial);
-            // Karena Outdoor juga generic, cara panggil key-nya sama
             final outKey = _getSafeHiveKey(updatedOut.serialNo,
                 updatedOut.transNo, updatedOut.unitIndex ?? 0, 'OUT', true);
             await box.put(outKey, updatedOut);
-            print(
-                "🔄 Cascade Update: Outdoor ${updatedOut.unitIndex} otomatis berubah pasangan ke $newSerial");
           }
         }
       }
 
-      // Lanjut simpan data Indoor/Outdoor yang sedang dibuka ini
       final entry = PosValidationEntryModel(
         transNo: event.transNo,
         serialNo: event.serialNo.trim().toUpperCase(),
@@ -389,6 +402,9 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         pairedSerialNo: currentState.pairedIndoorSerial,
         isGeneric: currentState.isGeneric,
         unitIndex: currentState.unitIndex,
+        // 🔥 4. SIMPAN KE HIVE (SAAT USER KLIK SAVE)
+        excludeQty: currentState.excludeQty,
+        reffLineNo: currentState.reffLineNo,
       );
 
       await box.put(hiveKey, entry);
@@ -420,10 +436,13 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
         articleType: event.articleType,
         isGeneric: event.isGeneric,
         unitIndex: event.unitIndex,
+        // 🔥 5. SIMPAN KE HIVE JUGA
+        excludeQty: currentState.excludeQty,
+        reffLineNo: currentState.reffLineNo,
       );
 
       final box =
-          await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+      await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
       final hiveKey = _getSafeHiveKey(event.serialNo, event.transNo,
           event.unitIndex, event.articleType, event.isGeneric);
 

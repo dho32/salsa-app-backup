@@ -24,10 +24,9 @@ class PosValidationScreen extends StatefulWidget {
   final double? indoorTemp;
   final List<String> allIndoorSerials;
   final List<NoteOption> noteOptions;
-
-  // 🔥 PARAMETER BARU KHUSUS GENERIC
   final bool isGeneric;
   final int unitIndex;
+  final String reffLineNo;
 
   const PosValidationScreen({
     super.key,
@@ -44,6 +43,7 @@ class PosValidationScreen extends StatefulWidget {
     required this.noteOptions,
     this.isGeneric = false, // Default false
     this.unitIndex = 0,
+    required this.reffLineNo,
   });
 
   @override
@@ -112,6 +112,7 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
           // 🔥 TERUSKAN KE BLOC
           isGeneric: widget.isGeneric,
           unitIndex: widget.unitIndex,
+          reffLineNo: widget.reffLineNo,
         )),
       child: BlocListener<PosValidationBloc, PosValidationState>(
         listener: (context, state) {

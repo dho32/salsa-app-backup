@@ -250,12 +250,17 @@ class _OtpDialogState extends State<OtpDialog> {
 
   Widget _buildResendArea(OtpState state) {
     if (state is OtpSent) {
+      final int currentAttempt = (3 - state.retryLeft) + 1;
+      final int maxAttempt = 3;
+
       if (state.retryLeft == 0) {
         return Column(
           key: const ValueKey('limit_reached'),
           children: [
-            const Text("Batas permintaan OTP habis.",
-                style: TextStyle(color: Colors.red)),
+            const Text(
+              "Batas permintaan OTP habis (3/3).", // Tampilkan mentok
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -273,23 +278,49 @@ class _OtpDialogState extends State<OtpDialog> {
         );
       }
 
-      if (state.cooldown > 0) {
-        return Text('Kirim ulang dalam ${state.cooldown} detik',
-            key: const ValueKey('timer'),
-            style: const TextStyle(
-                color: Colors.grey, fontWeight: FontWeight.bold));
-      } else {
-        return TextButton(
-          key: const ValueKey('resend_btn'),
-          onPressed: () {
-            _pinController.clear();
-            context
-                .read<OtpBloc>()
-                .add(ResendOtp(widget.transNo, widget.shipTo, '0'));
-          },
-          child: const Text('Tidak menerima kode? Kirim Ulang'),
-        );
-      }
+      // Tampilan Counter & Timer
+      return Column(
+        children: [
+          // 🔥 COUNTER PERCOBAAN
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Text(
+              "Percobaan $currentAttempt dari $maxAttempt",
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade800
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Logic Tombol Kirim Ulang
+          if (state.cooldown > 0)
+            Text(
+              'Kirim ulang dalam ${state.cooldown} detik',
+              key: const ValueKey('timer'),
+              style: const TextStyle(
+                  color: Colors.grey, fontWeight: FontWeight.bold),
+            )
+          else
+            TextButton(
+              key: const ValueKey('resend_btn'),
+              onPressed: () {
+                _pinController.clear();
+                context
+                    .read<OtpBloc>()
+                    .add(ResendOtp(widget.transNo, widget.shipTo, '0'));
+              },
+              child: const Text('Tidak menerima kode? Kirim Ulang'),
+            ),
+        ],
+      );
     }
     return const SizedBox.shrink();
   }

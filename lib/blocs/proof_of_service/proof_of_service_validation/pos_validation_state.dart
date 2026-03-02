@@ -35,6 +35,10 @@ class PosValidationLoaded extends PosValidationState {
   final bool isGeneric;
   final int unitIndex;
 
+  // 🔥 FIELD BARU UNTUK EXCLUDE QTY FLAG
+  final bool excludeQty;
+  final String? reffLineNo;
+
   const PosValidationLoaded({
     this.currentStep = 0,
     required this.unitType,
@@ -54,6 +58,8 @@ class PosValidationLoaded extends PosValidationState {
     this.remarkPhotos = const [],
     this.isGeneric = false, // Default False (Unit Sewa)
     this.unitIndex = 0,     // Default 0
+    this.excludeQty = false, // 🔥 Default False
+    this.reffLineNo,
   });
 
   PosValidationLoaded copyWith({
@@ -73,8 +79,10 @@ class PosValidationLoaded extends PosValidationState {
     String? note,
     String? noteRemark,
     List<CapturedImageDetail>? remarkPhotos,
-    bool? isGeneric, // 🔥
-    int? unitIndex,  // 🔥
+    bool? isGeneric,
+    int? unitIndex,
+    bool? excludeQty, // 🔥
+    String? reffLineNo,
   }) {
     return PosValidationLoaded(
       currentStep: currentStep ?? this.currentStep,
@@ -94,8 +102,10 @@ class PosValidationLoaded extends PosValidationState {
       note: note ?? this.note,
       noteRemark: noteRemark ?? this.noteRemark,
       remarkPhotos: remarkPhotos ?? this.remarkPhotos,
-      isGeneric: isGeneric ?? this.isGeneric, // 🔥
-      unitIndex: unitIndex ?? this.unitIndex, // 🔥
+      isGeneric: isGeneric ?? this.isGeneric,
+      unitIndex: unitIndex ?? this.unitIndex,
+      excludeQty: excludeQty ?? this.excludeQty, // 🔥
+      reffLineNo: reffLineNo ?? this.reffLineNo,
     );
   }
 
@@ -117,8 +127,10 @@ class PosValidationLoaded extends PosValidationState {
     note,
     noteRemark,
     remarkPhotos,
-    isGeneric, // 🔥
-    unitIndex, // 🔥
+    isGeneric,
+    unitIndex,
+    excludeQty, // 🔥 Tambahkan ke props agar bloc mendeteksi perubahan state
+    reffLineNo,
   ];
 }
 

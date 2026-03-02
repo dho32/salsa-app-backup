@@ -36,13 +36,14 @@ class PosValidationEntryModelAdapter
       reffLineNo: fields[15] as String?,
       isGeneric: fields[16] as bool?,
       unitIndex: fields[17] as int?,
+      excludeQty: fields[18] as bool?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PosValidationEntryModel obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -78,7 +79,9 @@ class PosValidationEntryModelAdapter
       ..writeByte(16)
       ..write(obj.isGeneric)
       ..writeByte(17)
-      ..write(obj.unitIndex);
+      ..write(obj.unitIndex)
+      ..writeByte(18)
+      ..write(obj.excludeQty);
   }
 
   @override

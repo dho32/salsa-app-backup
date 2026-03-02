@@ -1358,6 +1358,7 @@ class _ProofOfServiceDetailBodyMobileState
           noteOptions: noteOptionsToSend,
           isGeneric: detail.isGeneric,
           unitIndex: detail.unitIndex,
+          reffLineNo: detail.reffLineNo,
         ),
       ),
     );

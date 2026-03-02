@@ -12,7 +12,7 @@ class TaskMaintenanceRepository {
     try {
       final params = {'trans_no': transNo, 'maintenance_by': maintenanceBy};
 
-      Uri uri = getUrl(pathUrl: 'task_maintenance/v2', params: params);
+      Uri uri = getUrl(pathUrl: 'task_maintenance/v3', params: params);
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
