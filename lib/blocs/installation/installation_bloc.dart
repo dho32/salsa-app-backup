@@ -37,6 +37,8 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
     on<ValidateSerialNumbers>(_onValidateSerialNumbers);
     on<SubmitInstallationFinal>(_onSubmitFinal);
     on<UpdateTransportStatus>(_onUpdateTransportStatus);
+    on<SaveStoreFrontPhoto>(_onSaveStoreFrontPhoto);
+    on<UpdateTransportData>(_onUpdateTransportData);
   }
 
   // --- 1. LOAD DATA ---
@@ -185,50 +187,70 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
     emit(state.copyWith(draftEntry: newDraft));
   }
 
-  // [FIXED] Auto-Pairing Outdoor saat Indoor disimpan
+  // [FIXED] Auto-Pairing Two-Way Sync (Indoor <-> Outdoor)
   Future<void> _onSaveIndoor(
       SaveIndoorUnit event, Emitter<InstallationState> emit) async {
-    // Gunakan status loading biasa (Local Save)
     emit(state.copyWith(status: InstallationStatus.loading));
 
     try {
       final draft = state.draftEntry!;
       var units = List<InstallationUnitModel>.from(draft.units);
 
-      // 1. Find & Update Indoor Unit
+      // 1. Find & Update/Add Indoor Unit
       final index = units.indexWhere(
           (u) => u.unitIndex == event.unit.unitIndex && u.articleType == 'IN');
 
+      InstallationUnitModel finalIndoor = event.unit;
+
       if (index >= 0) {
-        units[index] = event.unit;
+        // Pertahankan paired SN jika dari UI terkirim kosong
+        if ((finalIndoor.pairedSerialNo == null ||
+                finalIndoor.pairedSerialNo!.isEmpty) &&
+            (units[index].pairedSerialNo != null &&
+                units[index].pairedSerialNo!.isNotEmpty)) {
+          finalIndoor =
+              finalIndoor.copyWith(pairedSerialNo: units[index].pairedSerialNo);
+        }
+        units[index] = finalIndoor;
       } else {
-        units.add(event.unit);
+        units.add(finalIndoor);
       }
 
-      // 2. [FIX BUG] Auto-Update Pairing Outdoor Unit
-      // Cari Outdoor dengan unitIndex yang sama
+      // 2. [FIX BUG] Two-Way Sync dengan Outdoor Unit
       final outdoorIndex = units.indexWhere(
           (u) => u.unitIndex == event.unit.unitIndex && u.articleType == 'OUT');
 
       if (outdoorIndex != -1) {
         final existingOutdoor = units[outdoorIndex];
-        // Jika Pairing belum sesuai dengan SN Indoor baru, paksa update
-        if (existingOutdoor.pairedSerialNo != event.unit.serialNo) {
+
+        // A. Jika Outdoor belum update SN Indoor baru, paksa update
+        if (existingOutdoor.pairedSerialNo != finalIndoor.serialNo) {
           units[outdoorIndex] = existingOutdoor.copyWith(
-            pairedSerialNo: event.unit.serialNo,
+            pairedSerialNo: finalIndoor.serialNo,
           );
+        }
+
+        // B. PASTIKAN INDOOR JUGA MENYIMPAN SN OUTDOOR YANG SUDAH ADA (Failsafe)
+        if (finalIndoor.pairedSerialNo != existingOutdoor.serialNo) {
+          if (index >= 0) {
+            units[index] =
+                units[index].copyWith(pairedSerialNo: existingOutdoor.serialNo);
+          } else {
+            units[units.length - 1] = units[units.length - 1]
+                .copyWith(pairedSerialNo: existingOutdoor.serialNo);
+          }
         }
       }
 
       final newDraft = draft.copyWith(units: units);
       await _draftBox?.put(draft.transNo, newDraft);
 
-      // 3. Emit SUCCESS (Bukan Validating) biar UI gak manggil API
+      // 3. Emit SUCCESS
       emit(state.copyWith(
         status: InstallationStatus.success,
         draftEntry: newDraft,
         availableIndoors: _calculateAvailableIndoors(newDraft),
-        errorMessage: "", // Clear error if any
+        errorMessage: "",
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -236,7 +258,7 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
     }
   }
 
-  // [FIXED] Explicit Success Status
+  // [FIXED] Auto-Pairing Two-Way Sync (Outdoor <-> Indoor)
   Future<void> _onSaveOutdoor(
       SaveOutdoorUnit event, Emitter<InstallationState> emit) async {
     emit(state.copyWith(status: InstallationStatus.loading));
@@ -245,25 +267,40 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
       final draft = state.draftEntry!;
       var units = List<InstallationUnitModel>.from(draft.units);
 
-      // 1. Update/Add Outdoor Unit
+      // 1. Find & Update/Add Outdoor Unit
       final outIndex = units.indexWhere(
           (u) => u.unitIndex == event.unit.unitIndex && u.articleType == 'OUT');
 
+      InstallationUnitModel finalOutdoor = event.unit;
+
       if (outIndex >= 0) {
-        units[outIndex] = event.unit;
+        units[outIndex] = finalOutdoor;
       } else {
-        units.add(event.unit);
+        units.add(finalOutdoor);
       }
 
-      // 2. Update Paired Indoor Unit (IF PAIRED)
-      if (event.pairedIndoorSerial.isNotEmpty) {
-        final inIndex = units.indexWhere((u) =>
-            u.serialNo == event.pairedIndoorSerial && u.articleType == 'IN');
+      // 2. [FIX BUG] Two-Way Sync dengan Indoor Unit (Berdasarkan Unit Index)
+      final indoorIndex = units.indexWhere(
+          (u) => u.unitIndex == event.unit.unitIndex && u.articleType == 'IN');
 
-        if (inIndex >= 0) {
-          final oldIndoor = units[inIndex];
-          units[inIndex] = oldIndoor.copyWith(
-            pairedSerialNo: event.unit.serialNo, // Update link ke SN Outdoor
+      if (indoorIndex != -1) {
+        final existingIndoor = units[indoorIndex];
+
+        // A. Pastikan Outdoor mencatat SN Indoor yang benar (Failsafe)
+        if (finalOutdoor.pairedSerialNo != existingIndoor.serialNo) {
+          if (outIndex >= 0) {
+            units[outIndex] = units[outIndex]
+                .copyWith(pairedSerialNo: existingIndoor.serialNo);
+          } else {
+            units[units.length - 1] = units[units.length - 1]
+                .copyWith(pairedSerialNo: existingIndoor.serialNo);
+          }
+        }
+
+        // B. Paksa Indoor untuk mencatat SN Outdoor yang baru di-save ini
+        if (existingIndoor.pairedSerialNo != finalOutdoor.serialNo) {
+          units[indoorIndex] = existingIndoor.copyWith(
+            pairedSerialNo: finalOutdoor.serialNo,
           );
         }
       }
@@ -542,15 +579,27 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
           ));
         }
       } else {
-        // A. Simpan ke Hive FailedUploads (Agar muncul Card Pending di Home)
-        final failedBox = await Hive.openBox(kFailedUploadsBox);
+        // A. Buka Kotak (Pagar Aman Hive)
+        Box<Map<dynamic, dynamic>> failedBox;
+        if (Hive.isBoxOpen(kFailedUploadsBox)) {
+          // Ambil kotak dengan tipe yang sama
+          failedBox = Hive.box<Map<dynamic, dynamic>>(kFailedUploadsBox);
+        } else {
+          // Buka kotak dengan tipe yang sama
+          failedBox = await Hive.openBox<Map<dynamic, dynamic>>(kFailedUploadsBox);
+        }
+
+        // B. Tarik Nama Toko untuk ditampilkan di UI (Card Failed Uploads)
+        final storeName = state.taskDetail?.header.shipToName ?? 'Toko Tidak Diketahui';
+
+        // C. Simpan dengan STANDAR KUNCI yang sama persis seperti POS & SC
         await failedBox.put(event.transNo, {
           'transNo': event.transNo,
-          'type': 'INSTALLATION',
+          'module': 'INSTALLATION',
           'timestamp': DateTime.now().toIso8601String(),
-          'failed_files': uploadResult.failedFiles,
-          'presigned_detail': apiResult['result']['detail']
-          // Simpan URL utk retry
+          'failedFiles': uploadResult.failedFiles,
+          'presignedDetail': apiResult['result']['detail'],
+          'storeName': storeName, // [FIX] Tambah nama toko
         });
 
         // // B. Hapus Draft Utama (Karena data teks sudah masuk server)
@@ -559,7 +608,7 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
         // }
         // await _draftBox?.delete(event.transNo);
 
-        // C. Emit Partial
+        // D. Emit Partial
         emit(state.copyWith(
           status: InstallationStatus.uploadPartial,
           successCount: successCount,
@@ -587,5 +636,46 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
 
     // Emit state baru
     emit(state.copyWith(draftEntry: newDraft));
+  }
+
+  Future<void> _onSaveStoreFrontPhoto(
+      SaveStoreFrontPhoto event, Emitter<InstallationState> emit) async {
+    final draft = state.draftEntry;
+    if (draft != null) {
+      // 1. Update draft di memori
+      final newDraft = draft.copyWith(
+        storeFrontPhoto: event.photo,
+        clearStoreFrontPhoto: event.photo == null,
+      );
+
+      // 2. Save ke Hive (Local Storage)
+      await _draftBox?.put(draft.transNo, newDraft);
+
+      // 3. Update UI
+      emit(state.copyWith(draftEntry: newDraft));
+    }
+  }
+
+  // --- HANDLER UPDATE TRANSPORT ---
+  Future<void> _onUpdateTransportData(
+      UpdateTransportData event, Emitter<InstallationState> emit) async {
+    final draft = state.draftEntry;
+
+    if (draft != null) {
+      // 1. Perbarui data draft di memori dengan data dari event
+      final newDraft = draft.copyWith(
+        hasTransport: event.hasTransport,
+        transportDistance: event.distance,
+        transportEvidencePhoto: event.photo,
+        clearTransportPhoto: event.photo == null,
+      );
+
+      // 2. Simpan ke database lokal (Hive) biar nggak hilang kalau HP mati
+      // Note: Pastikan nama variabel _draftBox atau fungsi save lokal Akang sesuai ya
+      await _draftBox?.put(draft.transNo, newDraft);
+
+      // 3. Update UI
+      emit(state.copyWith(draftEntry: newDraft));
+    }
   }
 }

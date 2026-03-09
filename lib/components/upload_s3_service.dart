@@ -403,10 +403,17 @@ Future<InstallationUploadResult> uploadInstallationFiles({
     }
   }
 
+  if (draft.storeFrontPhoto != null) {
+    localFileMap[draft.storeFrontPhoto!.imageFileName] = draft.storeFrontPhoto!.imagePath;
+  }
+  if (draft.hasTransport && draft.transportEvidencePhoto != null) {
+    localFileMap[draft.transportEvidencePhoto!.imageFileName] = draft.transportEvidencePhoto!.imagePath;
+  }
   for (var u in draft.units) {
     for (var m in u.measurements) {
-      if (m.photo != null)
+      if (m.photo != null) {
         localFileMap[m.photo!.imageFileName] = m.photo!.imagePath;
+      }
     }
     collect(u.remarkPhotos);
     collect(u.remarkPhotosPsi);

@@ -35,18 +35,18 @@ class InstallationPhotoModel {
       timestamp: json['timestamp'] ?? '',
       latitude: (json['latitude'] ?? 0).toDouble(),
       longitude: (json['longitude'] ?? 0).toDouble(),
-      deviceModel: json['device_model'] ?? '',
+      deviceModel: json['device'] ?? '',
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'image_path': imagePath,
-    'image_file_name': imageFileName,
-    'timestamp': timestamp,
-    'latitude': latitude,
-    'longitude': longitude,
-    'device_model': deviceModel,
-  };
+        'image_path': imagePath,
+        'image_file_name': imageFileName,
+        'timestamp': timestamp,
+        'latitude': latitude,
+        'longitude': longitude,
+        'device': deviceModel,
+      };
 }
 
 @HiveType(typeId: 201)
@@ -87,13 +87,13 @@ class InstallationMeasurementModel {
   }
 
   Map<String, dynamic> toJson() => {
-    'measurement_id': measurementId,
-    'value': value,
-    'unit': unit,
-    'photo': photo?.toJson(),
-    'is_skipped': isSkipped,
-    'note': note,
-  };
+        'measurement_id': measurementId,
+        'value': value,
+        'unit': unit,
+        'photo': photo?.toJson(),
+        'is_skipped': isSkipped,
+        'note': note,
+      };
 }
 
 @HiveType(typeId: 202)
@@ -132,13 +132,13 @@ class InstallationMaterialItemModel {
   }
 
   Map<String, dynamic> toJson() => {
-    'article_id': articleId,
-    'article_name': articleName,
-    'brand_id': brandId,
-    'brand_name': brandName,
-    'length': length,
-    'usage_type': usageType,
-  };
+        'article_id': articleId,
+        'article_name': articleName,
+        'brand_id': brandId,
+        'brand_name': brandName,
+        'length': length,
+        'usage_type': usageType,
+      };
 }
 
 @HiveType(typeId: 203)
@@ -162,12 +162,12 @@ class InstallationMaterialsModel {
   factory InstallationMaterialsModel.fromJson(Map<String, dynamic> json) {
     return InstallationMaterialsModel(
       pipes: (json['pipes'] as List?)
-          ?.map((e) => InstallationMaterialItemModel.fromJson(e))
-          .toList() ??
+              ?.map((e) => InstallationMaterialItemModel.fromJson(e))
+              .toList() ??
           [],
       cables: (json['cables'] as List?)
-          ?.map((e) => InstallationMaterialItemModel.fromJson(e))
-          .toList() ??
+              ?.map((e) => InstallationMaterialItemModel.fromJson(e))
+              .toList() ??
           [],
       mountingType: json['mounting_type'] ?? 'NONE',
       hasJasaPerapihan: json['has_jasa_perapihan'] ?? false,
@@ -175,11 +175,11 @@ class InstallationMaterialsModel {
   }
 
   Map<String, dynamic> toJson() => {
-    'pipes': pipes.map((e) => e.toJson()).toList(),
-    'cables': cables.map((e) => e.toJson()).toList(),
-    'mounting_type': mountingType,
-    'has_jasa_perapihan': hasJasaPerapihan,
-  };
+        'pipes': pipes.map((e) => e.toJson()).toList(),
+        'cables': cables.map((e) => e.toJson()).toList(),
+        'mounting_type': mountingType,
+        'has_jasa_perapihan': hasJasaPerapihan,
+      };
 }
 
 @HiveType(typeId: 204)
@@ -305,8 +305,8 @@ class InstallationUnitModel {
       articleType: json['article_type'] ?? '',
       note: json['note'],
       measurements: (json['measurements'] as List?)
-          ?.map((e) => InstallationMeasurementModel.fromJson(e))
-          .toList() ??
+              ?.map((e) => InstallationMeasurementModel.fromJson(e))
+              .toList() ??
           [],
       materials: json['materials'] != null
           ? InstallationMaterialsModel.fromJson(json['materials'])
@@ -320,36 +320,38 @@ class InstallationUnitModel {
       // JSON Parsing for New Fields (Optional, mostly for backup)
       remark: json['remark'] ?? '',
       remarkPhotos: (json['remark_photos'] as List?)
-          ?.map((e) => InstallationPhotoModel.fromJson(e))
-          .toList() ?? [],
+              ?.map((e) => InstallationPhotoModel.fromJson(e))
+              .toList() ??
+          [],
       notePsi: json['note_psi'] ?? '',
       remarkPsi: json['remark_psi'] ?? '',
       remarkPhotosPsi: (json['remark_photos_psi'] as List?)
-          ?.map((e) => InstallationPhotoModel.fromJson(e))
-          .toList() ?? [],
+              ?.map((e) => InstallationPhotoModel.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'serial_no': serialNo,
-    'article_no': articleNo,
-    'article_desc': articleDesc,
-    'article_type': articleType,
-    'note': note,
-    'measurements': measurements.map((e) => e.toJson()).toList(),
-    'materials': materials.toJson(),
-    'paired_serial_no': pairedSerialNo,
-    'unit_index': unitIndex,
-    'status': status,
-    'material_status': materialStatus,
-    'reff_line_no': reffLineNo,
-    // To JSON for New Fields
-    'remark': remark,
-    'remark_photos': remarkPhotos.map((e) => e.toJson()).toList(),
-    'note_psi': notePsi,
-    'remark_psi': remarkPsi,
-    'remark_photos_psi': remarkPhotosPsi.map((e) => e.toJson()).toList(),
-  };
+        'serial_no': serialNo,
+        'article_no': articleNo,
+        'article_desc': articleDesc,
+        'article_type': articleType,
+        'note': note,
+        'measurements': measurements.map((e) => e.toJson()).toList(),
+        'materials': materials.toJson(),
+        'paired_serial_no': pairedSerialNo,
+        'unit_index': unitIndex,
+        'status': status,
+        'material_status': materialStatus,
+        'reff_line_no': reffLineNo,
+        // To JSON for New Fields
+        'remark': remark,
+        'remark_photos': remarkPhotos.map((e) => e.toJson()).toList(),
+        'note_psi': notePsi,
+        'remark_psi': remarkPsi,
+        'remark_photos_psi': remarkPhotosPsi.map((e) => e.toJson()).toList(),
+      };
 }
 
 @HiveType(typeId: 205)
@@ -380,6 +382,14 @@ class InstallationEntryModel {
   final List<MaterialEvidenceModel> materialEvidences;
   @HiveField(12)
   final bool hasTransport;
+  @HiveField(13)
+  final InstallationPhotoModel? storeFrontPhoto;
+
+  // [FITUR BARU] Transport
+  @HiveField(14)
+  final double? transportDistance;
+  @HiveField(15)
+  final InstallationPhotoModel? transportEvidencePhoto;
 
   InstallationEntryModel({
     required this.transNo,
@@ -395,6 +405,9 @@ class InstallationEntryModel {
     this.units = const [],
     this.materialEvidences = const [],
     this.hasTransport = false,
+    this.storeFrontPhoto,
+    this.transportDistance = 0,
+    this.transportEvidencePhoto,
   });
 
   InstallationEntryModel copyWith({
@@ -411,22 +424,33 @@ class InstallationEntryModel {
     List<InstallationUnitModel>? units,
     List<MaterialEvidenceModel>? materialEvidences,
     bool? hasTransport,
+    InstallationPhotoModel? storeFrontPhoto,
+    bool clearStoreFrontPhoto = false,
+    double? transportDistance,
+    InstallationPhotoModel? transportEvidencePhoto,
+    bool clearTransportPhoto = false,
   }) {
     return InstallationEntryModel(
-      transNo: transNo ?? this.transNo,
-      vendorId: vendorId ?? this.vendorId,
-      vendorName: vendorName ?? this.vendorName,
-      technicianId: technicianId ?? this.technicianId,
-      technician1Name: technician1Name ?? this.technician1Name,
-      technician2Name: technician2Name ?? this.technician2Name,
-      technician3Name: technician3Name ?? this.technician3Name,
-      startDate: startDate ?? this.startDate,
-      finalNote: finalNote ?? this.finalNote,
-      finalPhotos: finalPhotos ?? this.finalPhotos,
-      units: units ?? this.units,
-      materialEvidences: materialEvidences ?? this.materialEvidences,
-      hasTransport: hasTransport ?? this.hasTransport,
-    );
+        transNo: transNo ?? this.transNo,
+        vendorId: vendorId ?? this.vendorId,
+        vendorName: vendorName ?? this.vendorName,
+        technicianId: technicianId ?? this.technicianId,
+        technician1Name: technician1Name ?? this.technician1Name,
+        technician2Name: technician2Name ?? this.technician2Name,
+        technician3Name: technician3Name ?? this.technician3Name,
+        startDate: startDate ?? this.startDate,
+        finalNote: finalNote ?? this.finalNote,
+        finalPhotos: finalPhotos ?? this.finalPhotos,
+        units: units ?? this.units,
+        materialEvidences: materialEvidences ?? this.materialEvidences,
+        hasTransport: hasTransport ?? this.hasTransport,
+        storeFrontPhoto: clearStoreFrontPhoto
+            ? null
+            : (storeFrontPhoto ?? this.storeFrontPhoto),
+        transportDistance: transportDistance ?? this.transportDistance,
+        transportEvidencePhoto: clearTransportPhoto
+            ? null
+            : (transportEvidencePhoto ?? this.transportEvidencePhoto));
   }
 }
 

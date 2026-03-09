@@ -1,11 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/installation/installation_bloc.dart';
 import 'package:salsa/blocs/installation/installation_event.dart';
 import 'package:salsa/blocs/installation/installation_state.dart';
 import 'package:salsa/models/installation/installation_detail_model.dart';
+import 'package:salsa/models/installation/installation_model.dart';
 
 // --- IMPORT SCREENS ---
 import 'package:salsa/screens/installation/installation_detail_list/indoor_list/indoor_list_screen.dart';
@@ -13,6 +20,12 @@ import 'package:salsa/screens/installation/installation_detail_list/outdoor_list
 import 'package:salsa/screens/installation/installation_detail_list/material_list/material_list_screen.dart';
 import 'package:salsa/screens/installation/installation_detail_list/material_evidence/material_evidence_screen.dart';
 import 'package:salsa/screens/installation/installation_summary/installation_summary_screen.dart';
+
+import '../../../../blocs/auth/auth_storage.dart';
+import '../../../../components/services/watermark_service.dart';
+import '../../../../components/shared_function.dart';
+import '../../../../components/widgets/full_screen_image_viewer.dart';
+import '../../../../models/common/captured_image_detail.dart';
 
 class InstallationDetailBodyMobile extends StatefulWidget {
   const InstallationDetailBodyMobile({super.key});
@@ -28,6 +41,34 @@ class _InstallationDetailBodyMobileState
   bool _showTechnician3 = false;
   final TextEditingController _dateController = TextEditingController();
   DateTime? _selectedDate;
+
+  // State Foto Toko
+  bool _isTakingStorePhoto = false;
+  CapturedImageDetail? _storeFrontPhoto;
+
+  @override
+  void initState() {
+    super.initState();
+    // [FIX 1] Tarik foto dari draft lokal saat halaman pertama kali dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final draft = context.read<InstallationBloc>().state.draftEntry;
+      if (draft?.storeFrontPhoto != null) {
+        setState(() {
+          _storeFrontPhoto = CapturedImageDetail(
+            imagePath: draft!.storeFrontPhoto!.imagePath,
+            timestamp: DateTime.tryParse(draft.storeFrontPhoto!.timestamp) ??
+                DateTime.now(),
+            technicianName: '',
+            deviceModel: draft.storeFrontPhoto!.deviceModel,
+            transNo: draft.transNo,
+            latitude: draft.storeFrontPhoto!.latitude,
+            longitude: draft.storeFrontPhoto!.longitude,
+            address: '',
+          );
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -82,6 +123,103 @@ class _InstallationDetailBodyMobileState
         ],
       ),
     );
+  }
+
+  // --- LOGIC FOTO TOKO & GPS ---
+  Future<void> _takeStoreFrontPhoto(
+      BuildContext context, InstallationHeaderDetailModel header) async {
+    // 1. CEK & REQUEST PERMISSION LOKASI
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        _showErrorSnack(context, "Akses lokasi ditolak! Wajib izinkan lokasi.");
+        return;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      _showErrorSnack(
+          context, "Akses lokasi diblokir permanen di pengaturan HP.");
+      return;
+    }
+
+    setState(() => _isTakingStorePhoto = true);
+
+    try {
+      // 2. AMBIL TITIK LOKASI (Akurasi Tinggi)
+      Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+
+      // 3. BUKA KAMERA
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1280,
+          maxHeight: 1280,
+          imageQuality: 85);
+
+      if (image != null) {
+        // 4. PROSES WATERMARK
+        final user = await AuthStorage.getUser();
+        final deviceModel = user['device_model'] ?? 'Mobile App';
+        final directory = await getApplicationDocumentsDirectory();
+        final String fileName =
+            'WM_STORE_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String targetPath = p.join(directory.path, fileName);
+
+        final timestamp = DateTime.now();
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
+        final req = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: header.transNo,
+          formattedDate: formattedDate,
+          technicianName: user['name'] ?? 'Teknisi',
+          deviceModel: deviceModel,
+          location: '${position.latitude}, ${position.longitude}',
+        );
+
+        final String? resultPath = await WatermarkService.processImage(req);
+
+        if (resultPath != null) {
+          // 5. SIMPAN KE STATE (Lengkap dengan Lat/Long)
+          setState(() {
+            _storeFrontPhoto = CapturedImageDetail(
+              imagePath: resultPath,
+              timestamp: timestamp,
+              technicianName: req.technicianName,
+              deviceModel: req.deviceModel,
+              transNo: header.transNo,
+              latitude: position.latitude,
+              longitude: position.longitude,
+              address: '',
+            );
+          });
+
+          // [FIX 2] Langsung tembak ke BLoC agar auto-save ke draft lokal
+          final photoModel = InstallationPhotoModel(
+            imagePath: resultPath,
+            imageFileName: resultPath.split('/').last,
+            timestamp: timestamp.toIso8601String(),
+            latitude: position.latitude,
+            longitude: position.longitude,
+            deviceModel: req.deviceModel,
+          );
+          if (mounted) {
+            context
+                .read<InstallationBloc>()
+                .add(SaveStoreFrontPhoto(photoModel));
+          }
+        }
+      }
+    } catch (e) {
+      _showErrorSnack(context, "Gagal memproses foto atau lokasi: $e");
+    } finally {
+      setState(() => _isTakingStorePhoto = false);
+    }
   }
 
   @override
@@ -145,8 +283,7 @@ class _InstallationDetailBodyMobileState
         final doneMaterial = draft?.units
                 .where((u) =>
                     u.articleType == 'OUT' &&
-                    u.materialStatus ==
-                        'COMPLETED' && // Pastikan logic COMPLETED
+                    u.materialStatus == 'COMPLETED' &&
                     u.materials.pipes.isNotEmpty)
                 .length ??
             0;
@@ -198,12 +335,15 @@ class _InstallationDetailBodyMobileState
                 (totalEvidenceNeeded == 0 && isMaterialComplete);
         bool isDateFilled = _dateController.text.isNotEmpty;
 
+        bool isStorePhotoFilled = draft?.storeFrontPhoto != null;
+
         // Final Status
         bool isReadyToSubmit = isIndoorComplete &&
             isOutdoorComplete &&
             isMaterialComplete &&
             isEvidenceComplete &&
-            isDateFilled;
+            isDateFilled &&
+            isStorePhotoFilled; // Masuk ke validasi final
 
         return Column(
           children: [
@@ -213,6 +353,8 @@ class _InstallationDetailBodyMobileState
                 child: Column(
                   children: [
                     _buildCustomerSection(detail.header),
+                    const SizedBox(height: 8),
+                    _buildStoreFrontPhotoSection(detail.header, draft!),
                     const SizedBox(height: 16),
                     _buildTicketSection(detail.header),
                     const SizedBox(height: 16),
@@ -324,6 +466,11 @@ class _InstallationDetailBodyMobileState
                         context, "⚠️ Tanggal pengerjaan wajib diisi!");
                     return;
                   }
+                  if (!isStorePhotoFilled) {
+                    _showErrorSnack(
+                        context, "⚠️ Foto Tampak Depan Toko wajib diambil!");
+                    return;
+                  }
                   if (!isIndoorComplete) {
                     _showErrorSnack(context, "⚠️ Unit Indoor belum selesai.");
                     return;
@@ -405,10 +552,8 @@ class _InstallationDetailBodyMobileState
     required VoidCallback onTap,
     bool isLocked = false,
   }) {
-    // ... Logic Helper tetap sama ...
     bool isDone = progress >= 1.0;
-    // ... dst ...
-    // (Biar hemat space, bagian ini sama persis dengan yang Akang kirim)
+
     final displayColor = isLocked ? Colors.grey : color;
     final displayIcon =
         isLocked ? Icons.lock : (isDone ? Icons.check_circle : icon);
@@ -667,5 +812,116 @@ class _InstallationDetailBodyMobileState
                 style: const TextStyle(fontWeight: FontWeight.w500))
           ])
         ]));
+  }
+
+  // Tambahkan parameter `InstallationEntryModel draft`
+  Widget _buildStoreFrontPhotoSection(
+      InstallationHeaderDetailModel header, InstallationEntryModel draft) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Foto Tampak Depan Toko",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 4),
+          const Text("Wajib difoto di lokasi (GPS akan tercatat otomatis)",
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 12),
+
+          // [FIX] BACA LANGSUNG DARI DRAFT BLOC
+          if (draft.storeFrontPhoto != null)
+            Stack(
+              children: [
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullScreenImageViewer(
+                          // Bikin object on-the-fly untuk preview
+                          imageDetail: CapturedImageDetail(
+                            imagePath: draft.storeFrontPhoto!.imagePath,
+                            timestamp: DateTime.tryParse(
+                                    draft.storeFrontPhoto!.timestamp) ??
+                                DateTime.now(),
+                            technicianName: '',
+                            deviceModel: draft.storeFrontPhoto!.deviceModel,
+                            transNo: header.transNo,
+                            latitude: draft.storeFrontPhoto!.latitude,
+                            longitude: draft.storeFrontPhoto!.longitude,
+                            address: '',
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(draft.storeFrontPhoto!.imagePath),
+                        width: double.infinity, height: 180, fit: BoxFit.cover),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: InkWell(
+                    // [FIX] Tombol hapus langsung nembak event null ke BLoC
+                    onTap: () => context
+                        .read<InstallationBloc>()
+                        .add(const SaveStoreFrontPhoto(null)),
+                    child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                            color: Colors.white, shape: BoxShape.circle),
+                        child: const Icon(Icons.close,
+                            color: Colors.red, size: 20)),
+                  ),
+                ),
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(4)),
+                    child: Text(
+                        "Lat: ${draft.storeFrontPhoto!.latitude}\nLon: ${draft.storeFrontPhoto!.longitude}",
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 10)),
+                  ),
+                )
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              height: 100,
+              child: OutlinedButton.icon(
+                onPressed: _isTakingStorePhoto
+                    ? null
+                    : () => _takeStoreFrontPhoto(context, header),
+                icon: _isTakingStorePhoto
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.camera_alt, color: Colors.blue),
+                label: Text(
+                    _isTakingStorePhoto ? "Memproses..." : "Ambil Foto Toko"),
+                style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8))),
+              ),
+            )
+        ],
+      ),
+    );
   }
 }

@@ -289,6 +289,12 @@ class InstallationRepository {
       "remark": remark,
       "created_by": createdBy,
       "has_transport": draft.hasTransport,
+      if (draft.hasTransport && draft.storeFrontPhoto != null)
+        "store_front_image": mapPhoto(draft.storeFrontPhoto),
+      if (draft.hasTransport)
+        "transport_distance": draft.transportDistance,
+      if (draft.hasTransport)
+        "transport_distance_image": draft.transportEvidencePhoto,
       "units_indoor": unitsIndoor,
       "units_outdoor": unitsOutdoor,
       "materials": materialsPayload,
@@ -298,7 +304,6 @@ class InstallationRepository {
     JsonEncoder encoder = const JsonEncoder.withIndent('  ');
     log("====== REQUEST BODY FINAL ======");
     log(encoder.convert(requestBody));
-    log(encoder.convert(draft.units));
 
     Uri uri = getUrl(pathUrl: 'installation/submitted');
     final response = await http.post(uri,

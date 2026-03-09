@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 
 // Bloc & Models
 import 'package:salsa/blocs/installation/installation_bloc.dart';
@@ -10,11 +15,14 @@ import 'package:salsa/blocs/installation/installation_event.dart';
 import 'package:salsa/blocs/installation/installation_state.dart';
 import 'package:salsa/models/installation/installation_model.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
-import 'package:salsa/blocs/upload_progress/upload_progress_cubit.dart'; // [WAJIB IMPORT INI]
+import 'package:salsa/blocs/upload_progress/upload_progress_cubit.dart';
 
 // Widgets
 import 'package:salsa/components/widgets/full_screen_image_viewer.dart';
-import 'package:salsa/components/shared_widgets.dart'; // Pastikan UploadProgressDialog ada disini atau import manual
+import 'package:salsa/components/shared_widgets.dart';
+import '../../../../blocs/auth/auth_storage.dart';
+import '../../../../components/services/watermark_service.dart';
+import '../../../../models/installation/installation_detail_model.dart';
 
 class InstallationSummaryBodyMobile extends StatefulWidget {
   final String transNo;
@@ -33,6 +41,8 @@ class _InstallationSummaryBodyMobileState
 
   bool _isSubmitting = false;
   bool _hasReachedBottom = false;
+  bool _isAgreed = false;
+  bool _isProcessingTransportPhoto = false; // [TAMBAHAN] State loading foto
 
   @override
   void initState() {
@@ -65,9 +75,173 @@ class _InstallationSummaryBodyMobileState
     }
   }
 
+  // --- [TAMBAHAN] FUNGSI AMBIL SCREENSHOT DARI GALERI + GPS LIVE ---
+  Future<void> _pickTransportScreenshot(
+      InstallationHeaderDetailModel header) async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Akses lokasi ditolak! Wajib izinkan lokasi."),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() => _isProcessingTransportPhoto = true);
+
+    try {
+      final picker = ImagePicker();
+      final XFile? image =
+          await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+
+      if (image != null) {
+        // --- [TAMBAHAN PAGAR 1] CEK UMUR FOTO ---
+        final File imgFile = File(image.path);
+        final DateTime lastModified = await imgFile.lastModified();
+        final Duration photoAge = DateTime.now().difference(lastModified);
+
+        // // Jika umur foto lebih dari 12 jam (bisa Akang atur), tolak mentah-mentah!
+        // print("photoAge.inHours");
+        // print(photoAge.inHours);
+        // if (photoAge.inHours > 12) {
+        //   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        //       content: Text(
+        //           "⚠️ Screenshot kadaluarsa! Harap ambil screenshot rute hari ini."),
+        //       backgroundColor: Colors.red));
+        //   setState(() => _isProcessingTransportPhoto = false);
+        //   return; // Hentikan proses
+        // }
+        // // ----------------------------------------
+
+        Position position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high);
+        final user = await AuthStorage.getUser();
+        final deviceModel = user['device_model'] ?? 'Mobile App';
+
+        final directory = await getApplicationDocumentsDirectory();
+        final String fileName =
+            'WM_TRANS_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String targetPath = p.join(directory.path, fileName);
+
+        final timestamp = DateTime.now();
+        final zone =
+            "WIB"; // Sederhanakan timezone jika function Akang belum ter-import
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
+        final req = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: header.transNo,
+          formattedDate: formattedDate,
+          technicianName: user['name'] ?? 'Teknisi',
+          deviceModel: deviceModel,
+          location: '${position.latitude}, ${position.longitude}',
+        );
+
+        final String? resultPath = await WatermarkService.processImage(req);
+
+        if (resultPath != null) {
+          final photoModel = InstallationPhotoModel(
+            imagePath: resultPath,
+            imageFileName: resultPath.split('/').last,
+            timestamp: timestamp.toIso8601String(),
+            latitude: position.latitude,
+            longitude: position.longitude,
+            deviceModel: deviceModel,
+          );
+
+          if (mounted) {
+            final currentDraft =
+                context.read<InstallationBloc>().state.draftEntry;
+            context.read<InstallationBloc>().add(UpdateTransportData(
+                  hasTransport: true,
+                  distance: currentDraft?.transportDistance,
+                  photo: photoModel,
+                ));
+          }
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Gagal memproses screenshot: $e"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessingTransportPhoto = false);
+    }
+  }
+
+  Future<void> _submitFinal() async {
+    final draft = context.read<InstallationBloc>().state.draftEntry;
+
+    // Validasi Cegatan Transport
+    if (draft != null && draft.hasTransport) {
+      if (draft.transportDistance == null || draft.transportDistance! <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Jarak tempuh transport wajib diisi!"),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      if (draft.transportEvidencePhoto == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Screenshot rute Google Maps wajib diupload!"),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
+    final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+                title: const Text("Konfirmasi Submit"),
+                content: const Text(
+                    "Pastikan data sudah benar. Data akan dikirim ke server dan tidak dapat diubah lagi."),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text("Cek Lagi")),
+                  ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1565C0)),
+                      child: const Text("Ya, Submit",
+                          style: TextStyle(color: Colors.white)))
+                ]));
+    if (confirm != true) return;
+
+    setState(() => _isSubmitting = true);
+
+    if (mounted) {
+      context.read<InstallationBloc>().add(SubmitInstallationFinal(
+            transNo: widget.transNo,
+            remark: _remarkController.text,
+            progressCubit: context.read<UploadProgressCubit>(),
+          ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<InstallationBloc, InstallationState>(
+      listenWhen: (previous, current) => previous.status != current.status,
       listener: (context, state) {
         // 1. HANDLE PROGRESS UPLOAD
         if (state.status == InstallationStatus.uploading) {
@@ -150,12 +324,18 @@ class _InstallationSummaryBodyMobileState
 
         // 4. HANDLE FAILURE
         else if (state.status == InstallationStatus.failure) {
+          print(state.status);
           setState(() => _isSubmitting = false);
           Navigator.of(context, rootNavigator: true).popUntil(
               (route) => route.settings.name != 'UploadProgressDialog');
 
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(state.errorMessage), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.errorMessage),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
       },
       builder: (context, state) {
@@ -174,6 +354,8 @@ class _InstallationSummaryBodyMobileState
                   children: [
                     _buildHeaderInfo(state),
                     const SizedBox(height: 20),
+                    _buildStoreFrontPhotoSummary(draft),
+                    const SizedBox(height: 20),
                     const Text("Review Per Unit",
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -184,7 +366,8 @@ class _InstallationSummaryBodyMobileState
                     const SizedBox(height: 12),
                     _buildTotalMaterialSummary(draft),
                     const SizedBox(height: 16),
-                    _buildTransportSwitch(draft),
+                    _buildTransportSwitch(draft, state.taskDetail?.header),
+                    // [DIMODIFIKASI] Lempar header ke parameter
                     const Divider(height: 40, thickness: 1),
                     const Text("Catatan Akhir (Opsional)",
                         style: TextStyle(
@@ -231,14 +414,38 @@ class _InstallationSummaryBodyMobileState
                                 fontSize: 11,
                                 color: Colors.orange,
                                 fontStyle: FontStyle.italic)),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: const Color(0xFF1565C0),
+                          title: const Text(
+                            "Saya menyatakan bahwa data, foto, dan jarak transport yang diinput sudah benar sesuai kondisi lapangan.",
+                            style:
+                                TextStyle(fontSize: 12, color: Colors.black87),
+                          ),
+                          value: _isAgreed,
+                          onChanged: (val) {
+                            setState(() => _isAgreed = val ?? false);
+                          },
+                        ),
                       ),
+
+                    // Tombol Submit
                     SizedBox(
                       height: 48,
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: (_hasReachedBottom && !_isSubmitting)
-                            ? _submitFinal
-                            : null,
+                        // [MODIFIKASI] Tombol nyala kalau sudah scroll mentok DAN checkbox dicentang
+                        onPressed:
+                            (_hasReachedBottom && _isAgreed && !_isSubmitting)
+                                ? _submitFinal
+                                : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1565C0),
                           disabledBackgroundColor: Colors.grey.shade300,
@@ -598,18 +805,22 @@ class _InstallationSummaryBodyMobileState
               const Text("Tambahan:",
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(height: 5),
-                  if (outdoor.materials.mountingType == 'NONE')
-                    const Text("- Tidak ada material tambahan -",
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.grey))
-                  else
-                    Text(" - ${outdoor.materials.mountingType}", style: TextStyle(
-                        fontSize: 12,)),
-                  if (outdoor.materials.hasJasaPerapihan)
-                    Text(" - JASA PERAPIHAN", style: TextStyle(
-                      fontSize: 12,)),
+              if (outdoor.materials.mountingType == 'NONE')
+                const Text("- Tidak ada material tambahan -",
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.grey))
+              else
+                Text(" - ${outdoor.materials.mountingType}",
+                    style: const TextStyle(
+                      fontSize: 12,
+                    )),
+              if (outdoor.materials.hasJasaPerapihan)
+                const Text(" - JASA PERAPIHAN",
+                    style: TextStyle(
+                      fontSize: 12,
+                    )),
               const SizedBox(height: 16),
               if (relatedEvidences.isNotEmpty) ...[
                 const Text("Foto Bukti Merk:",
@@ -776,54 +987,254 @@ class _InstallationSummaryBodyMobileState
                 border: Border.all(color: Colors.grey.shade300))));
   }
 
-  Widget _buildTransportSwitch(InstallationEntryModel draft) {
+  Widget _buildStoreFrontPhotoSummary(InstallationEntryModel draft) {
+    if (draft.storeFrontPhoto == null) return const SizedBox.shrink();
+
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200)),
-      child: SwitchListTile(
-        title: const Text("Biaya Transport",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: const Text("Centang jika ada biaya transport kunjungan",
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
-        activeColor: const Color(0xFF1565C0),
-        value: draft.hasTransport,
-        onChanged: (val) {
-          context.read<InstallationBloc>().add(UpdateTransportStatus(val));
-        },
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16))),
+            child: Row(
+              children: [
+                Icon(Icons.storefront, color: Colors.green.shade800, size: 18),
+                const SizedBox(width: 8),
+                Text("Foto Tampak Depan Toko",
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade900,
+                        fontSize: 13)),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullScreenImageViewer(
+                          imageDetail: CapturedImageDetail(
+                            imagePath: draft.storeFrontPhoto!.imagePath,
+                            timestamp: DateTime.tryParse(
+                                    draft.storeFrontPhoto!.timestamp) ??
+                                DateTime.now(),
+                            technicianName: '',
+                            deviceModel: draft.storeFrontPhoto!.deviceModel,
+                            transNo: widget.transNo,
+                            latitude: draft.storeFrontPhoto!.latitude,
+                            longitude: draft.storeFrontPhoto!.longitude,
+                            address: '',
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(draft.storeFrontPhoto!.imagePath),
+                      width: double.infinity,
+                      height: 160,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: Colors.red),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        "Lat: ${draft.storeFrontPhoto!.latitude}  |  Lon: ${draft.storeFrontPhoto!.longitude}",
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
 
-  Future<void> _submitFinal() async {
-    final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-                title: const Text("Konfirmasi Submit"),
-                content: const Text(
-                    "Pastikan data sudah benar. Data akan dikirim ke server dan tidak dapat diubah lagi."),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text("Cek Lagi")),
-                  ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1565C0)),
-                      child: const Text("Ya, Submit",
-                          style: TextStyle(color: Colors.white)))
-                ]));
-    if (confirm != true) return;
-
-    setState(() => _isSubmitting = true);
-
-    if (mounted) {
-      context.read<InstallationBloc>().add(SubmitInstallationFinal(
-            transNo: widget.transNo,
-            remark: _remarkController.text,
-            progressCubit: context.read<UploadProgressCubit>(),
-          ));
-    }
+  // --- [DIMODIFIKASI] WIDGET TRANSPORT DENGAN INPUT JARAK & FOTO ---
+  Widget _buildTransportSwitch(
+      InstallationEntryModel draft, InstallationHeaderDetailModel? header) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Ada Biaya Transport?",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              Switch(
+                value: draft.hasTransport,
+                activeColor: Colors.blue,
+                onChanged: (val) {
+                  context.read<InstallationBloc>().add(UpdateTransportData(
+                        hasTransport: val,
+                        distance: val ? draft.transportDistance : null,
+                        photo: val ? draft.transportEvidencePhoto : null,
+                      ));
+                },
+              ),
+            ],
+          ),
+          if (draft.hasTransport) ...[
+            const Divider(height: 24),
+            TextFormField(
+              initialValue: (draft.transportDistance != null &&
+                      draft.transportDistance! > 0)
+                  ? (draft.transportDistance! % 1 == 0
+                      ? draft.transportDistance!.toInt().toString()
+                      : draft.transportDistance.toString())
+                  : '',
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              // inputFormatters: [
+              //   TextInputFormatter.withFunction((oldValue, newValue) {
+              //     return newValue.copyWith(text: newValue.text.replaceAll(',', '.'));
+              //   }),
+              //   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              // ],
+              decoration: InputDecoration(
+                labelText: "Jarak Tempuh (KM)",
+                hintText: "Contoh: 12.5",
+                prefixIcon: const Icon(Icons.add_road, color: Colors.blue),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                isDense: true,
+              ),
+              onChanged: (val) {
+                final distance = val.trim().isEmpty
+                    ? null
+                    : double.tryParse(val.replaceAll(',', '.'));
+                context.read<InstallationBloc>().add(UpdateTransportData(
+                      hasTransport: true,
+                      distance: distance,
+                      photo: draft.transportEvidencePhoto,
+                    ));
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text("Screenshot Rute Google Maps",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            if (draft.transportEvidencePhoto != null)
+              Stack(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => FullScreenImageViewer(
+                                    imageDetail: CapturedImageDetail(
+                                      imagePath: draft
+                                          .transportEvidencePhoto!.imagePath,
+                                      timestamp: DateTime.tryParse(draft
+                                              .transportEvidencePhoto!
+                                              .timestamp) ??
+                                          DateTime.now(),
+                                      technicianName: '',
+                                      deviceModel: draft
+                                          .transportEvidencePhoto!.deviceModel,
+                                      transNo: widget.transNo,
+                                      latitude: draft
+                                          .transportEvidencePhoto!.latitude,
+                                      longitude: draft
+                                          .transportEvidencePhoto!.longitude,
+                                      address: '',
+                                    ),
+                                  )));
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                          File(draft.transportEvidencePhoto!.imagePath),
+                          width: double.infinity,
+                          height: 150,
+                          fit: BoxFit.cover),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: InkWell(
+                      onTap: () {
+                        context.read<InstallationBloc>().add(
+                            UpdateTransportData(
+                                hasTransport: true,
+                                distance: draft.transportDistance,
+                                photo: null));
+                      },
+                      child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                              color: Colors.white, shape: BoxShape.circle),
+                          child: const Icon(Icons.close,
+                              color: Colors.red, size: 20)),
+                    ),
+                  )
+                ],
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: _isProcessingTransportPhoto || header == null
+                      ? null
+                      : () => _pickTransportScreenshot(header),
+                  icon: _isProcessingTransportPhoto
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.image, color: Colors.blue),
+                  label: Text(_isProcessingTransportPhoto
+                      ? "Memproses..."
+                      : "Upload Screenshot dari Galeri"),
+                ),
+              ),
+          ]
+        ],
+      ),
+    );
   }
 }

@@ -218,15 +218,41 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
 
       if (result.allSuccess) {
         try {
-          final response =
-              await serviceRepo.confirmUploadSuccess(event.transNo);
+          final response = await serviceRepo.confirmUploadSuccess(event.transNo);
 
           if (response['status'] == 'OK') {
+
+            // --- [AWAL PERBAIKAN: EKSEKUSI MATI DATA DARI HIVE] ---
+
+            // 1. Hapus kartu pending dari Failed Uploads Box (Sesuai Modulnya)
+            String? targetBoxName = _getBoxNameForModule(moduleType);
+            if (targetBoxName != null) {
+              Box<Map<dynamic, dynamic>> box;
+              if (Hive.isBoxOpen(targetBoxName)) {
+                box = Hive.box<Map<dynamic, dynamic>>(targetBoxName);
+              } else {
+                box = await Hive.openBox<Map<dynamic, dynamic>>(targetBoxName);
+              }
+              await box.delete(event.transNo);
+            }
+
+            // 2. Khusus Installation: Hapus juga Draft Utama biar HP teknisi nggak penuh
+            if (moduleType == 'INSTALLATION') {
+              Box<InstallationEntryModel> draftBox;
+              if (Hive.isBoxOpen(kInstallationDraftBox)) {
+                draftBox = Hive.box<InstallationEntryModel>(kInstallationDraftBox);
+              } else {
+                draftBox = await Hive.openBox<InstallationEntryModel>(kInstallationDraftBox);
+              }
+              await draftBox.delete(event.transNo);
+            }
+
+            // --- [AKHIR PERBAIKAN] ---
+
             await clearTransactionData(event.transNo);
             // await _addToConfirmationQueueIfNeeded(event.transNo, moduleType);
 
-            final updatedList =
-            List<Map<String, dynamic>>.from(state.failedTransactions)
+            final updatedList = List<Map<String, dynamic>>.from(state.failedTransactions)
               ..removeWhere((t) => t['transNo'] == event.transNo);
 
             emit(state.copyWith(

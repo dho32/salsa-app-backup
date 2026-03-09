@@ -353,6 +353,8 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     final rawSuggestions = state.suggestions;
     final enteredStoreCode = _storeCodeController.text.trim().toUpperCase();
 
+    print("test");
+    print(enteredStoreCode);
     if (rawSuggestions.isEmpty) {
       _showSnackBar('Transaksi tidak ditemukan.', Colors.red);
       return;
@@ -361,6 +363,7 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     // 🔥 4. CROSS-CHECK KODE TOKO DENGAN DATA API
     // Kita filter hanya data yang Kode Tokonya SAMA PERSIS dengan inputan Teknisi
     final suggestions = rawSuggestions.where((s) {
+      print(s.customerCode.trim().toUpperCase());
       return s.customerCode.trim().toUpperCase() == enteredStoreCode;
     }).toList();
 
@@ -506,7 +509,7 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       destinationScreen =
           ProofOfServiceDetailScreen(transNo: suggestion.transNo);
     } else if (suggestion.type == 'INSTALLATION' ||
-        suggestion.type == 'INSTALLATION_WH') {
+        suggestion.type == 'INSTALLATION') {
       destinationScreen = InstallationDetailScreen(
         transNo: suggestion.transNo,
         vendorId: widget.userData['maintenance_by']!,

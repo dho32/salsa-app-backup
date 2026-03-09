@@ -97,10 +97,8 @@ class InstallationTargetUnitModel {
       description: json['article_name_unit'] ?? '',
       unitType: json['unit_type'] ?? '',
       unitIndex: parseInt(json['unit_index']),
-      reffLineNo: json['line_no'].toString(),
-
       // [FIX] Ubah key dari 'reff_line_no' menjadi 'line_no' sesuai API
-      // reffLineNo: (json['line_no'] ?? json['reff_line_no'])?.toString() ?? '',
+      reffLineNo: (json['line_no'] ?? json['reff_line_no'])?.toString() ?? '',
     );
   }
 }

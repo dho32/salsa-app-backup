@@ -304,13 +304,11 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       articleDesc: widget.target.description,
       articleType: 'IN',
       serialNo: sn,
-
-      // FIELD LAMA (Hanya dropdown, jangan digabung " - " lagi)
       note: noteDropdown,
 
       measurements: measurements,
       materials: InstallationMaterialsModel(),
-      pairedSerialNo: null,
+      pairedSerialNo: widget.existingData?.pairedSerialNo,
       status: currentStatus,
 
       // FIELD BARU
@@ -318,7 +316,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       remarkPhotos: remarkPhotosModel,
 
       // Keep Reff Line No
-      reffLineNo: widget.existingData?.reffLineNo ?? '',
+      reffLineNo: widget.target.reffLineNo,
     );
   }
 
@@ -494,8 +492,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
         }
       }
 
-      if (_installPhotos.isEmpty) {
-        _showErrorSnack("Wajib ambil minimal 1 Foto Dokumentasi Pemasangan!");
+      if (_installPhotos.length < 3) {
+        _showErrorSnack("Wajib ambil minimal 3 Foto Dokumentasi Pemasangan!");
         return;
       }
     }

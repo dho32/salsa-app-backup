@@ -12,6 +12,7 @@ abstract class InstallationEvent extends Equatable {
 // --- INITIALIZATION ---
 class LoadInstallationData extends InstallationEvent {
   final String transNo;
+
   const LoadInstallationData(this.transNo);
 
   @override
@@ -135,4 +136,25 @@ class SubmitInstallationFinal extends InstallationEvent {
 
   @override
   List<Object?> get props => [transNo, remark, progressCubit];
+}
+
+class SaveStoreFrontPhoto extends InstallationEvent {
+  final InstallationPhotoModel? photo;
+
+  const SaveStoreFrontPhoto(this.photo);
+
+  @override
+  List<Object?> get props => [photo];
+}
+
+class UpdateTransportData extends InstallationEvent {
+  final bool hasTransport;
+  final double? distance;
+  final InstallationPhotoModel? photo;
+
+  const UpdateTransportData({
+    required this.hasTransport,
+    this.distance,
+    this.photo,
+  });
 }

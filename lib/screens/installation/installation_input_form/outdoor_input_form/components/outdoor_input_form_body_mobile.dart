@@ -583,7 +583,7 @@ class _OutdoorInputFormBodyMobileState
       materials: InstallationMaterialsModel(),
       pairedSerialNo: autoPairedSN,
       status: currentStatus,
-      reffLineNo: widget.existingData?.reffLineNo ?? '',
+      reffLineNo: widget.target.reffLineNo,
     );
   }
 
@@ -704,8 +704,8 @@ class _OutdoorInputFormBodyMobileState
         }
       }
 
-      if (_installPhotos.isEmpty) {
-        _showErrorSnack("Wajib ambil minimal 1 Foto Dokumentasi Pemasangan!");
+      if (_installPhotos.length < 4) {
+        _showErrorSnack("Wajib ambil minimal 4 Foto Dokumentasi Pemasangan!");
         return;
       }
     }

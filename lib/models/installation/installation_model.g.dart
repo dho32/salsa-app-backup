@@ -311,13 +311,16 @@ class InstallationEntryModelAdapter
       units: (fields[10] as List).cast<InstallationUnitModel>(),
       materialEvidences: (fields[11] as List).cast<MaterialEvidenceModel>(),
       hasTransport: fields[12] as bool,
+      storeFrontPhoto: fields[13] as InstallationPhotoModel?,
+      transportDistance: fields[14] as double?,
+      transportEvidencePhoto: fields[15] as InstallationPhotoModel?,
     );
   }
 
   @override
   void write(BinaryWriter writer, InstallationEntryModel obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -343,7 +346,13 @@ class InstallationEntryModelAdapter
       ..writeByte(11)
       ..write(obj.materialEvidences)
       ..writeByte(12)
-      ..write(obj.hasTransport);
+      ..write(obj.hasTransport)
+      ..writeByte(13)
+      ..write(obj.storeFrontPhoto)
+      ..writeByte(14)
+      ..write(obj.transportDistance)
+      ..writeByte(15)
+      ..write(obj.transportEvidencePhoto);
   }
 
   @override
