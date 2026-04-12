@@ -39,11 +39,8 @@ class ServiceCallSubmittedBloc
       String transNo, List<ProblemSourceModel> problemSources) async {
     try {
       log("--- 🏁 Memulai Pengecekan AHO untuk $transNo ---");
-      final box = await Hive.openBox<ServiceCallValidationEntryModel>(
-          kServiceCallHiveBox);
+      final box = await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       final entries = box.values.where((entry) => entry.transNo == transNo);
-
-      if (entries.isEmpty) return false;
 
       if (entries.isEmpty) {
         log("🔴 GAGAL: Tidak ada entri Hive ditemukan untuk $transNo");
@@ -51,7 +48,6 @@ class ServiceCallSubmittedBloc
       }
       log("✅ Ditemukan ${entries.length} entri di Hive.");
 
-      // Buat "peta" solusi untuk pencarian cepat
       final Map<String, Solution> solutionMap = {};
       for (var source in problemSources) {
         for (var problem in source.problems) {
@@ -61,34 +57,20 @@ class ServiceCallSubmittedBloc
         }
       }
 
-      log("✅ Peta solusi (solutionMap) dibuat dengan ${solutionMap.length} total solusi.");
-
-      // Cek setiap entri di Hive
       for (var entry in entries) {
-        log("--- 🕵️ Menganalisis Entri: ${entry.serialNo} ---");
         for (var problem in entry.problems) {
           for (var solutionId in problem.solutionIds) {
             final solution = solutionMap[solutionId];
 
             if (solution != null) {
-              // Log paling penting ada di sini
-              log("    > Mengecek SolutionID: $solutionId | Nama: ${solution.solutionName} | AHO Flag: '${solution.ahoFlag}'");
-
               if (solution.ahoFlag.toLowerCase().trim() == 'true') {
-                // Tambahkan .trim()
-                log("    🎉🎉🎉 DITEMUKAN AHO TRUE! Hentikan pencarian.");
-                return true; // Ditemukan!
+                return true;
               }
-            } else {
-              // Log error jika data tidak sinkron
-              log("    ⚠️ PERINGATAN: SolutionID $solutionId dari Hive tidak ditemukan di Peta Solusi (solutionMap).");
             }
           }
         }
       }
-
-      log("--- 🛑 Selesai Pengecekan: Tidak ada AHO flag 'true' yang ditemukan. ---");
-      return false; // Tidak ditemukan
+      return false;
     } catch (e, stacktrace) {
       log("Error checking AHO flag: $e", error: e, stackTrace: stacktrace);
       return false;
@@ -96,9 +78,9 @@ class ServiceCallSubmittedBloc
   }
 
   Future<void> _onScFinalValidationRequested(
-    ScFinalValidationRequested event,
-    Emitter<ServiceCallSubmittedState> emit,
-  ) async {
+      ScFinalValidationRequested event,
+      Emitter<ServiceCallSubmittedState> emit,
+      ) async {
     emit(ScFinalValidationLoading());
     final bool needsAho = await _checkIfAhoIsNeeded(
       event.transNo,
@@ -108,40 +90,68 @@ class ServiceCallSubmittedBloc
     if (needsAho) {
       emit(ScProceedToAhoDialog(event.formState, initialAho: _cachedAhoNumber));
     } else {
-      emit(ScProceedToOtpDialog(event.formState,
-          ahoNumber: null));
+      emit(ScProceedToOtpDialog(event.formState, ahoNumber: null));
     }
   }
 
   Future<void> _onAhoInputCompleted(
-    AhoInputCompleted event,
-    Emitter<ServiceCallSubmittedState> emit,
-  ) async {
+      AhoInputCompleted event,
+      Emitter<ServiceCallSubmittedState> emit,
+      ) async {
     _cachedAhoNumber = event.ahoNumber;
-    // Setelah AHO diisi, baru kita lanjut ke OTP
     emit(ScProceedToOtpDialog(event.formState, ahoNumber: event.ahoNumber));
   }
 
   Future<void> _onSubmitValidation(
-    SubmitValidation event,
-    Emitter<ServiceCallSubmittedState> emit,
-  ) async {
+      SubmitValidation event,
+      Emitter<ServiceCallSubmittedState> emit,
+      ) async {
     emit(ValidationSubmitting());
     try {
-      final box = await Hive.openBox<ServiceCallValidationEntryModel>(
-          kServiceCallHiveBox);
-      final entries =
-          box.values.where((entry) => entry.transNo == event.transNo).toList();
+      final box = await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+      final entries = box.values.where((entry) => entry.transNo == event.transNo).toList();
 
       if (entries.isEmpty) {
         emit(ValidationFailure("Data validasi tidak ditemukan."));
         return;
       }
 
+      // 🔥 --- SUNTIKAN 1: SATPAM ANTI-ZOMBIE (CEK UMUR FOTO) --- 🔥
+      for (final entry in entries) {
+        final allPhotos = [
+          ...entry.imagePathsBefore,
+          ...entry.imagePathsAfter,
+        ];
+
+        if (entry.remarkPhotosIndoorAfter != null) allPhotos.addAll(entry.remarkPhotosIndoorAfter!);
+        if (entry.remarkPhotosOutdoorAfter != null) allPhotos.addAll(entry.remarkPhotosOutdoorAfter!);
+        if (entry.remarkPhotosOutdoorPsiAfter != null) allPhotos.addAll(entry.remarkPhotosOutdoorPsiAfter!);
+
+        for (final m in entry.measurementsBefore) {
+          if (m.capturedImage != null) allPhotos.add(m.capturedImage!);
+        }
+        for (final m in entry.measurementsAfter) {
+          if (m.capturedImage != null) allPhotos.add(m.capturedImage!);
+        }
+
+        // Sapu bersih foto basi
+        for (final photo in allPhotos) {
+          // Jika umur foto > 3 hari (72 jam), ini PASTI foto nyangkut bulan lalu!
+          if (DateTime.now().difference(photo.timestamp).inHours > 72) {
+            emit(ValidationFailure(
+                "🚨 DITEMUKAN DATA USANG PADA UNIT ${entry.serialNo}!\n\n"
+                    "Sistem mendeteksi foto yang diambil beberapa hari/bulan yang lalu.\n"
+                    "Mohon KEMBALI, Hapus Data/Foto Lama, lalu isi ulang kembali."
+            ));
+            return; // BLOKIR PENGIRIMAN KE SERVER!
+          }
+        }
+      }
+      // 🔥 ---------------------------------------------------- 🔥
+
       final payload = entries.map((entry) => entry.toJson()).toList();
 
-      final infoBox =
-          await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
+      final infoBox = await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
       final normalizedKey = _normalizeHiveKey(event.transNo);
       final transactionInfo = infoBox.get(normalizedKey);
 
@@ -172,6 +182,16 @@ class ServiceCallSubmittedBloc
               _cachedAhoNumber = '';
               await clearTransactionData(event.transNo);
 
+              // 🔥 --- SUNTIKAN 2: SAPU BERSIH ZOMBIE MANUAL --- 🔥
+              final keysToDelete = box.keys.where((k) {
+                final e = box.get(k);
+                return e?.transNo == event.transNo;
+              }).toList();
+              if (keysToDelete.isNotEmpty) {
+                await box.deleteAll(keysToDelete);
+              }
+              // 🔥 ----------------------------------------------- 🔥
+
               emit(ValidationSuccess(transNo: event.transNo, presignedDetail: []));
             } else {
               emit(ValidationFailure("Foto terunggah, tapi gagal update status server: ${response['message']}"));
@@ -180,8 +200,7 @@ class ServiceCallSubmittedBloc
             emit(ValidationFailure("Gagal konfirmasi status ke server: $e"));
           }
         } else {
-          final cacheBox = Hive.box<Map<dynamic, dynamic>>(
-              kServiceCallValidationPartialHiveBox);
+          final cacheBox = Hive.box<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
             'failedFiles': uploadResult.failedFiles,
@@ -206,9 +225,9 @@ class ServiceCallSubmittedBloc
   }
 
   Future<void> _onRetryUpload(
-    RetryUpload event,
-    Emitter<ServiceCallSubmittedState> emit,
-  ) async {
+      RetryUpload event,
+      Emitter<ServiceCallSubmittedState> emit,
+      ) async {
     emit(ValidationSubmitting());
 
     try {
@@ -227,23 +246,29 @@ class ServiceCallSubmittedBloc
             _cachedAhoNumber = '';
             await clearTransactionData(event.transNo);
 
+            // 🔥 SAPU BERSIH MANUAL SAAT RETRY SUKSES 🔥
+            final box = await Hive.openBox<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
+            final keysToDelete = box.keys.where((k) {
+              final e = box.get(k);
+              return e?.transNo == event.transNo;
+            }).toList();
+            if (keysToDelete.isNotEmpty) await box.deleteAll(keysToDelete);
+            // 🔥 ------------------------------------- 🔥
+
             // Berhasil total
             emit(ValidationSuccess(
               transNo: event.transNo,
               presignedDetail: event.presignedDetail,
             ));
           } else {
-            // S3 Berhasil tapi API Gagal
             emit(ValidationFailure("Foto terunggah, tapi gagal update status server: ${response['message']}"));
           }
         } catch (e) {
           emit(ValidationFailure("Gagal konfirmasi ke server: $e"));
         }
       } else {
-        final cacheBox = Hive.box<Map<dynamic, dynamic>>(
-            kServiceCallValidationPartialHiveBox);
-        final oldData =
-            Map<String, dynamic>.from(cacheBox.get(event.transNo) ?? {});
+        final cacheBox = Hive.box<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox);
+        final oldData = Map<String, dynamic>.from(cacheBox.get(event.transNo) ?? {});
         await cacheBox.put(event.transNo, {
           ...oldData,
           'transNo': event.transNo,
@@ -265,24 +290,21 @@ class ServiceCallSubmittedBloc
   }
 
   Future<void> _onLoadValidationPartial(
-    LoadValidationPartial event,
-    Emitter<ServiceCallSubmittedState> emit,
-  ) async {
+      LoadValidationPartial event,
+      Emitter<ServiceCallSubmittedState> emit,
+      ) async {
     try {
-      final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(
-          kServiceCallValidationPartialHiveBox); // Gunakan tipe yang benar
+      final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox);
       final cached = cacheBox.get(event.transNo);
 
       if (cached != null) {
-        final Map<String, dynamic> typedCached =
-            Map<String, dynamic>.from(cached);
+        final Map<String, dynamic> typedCached = Map<String, dynamic>.from(cached);
         emit(ValidationUploadPartial(
           successCount: 0,
           failureCount: (typedCached['failedFiles'] as List?)?.length ?? 0,
           failedFiles: List<String>.from(typedCached['failedFiles'] ?? []),
           transNo: event.transNo,
-          presignedDetail:
-              List<dynamic>.from(typedCached['presignedDetail'] ?? []),
+          presignedDetail: List<dynamic>.from(typedCached['presignedDetail'] ?? []),
         ));
       }
     } catch (e) {

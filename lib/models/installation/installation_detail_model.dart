@@ -1,5 +1,7 @@
 import 'package:hive/hive.dart';
 
+import '../common/measurement_limits.dart';
+
 part 'installation_detail_model.g.dart';
 
 // --- TYPE ID: 210 - 220 ---
@@ -204,6 +206,8 @@ class InstallationDetailModel {
   final List<InstallationOptionItemModel> noteOutdoorOptions;
   @HiveField(5)
   final List<InstallationOptionItemModel> noteOutdoorPSIOptions;
+  @HiveField(6)
+  final Map<String, MeasurementLimits>? customLimitsAfter;
 
   InstallationDetailModel({
     required this.header,
@@ -212,14 +216,30 @@ class InstallationDetailModel {
     required this.noteIndoorOptions,
     required this.noteOutdoorOptions,
     required this.noteOutdoorPSIOptions,
+    this.customLimitsAfter,
   });
 
   factory InstallationDetailModel.fromJson(Map<String, dynamic> json) {
-    // Safety check json root
     final data = json['result'] ?? json;
 
     List<InstallationOptionItemModel> parseOpt(List? l) =>
         (l ?? []).map((e) => InstallationOptionItemModel.fromJson(e)).toList();
+
+    Map<String, MeasurementLimits> parsedLimitsAfter = {};
+
+    if (data['measurements'] != null && data['measurements']['limits_validation_unit'] != null) {
+      final limitsData = data['measurements']['limits_validation_unit'];
+
+      if (limitsData['sc_after'] != null && limitsData['sc_after'] is Map) {
+        (limitsData['sc_after'] as Map).forEach((key, value) {
+          if (value != null && value is Map) {
+            parsedLimitsAfter[key.toString()] =
+                MeasurementLimits.fromJson(Map<String, dynamic>.from(value));
+          }
+        });
+      }
+    }
+    // ---------------------------------------------------
 
     return InstallationDetailModel(
       header: InstallationHeaderDetailModel.fromJson(data['header'] ?? {}),
@@ -227,10 +247,11 @@ class InstallationDetailModel {
           .map((e) => InstallationTargetUnitModel.fromJson(e))
           .toList(),
       masterMaterials:
-          InstallationMasterDataModel.fromJson(data['master_materials'] ?? {}),
+      InstallationMasterDataModel.fromJson(data['master_materials'] ?? {}),
       noteIndoorOptions: parseOpt(data['note_indoor_options']),
       noteOutdoorOptions: parseOpt(data['note_outdoor_options']),
       noteOutdoorPSIOptions: parseOpt(data['note_outdoor_psi_options']),
+      customLimitsAfter: parsedLimitsAfter, // Inject hasil parse
     );
   }
 }

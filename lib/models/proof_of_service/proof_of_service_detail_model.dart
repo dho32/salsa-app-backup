@@ -1,8 +1,6 @@
-/// File: models/proof_of_service/proof_of_service_detail_model.dart
-library;
-
 import 'package:hive/hive.dart';
 import '../common/note_option.dart';
+import '../common/measurement_limits.dart'; // <-- JANGAN LUPA IMPORT INI KANG!
 
 part 'proof_of_service_detail_model.g.dart';
 
@@ -23,16 +21,21 @@ class ProofOfServiceDetailModel {
   @HiveField(7)
   final List<NoteOption>? unserviceableReasons;
 
+  // --- [TAMBAHAN: WADAH LIMIT DINAMIS POS] ---
+  @HiveField(8)
+  final Map<String, MeasurementLimits>? customLimitsAfter;
+
   ProofOfServiceDetailModel({
     required this.header,
     required this.detail,
     this.noteIndoorOptions,
     this.noteOutdoorOptions,
     this.unserviceableReasons,
+    this.customLimitsAfter, // <-- Tambahan
   });
 
   factory ProofOfServiceDetailModel.fromJson(Map<String, dynamic> json) {
-    List<NoteOption> _parseNotes(dynamic list) {
+    List<NoteOption> parseNotes(dynamic list) {
       if (list == null || list is! List) return [];
       return list.map((item) {
         if (item is Map) {
@@ -44,14 +47,33 @@ class ProofOfServiceDetailModel {
       }).toList();
     }
 
+    // --- [TAMBAHAN: PARSING LIMIT DINAMIS DARI API] ---
+    Map<String, MeasurementLimits> parsedLimitsAfter = {};
+
+    if (json['measurements'] != null && json['measurements']['limits_validation_unit'] != null) {
+      final limitsData = json['measurements']['limits_validation_unit'];
+
+      // Ambil pos_after
+      if (limitsData['pos_after'] != null && limitsData['pos_after'] is Map) {
+        (limitsData['pos_after'] as Map).forEach((key, value) {
+          if (value != null && value is Map) {
+            parsedLimitsAfter[key.toString()] =
+                MeasurementLimits.fromJson(Map<String, dynamic>.from(value));
+          }
+        });
+      }
+    }
+    // ---------------------------------------------------
+
     return ProofOfServiceDetailModel(
       header: ProofOfServiceHeader.fromJson(json['header'] ?? {}),
       detail: (json['detail'] as List<dynamic>? ?? [])
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
-      noteIndoorOptions: _parseNotes(json['note_indoor_options']),
-      noteOutdoorOptions: _parseNotes(json['note_outdoor_options']),
-      unserviceableReasons: _parseNotes(json['unserviceable_reasons']),
+      noteIndoorOptions: parseNotes(json['note_indoor_options']),
+      noteOutdoorOptions: parseNotes(json['note_outdoor_options']),
+      unserviceableReasons: parseNotes(json['unserviceable_reasons']),
+      customLimitsAfter: parsedLimitsAfter, // <-- Inject ke Sini
     );
   }
 }

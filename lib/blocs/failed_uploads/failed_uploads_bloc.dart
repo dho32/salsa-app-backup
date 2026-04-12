@@ -45,7 +45,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       SyncWithApiPending event, Emitter<FailedUploadsState> emit) {
     // Ambil transNo dari Hive yang sudah ada di state saat ini
     final localTransNos =
-        state.failedTransactions.map((t) => t['transNo'] as String).toSet();
+    state.failedTransactions.map((t) => t['transNo'] as String).toSet();
 
     int zombieCount = 0;
     for (var apiTask in event.apiPendingList) {
@@ -126,8 +126,8 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         await repository.resetTransactionData(event.transNo);
 
         final updatedList =
-            List<Map<String, dynamic>>.from(state.failedTransactions)
-              ..removeWhere((t) => t['transNo'] == event.transNo);
+        List<Map<String, dynamic>>.from(state.failedTransactions)
+          ..removeWhere((t) => t['transNo'] == event.transNo);
 
         emit(state.copyWith(
           status: FailedUploadsStatus.success,
@@ -137,14 +137,14 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           totalIssues: (state.totalIssues - 1).clamp(0, 999),
           clearUploadingTransNo: true,
           successMessage:
-              "Status transaksi ${event.transNo} berhasil di-reset.",
+          "Status transaksi ${event.transNo} berhasil di-reset.",
         ));
         return;
       }
 
       // === KASUS 2: NORMAL RETRY (UPLOAD S3) ===
       final transactionData = state.failedTransactions.firstWhere(
-        (t) => t['transNo'] == event.transNo,
+            (t) => t['transNo'] == event.transNo,
         orElse: () => {},
       );
 
@@ -171,8 +171,8 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         if (!Hive.isBoxOpen(kPosUnserviceableDraftsBox))
           await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
         final report =
-            Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox)
-                .get(event.transNo);
+        Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox)
+            .get(event.transNo);
         if (report == null) throw Exception("Draft tidak ditemukan.");
         result = await uploadPOSUnserviceableImagesToS3(report, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
@@ -267,7 +267,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
               status: FailedUploadsStatus.loaded,
               clearUploadingTransNo: true,
               errorMessage:
-                  "Foto terunggah, tapi gagal update status server: ${response['message']}",
+              "Foto terunggah, tapi gagal update status server: ${response['message']}",
             ));
           }
         } catch (e) {
@@ -391,7 +391,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     if (moduleType == 'POS' || moduleType == 'SC') {
       try {
         final queueBox =
-            await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+        await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
         final key = transNo.trim().toUpperCase();
         if (!queueBox.containsKey(key)) {
           await queueBox.put(key, ConfirmationTaskModel(transNo: key));

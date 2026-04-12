@@ -26,8 +26,12 @@ class InstallationRepository {
   // --- 1. GET DETAIL ---
   Future<InstallationDetailModel> getInstallationDetail(
       String transNo, String vendorId) async {
+    print("========================");
+    print("Masuk API get");
+    print("========================");
     final params = {'trans_no': transNo, 'vendor_id': vendorId};
     Uri uri = getUrl(pathUrl: 'installation/detail', params: params);
+    print(uri);
     final response = await http.get(uri);
     try {
       if (response.statusCode == 200) {
@@ -249,7 +253,7 @@ class InstallationRepository {
               "serial_no_outdoor": unit.serialNo,
               "materials": items,
               "mounting_type": unit.materials.mountingType,
-              "has_jasa_perapihan": unit.materials.hasJasaPerapihan
+              // "has_jasa_perapihan": unit.materials.hasJasaPerapihan
             });
           }
         }
@@ -289,12 +293,15 @@ class InstallationRepository {
       "remark": remark,
       "created_by": createdBy,
       "has_transport": draft.hasTransport,
-      if (draft.hasTransport && draft.storeFrontPhoto != null)
+      if (draft.storeFrontPhoto != null)
         "store_front_image": mapPhoto(draft.storeFrontPhoto),
       if (draft.hasTransport)
         "transport_distance": draft.transportDistance,
-      if (draft.hasTransport)
-        "transport_distance_image": draft.transportEvidencePhoto,
+      if (draft.hasTransport && draft.transportEvidencePhoto != null)
+        "transport_distance_image": mapPhoto(draft.transportEvidencePhoto),
+      "has_jasa_perapihan": draft.hasTidyingService,
+      if (draft.hasTidyingService)
+        "qty_jasa_perapihan": draft.tidyingQty,
       "units_indoor": unitsIndoor,
       "units_outdoor": unitsOutdoor,
       "materials": materialsPayload,

@@ -23,13 +23,14 @@ class ProofOfServiceDetailModelAdapter
       noteIndoorOptions: (fields[5] as List?)?.cast<NoteOption>(),
       noteOutdoorOptions: (fields[6] as List?)?.cast<NoteOption>(),
       unserviceableReasons: (fields[7] as List?)?.cast<NoteOption>(),
+      customLimitsAfter: (fields[8] as Map?)?.cast<String, MeasurementLimits>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceDetailModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.header)
       ..writeByte(1)
@@ -39,7 +40,9 @@ class ProofOfServiceDetailModelAdapter
       ..writeByte(6)
       ..write(obj.noteOutdoorOptions)
       ..writeByte(7)
-      ..write(obj.unserviceableReasons);
+      ..write(obj.unserviceableReasons)
+      ..writeByte(8)
+      ..write(obj.customLimitsAfter);
   }
 
   @override

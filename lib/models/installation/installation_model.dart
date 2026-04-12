@@ -384,12 +384,14 @@ class InstallationEntryModel {
   final bool hasTransport;
   @HiveField(13)
   final InstallationPhotoModel? storeFrontPhoto;
-
-  // [FITUR BARU] Transport
   @HiveField(14)
   final double? transportDistance;
   @HiveField(15)
   final InstallationPhotoModel? transportEvidencePhoto;
+  @HiveField(16, defaultValue: false)
+  final bool hasTidyingService;
+  @HiveField(17, defaultValue: 0)
+  final int tidyingQty;
 
   InstallationEntryModel({
     required this.transNo,
@@ -408,6 +410,8 @@ class InstallationEntryModel {
     this.storeFrontPhoto,
     this.transportDistance = 0,
     this.transportEvidencePhoto,
+    this.hasTidyingService = false,
+    this.tidyingQty = 0,
   });
 
   InstallationEntryModel copyWith({
@@ -429,28 +433,33 @@ class InstallationEntryModel {
     double? transportDistance,
     InstallationPhotoModel? transportEvidencePhoto,
     bool clearTransportPhoto = false,
+    bool? hasTidyingService,
+    int? tidyingQty,
   }) {
     return InstallationEntryModel(
-        transNo: transNo ?? this.transNo,
-        vendorId: vendorId ?? this.vendorId,
-        vendorName: vendorName ?? this.vendorName,
-        technicianId: technicianId ?? this.technicianId,
-        technician1Name: technician1Name ?? this.technician1Name,
-        technician2Name: technician2Name ?? this.technician2Name,
-        technician3Name: technician3Name ?? this.technician3Name,
-        startDate: startDate ?? this.startDate,
-        finalNote: finalNote ?? this.finalNote,
-        finalPhotos: finalPhotos ?? this.finalPhotos,
-        units: units ?? this.units,
-        materialEvidences: materialEvidences ?? this.materialEvidences,
-        hasTransport: hasTransport ?? this.hasTransport,
-        storeFrontPhoto: clearStoreFrontPhoto
-            ? null
-            : (storeFrontPhoto ?? this.storeFrontPhoto),
-        transportDistance: transportDistance ?? this.transportDistance,
-        transportEvidencePhoto: clearTransportPhoto
-            ? null
-            : (transportEvidencePhoto ?? this.transportEvidencePhoto));
+      transNo: transNo ?? this.transNo,
+      vendorId: vendorId ?? this.vendorId,
+      vendorName: vendorName ?? this.vendorName,
+      technicianId: technicianId ?? this.technicianId,
+      technician1Name: technician1Name ?? this.technician1Name,
+      technician2Name: technician2Name ?? this.technician2Name,
+      technician3Name: technician3Name ?? this.technician3Name,
+      startDate: startDate ?? this.startDate,
+      finalNote: finalNote ?? this.finalNote,
+      finalPhotos: finalPhotos ?? this.finalPhotos,
+      units: units ?? this.units,
+      materialEvidences: materialEvidences ?? this.materialEvidences,
+      hasTransport: hasTransport ?? this.hasTransport,
+      storeFrontPhoto: clearStoreFrontPhoto
+          ? null
+          : (storeFrontPhoto ?? this.storeFrontPhoto),
+      transportDistance: transportDistance ?? this.transportDistance,
+      transportEvidencePhoto: clearTransportPhoto
+          ? null
+          : (transportEvidencePhoto ?? this.transportEvidencePhoto),
+      hasTidyingService: hasTidyingService ?? this.hasTidyingService,
+      tidyingQty: tidyingQty ?? this.tidyingQty,
+    );
   }
 }
 

@@ -268,13 +268,14 @@ class InstallationDetailModelAdapter
           (fields[4] as List).cast<InstallationOptionItemModel>(),
       noteOutdoorPSIOptions:
           (fields[5] as List).cast<InstallationOptionItemModel>(),
+      customLimitsAfter: (fields[6] as Map?)?.cast<String, MeasurementLimits>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, InstallationDetailModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.header)
       ..writeByte(1)
@@ -286,7 +287,9 @@ class InstallationDetailModelAdapter
       ..writeByte(4)
       ..write(obj.noteOutdoorOptions)
       ..writeByte(5)
-      ..write(obj.noteOutdoorPSIOptions);
+      ..write(obj.noteOutdoorPSIOptions)
+      ..writeByte(6)
+      ..write(obj.customLimitsAfter);
   }
 
   @override

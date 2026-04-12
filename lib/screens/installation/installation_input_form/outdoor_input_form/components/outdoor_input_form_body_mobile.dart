@@ -48,7 +48,13 @@ class _OutdoorInputFormBodyMobileState
   // --- KONSTANTA ---
   final String _kInstallPhotoBaseId = 'OUT_INSTALL_PHOTO';
 
-  final _snController = TextEditingController();
+  final _snController = TextEditingController(); // Normal/Scanner
+
+  // --- [PERUBAHAN ALUR 3] Controller Sthira ---
+  final _sthiraSnPartController = TextEditingController();
+  final _sthiraTypePartController = TextEditingController();
+  String _vendorCode = '';
+  // --------------------------------------------
 
   // -- Controllers ELEKTRIKAL (FISIK) --
   final TextEditingController _elecRemarkController = TextEditingController();
@@ -67,7 +73,7 @@ class _OutdoorInputFormBodyMobileState
   bool _isTakingPsiPhoto = false;
 
   // -- Foto Dokumentasi --
-  List<CapturedImageDetail> _installPhotos = [];
+  final List<CapturedImageDetail> _installPhotos = [];
   bool _isTakingInstallPhoto = false;
 
   // -- Data Master --
@@ -86,9 +92,12 @@ class _OutdoorInputFormBodyMobileState
   void initState() {
     super.initState();
     _loadMasterDataFromBloc();
+    _fetchVendorCode(); // [ALUR 3] Load Vendor
     _initializeFormData();
 
     _snController.addListener(_onFormChanged);
+    _sthiraSnPartController.addListener(_onFormChanged);
+    _sthiraTypePartController.addListener(_onFormChanged);
     _elecRemarkController.addListener(_onFormChanged);
     _psiRemarkController.addListener(_onFormChanged);
   }
@@ -97,11 +106,29 @@ class _OutdoorInputFormBodyMobileState
   void dispose() {
     _debounceTimer?.cancel();
     _snController.dispose();
+    _sthiraSnPartController.dispose();
+    _sthiraTypePartController.dispose();
     _elecRemarkController.dispose();
     _psiRemarkController.dispose();
-    for (var c in _elecControllers.values) c.dispose();
-    for (var c in _psiControllers.values) c.dispose();
+    for (var c in _elecControllers.values) {
+      c.dispose();
+    }
+    for (var c in _psiControllers.values) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  // --- [PERUBAHAN ALUR 3] Fetch Vendor ---
+  Future<void> _fetchVendorCode() async {
+    try {
+      final user = await AuthStorage.getUser();
+      if (mounted) {
+        setState(() {
+          _vendorCode = user['maintenance_by'] ?? '';
+        });
+      }
+    } catch (_) {}
   }
 
   void _onFormChanged() {
@@ -157,7 +184,7 @@ class _OutdoorInputFormBodyMobileState
         state.taskDetail!.noteOutdoorOptions.isNotEmpty) {
       _elecNoteOptions = state.taskDetail!.noteOutdoorOptions
           .map((opt) => MeasurementNoteOption(
-              label: opt.label, requireRemark: opt.requireRemark))
+          label: opt.label, requireRemark: opt.requireRemark))
           .toList();
     } else {
       _elecNoteOptions = [
@@ -169,25 +196,35 @@ class _OutdoorInputFormBodyMobileState
         state.taskDetail!.noteOutdoorPSIOptions.isNotEmpty) {
       _psiNoteOptions = state.taskDetail!.noteOutdoorPSIOptions
           .map((opt) => MeasurementNoteOption(
-              label: opt.label, requireRemark: opt.requireRemark))
+          label: opt.label, requireRemark: opt.requireRemark))
           .toList();
     } else {
       _psiNoteOptions = _elecNoteOptions;
     }
   }
 
-  // --- [INIT DATA] Mapping ke Field Baru ---
   void _initializeFormData() {
     if (widget.existingData != null) {
-      _snController.text = widget.existingData!.serialNo;
+      final savedSn = widget.existingData!.serialNo;
+      _snController.text = savedSn;
 
-      // Load Remark & Photo Listrik (Fisik)
+      // --- [PERUBAHAN ALUR 3] Pecah SN jika ada ---
+      if (savedSn.contains('|ou|') || savedSn.contains('|OU|')) {
+        final parts = savedSn.split(RegExp(r'\|ou\|', caseSensitive: false));
+        if (parts.length == 2) {
+          _sthiraSnPartController.text = parts[0];
+          _sthiraTypePartController.text = parts[1];
+        }
+      } else {
+        _sthiraSnPartController.text = savedSn;
+      }
+      // -------------------------------------------
+
       _elecRemarkController.text = widget.existingData!.remark;
       _elecNotePhotos = widget.existingData!.remarkPhotos
           .map((p) => _mapPhotoModelToDetail(p))
           .toList();
 
-      // Load Remark & Photo PSI (Tekanan)
       _psiRemarkController.text = widget.existingData!.remarkPsi;
       _psiNotePhotos = widget.existingData!.remarkPhotosPsi
           .map((p) => _mapPhotoModelToDetail(p))
@@ -201,14 +238,15 @@ class _OutdoorInputFormBodyMobileState
 
       if (widget.existingData != null) {
         final m = widget.existingData!.measurements.firstWhere(
-            (e) => e.measurementId == id,
+                (e) => e.measurementId == id,
             orElse: () => InstallationMeasurementModel(
                 measurementId: id, unit: '', value: 0));
 
-        if (m.value == -1 || m.isSkipped)
+        if (m.value == -1 || m.isSkipped) {
           skipped = true;
-        else
+        } else {
           val = m.value ?? 0;
+        }
 
         if (!skipped && m.photo != null) {
           img = _mapPhotoModelToDetail(m.photo!);
@@ -237,38 +275,33 @@ class _OutdoorInputFormBodyMobileState
     }
 
     if (widget.existingData != null) {
-      // 1. Load Note Listrik
       if (_elecEntries.first.isSkipped == true) {
         String rawNote = widget.existingData!.note ?? '';
         if (_elecNoteOptions.any((o) => o.label == rawNote)) {
           _selectedElecNote = rawNote;
         } else if (rawNote.isNotEmpty) {
-          // Fallback regex jika data lama (agar tidak hilang)
           _loadExistingNote(rawNote, _elecNoteOptions, (reason, remark) {
             _selectedElecNote = reason;
-            // Jika controller remark masih kosong, isi dari fallback
-            if (_elecRemarkController.text.isEmpty)
+            if (_elecRemarkController.text.isEmpty) {
               _elecRemarkController.text = remark;
+            }
           });
         }
       }
 
-      // 2. Load Note PSI
       if (_psiEntries.first.isSkipped == true) {
         String rawNotePsi = widget.existingData!.notePsi;
         if (_psiNoteOptions.any((o) => o.label == rawNotePsi)) {
           _selectedPsiNote = rawNotePsi;
         } else if (widget.existingData!.note != null &&
             widget.existingData!.note!.contains("PSI")) {
-          // Fallback Legacy
           _loadExistingNote(widget.existingData!.note!, _psiNoteOptions,
-              (reason, remark) {
-            _selectedPsiNote = reason;
-          });
+                  (reason, remark) {
+                _selectedPsiNote = reason;
+              });
         }
       }
 
-      // 3. Load Install Photos
       final installMetrics = widget.existingData!.measurements
           .where((m) => m.measurementId.startsWith(_kInstallPhotoBaseId))
           .toList();
@@ -297,7 +330,7 @@ class _OutdoorInputFormBodyMobileState
   void _loadExistingNote(String fullNote, List<MeasurementNoteOption> options,
       Function(String, String) onParsed) {
     if (fullNote.isEmpty) return;
-    if (fullNote.contains("[Listrik:")) return; // Skip legacy complex string
+    if (fullNote.contains("[Listrik:")) return;
 
     String? matchedOption;
     for (var opt in options) {
@@ -316,9 +349,8 @@ class _OutdoorInputFormBodyMobileState
 
   Future<void> _takePhoto(
       {bool isInstallPhoto = false,
-      bool isElec = false,
-      bool isPsi = false}) async {
-    // 1. Cek Limit
+        bool isElec = false,
+        bool isPsi = false}) async {
     if (isInstallPhoto) {
       if (_installPhotos.length >= 5) {
         _showErrorSnack("Maksimal 5 foto dokumentasi.");
@@ -333,12 +365,13 @@ class _OutdoorInputFormBodyMobileState
     }
 
     setState(() {
-      if (isInstallPhoto)
+      if (isInstallPhoto) {
         _isTakingInstallPhoto = true;
-      else if (isElec)
+      } else if (isElec) {
         _isTakingElecPhoto = true;
-      else
+      } else {
         _isTakingPsiPhoto = true;
+      }
     });
 
     try {
@@ -359,10 +392,8 @@ class _OutdoorInputFormBodyMobileState
         final String techName = user['name'] ?? 'Teknisi';
         final timestamp = DateTime.now();
 
-        // Ambil timezone dari device
         final zone = getIndonesianTimezoneAbbreviation(timestamp);
 
-        // Format tanggal pakai locale (AMAN)
         final formattedDate =
             '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
 
@@ -391,12 +422,13 @@ class _OutdoorInputFormBodyMobileState
               address: '');
 
           setState(() {
-            if (isInstallPhoto)
+            if (isInstallPhoto) {
               _installPhotos.add(imgDetail);
-            else if (isElec)
-              _elecNotePhotos = [imgDetail]; // Foto Listrik
-            else
-              _psiNotePhotos = [imgDetail]; // Foto PSI (Fix logic else)
+            } else if (isElec) {
+              _elecNotePhotos = [imgDetail];
+            } else {
+              _psiNotePhotos = [imgDetail];
+            }
           });
 
           if (!_isOriginalCompleted) _forceSaveDraft();
@@ -409,12 +441,13 @@ class _OutdoorInputFormBodyMobileState
     } finally {
       setState(() {
         _isProcessingWatermark = false;
-        if (isInstallPhoto)
+        if (isInstallPhoto) {
           _isTakingInstallPhoto = false;
-        else if (isElec)
+        } else if (isElec) {
           _isTakingElecPhoto = false;
-        else
+        } else {
           _isTakingPsiPhoto = false;
+        }
       });
     }
   }
@@ -457,13 +490,25 @@ class _OutdoorInputFormBodyMobileState
     _onFormChanged();
   }
 
-  // --- [FIX 2] BUILD MODEL (Data Dipisah) ---
   InstallationUnitModel? _buildUnitModel({required bool isFinal}) {
-    final sn = _snController.text.toUpperCase().trim();
+    // --- [PERUBAHAN ALUR 3] Jahit SN Outdoor Sthira ---
+    String finalSn = "";
+
+    if (_vendorCode == 'V000062') {
+      final snPart = _sthiraSnPartController.text.toUpperCase().trim();
+      final typePart = _sthiraTypePartController.text.toUpperCase().trim();
+
+      if (snPart.isNotEmpty || typePart.isNotEmpty) {
+        finalSn = "$snPart|OU|$typePart"; // <-- Pakai |OU|
+      }
+    } else {
+      finalSn = _snController.text.toUpperCase().trim();
+    }
+    // --------------------------------------------------
 
     final state = context.read<InstallationBloc>().state;
     final indoorUnit = state.draftEntry?.units.firstWhere(
-        (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
+            (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
         orElse: () => InstallationUnitModel(
             serialNo: '',
             unitIndex: -1,
@@ -474,13 +519,20 @@ class _OutdoorInputFormBodyMobileState
             materials: InstallationMaterialsModel()));
     final autoPairedSN = indoorUnit?.serialNo ?? '';
 
-    if (isFinal && sn.isEmpty) return null;
+    if (isFinal && finalSn.isEmpty) return null;
     if (isFinal && autoPairedSN.isEmpty) return null;
+
+    // Validasi Sthira
+    if (isFinal && _vendorCode == 'V000062') {
+      if (_sthiraSnPartController.text.isEmpty || _sthiraTypePartController.text.isEmpty) {
+        _showErrorSnack("Nomor SN dan Tipe AC wajib diisi lengkap!");
+        return null;
+      }
+    }
 
     bool isElecSkipped = _elecEntries.first.isSkipped ?? false;
     bool isPsiSkipped = _psiEntries.first.isSkipped ?? false;
 
-    // A. DATA FIELD BARU (Dipisah Listrik & PSI)
     String noteOutdoor = '';
     String remarkOutdoor = '';
     List<InstallationPhotoModel> remarkPhotosOutdoor = [];
@@ -507,13 +559,10 @@ class _OutdoorInputFormBodyMobileState
       }
     }
 
-    // B. MEASUREMENTS
     List<InstallationMeasurementModel> finalMeasurements = [];
 
-    // 1. Volt & Ampere
     for (var e in _elecEntries) {
       InstallationPhotoModel? mPhoto;
-      // [FIX 3] Image Null Jika Skipped
       if (!isElecSkipped && e.capturedImage != null) {
         mPhoto = _buildPhotoModel(e.capturedImage!);
       }
@@ -522,14 +571,12 @@ class _OutdoorInputFormBodyMobileState
           measurementId: e.measurementId,
           unit: e.unit,
           value: isElecSkipped ? 0 : e.value,
-          // Value 0 jika skipped
           isSkipped: isElecSkipped,
           note: '',
-          photo: mPhoto // Photo Null jika skipped
-          ));
+          photo: mPhoto
+      ));
     }
 
-    // 2. PSI
     final psiE = _psiEntries.first;
     InstallationPhotoModel? psiMPhoto;
     if (!isPsiSkipped && psiE.capturedImage != null) {
@@ -540,13 +587,11 @@ class _OutdoorInputFormBodyMobileState
         measurementId: psiE.measurementId,
         unit: psiE.unit,
         value: isPsiSkipped ? 0 : psiE.value,
-        // Value 0 jika skipped
         isSkipped: isPsiSkipped,
         note: '',
-        photo: psiMPhoto // Photo Null jika skipped
-        ));
+        photo: psiMPhoto
+    ));
 
-    // 3. Install Photos
     for (int i = 0; i < _installPhotos.length; i++) {
       final img = _installPhotos[i];
       final id = "${_kInstallPhotoBaseId}_${i + 1}";
@@ -561,16 +606,15 @@ class _OutdoorInputFormBodyMobileState
     }
 
     String currentStatus =
-        isFinal ? 'COMPLETED' : (_isOriginalCompleted ? 'COMPLETED' : 'DRAFT');
+    isFinal ? 'COMPLETED' : (_isOriginalCompleted ? 'COMPLETED' : 'DRAFT');
 
     return InstallationUnitModel(
       unitIndex: widget.target.unitIndex,
       articleNo: widget.target.articleNo,
       articleDesc: widget.target.description,
       articleType: 'OUT',
-      serialNo: sn,
+      serialNo: finalSn, // <-- Jahitan SN masuk sini
 
-      // MAPPING KE FIELD BARU
       note: noteOutdoor,
       remark: remarkOutdoor,
       remarkPhotos: remarkPhotosOutdoor,
@@ -616,7 +660,7 @@ class _OutdoorInputFormBodyMobileState
 
     final state = context.read<InstallationBloc>().state;
     final indoorUnit = state.draftEntry?.units.firstWhere(
-        (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
+            (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
         orElse: () => InstallationUnitModel(
             serialNo: '',
             unitIndex: -1,
@@ -628,7 +672,12 @@ class _OutdoorInputFormBodyMobileState
     final autoPairedSN = indoorUnit?.serialNo ?? '';
 
     if (isFinal) {
-      if (_snController.text.isEmpty) {
+      final newUnit = _buildUnitModel(isFinal: isFinal);
+      if (newUnit == null) return; // Validasi Sthira
+
+      final snToValidate = newUnit.serialNo;
+
+      if (snToValidate.isEmpty) {
         _showErrorSnack("Serial Number wajib diisi!");
         return;
       }
@@ -637,19 +686,17 @@ class _OutdoorInputFormBodyMobileState
             "Unit Indoor pasangan belum diinput! Input Indoor dulu.");
         return;
       }
-      // Validasi Duplicate
+
       final draft = state.draftEntry;
       if (draft != null && draft.units.isNotEmpty) {
-        final inputSN = _snController.text.toUpperCase().trim();
         final isDuplicate = draft.units.any((u) =>
-            u.serialNo == inputSN && u.unitIndex != widget.target.unitIndex);
+        u.serialNo == snToValidate && u.unitIndex != widget.target.unitIndex);
         if (isDuplicate) {
-          _showErrorSnack("Serial Number '$inputSN' sudah digunakan!");
+          _showErrorSnack("Serial Number sudah digunakan di unit lain!");
           return;
         }
       }
 
-      // Validasi Elec
       bool isElecSkipped = _elecEntries.first.isSkipped ?? false;
       if (isElecSkipped) {
         if (_selectedElecNote == null) {
@@ -657,7 +704,7 @@ class _OutdoorInputFormBodyMobileState
           return;
         }
         final opt = _elecNoteOptions.firstWhere(
-            (o) => o.label == _selectedElecNote,
+                (o) => o.label == _selectedElecNote,
             orElse: () => const MeasurementNoteOption(label: ''));
         if (opt.requireRemark &&
             (_elecRemarkController.text.length < 20 ||
@@ -677,7 +724,6 @@ class _OutdoorInputFormBodyMobileState
         }
       }
 
-      // Validasi PSI
       bool isPsiSkipped = _psiEntries.first.isSkipped ?? false;
       if (isPsiSkipped) {
         if (_selectedPsiNote == null) {
@@ -685,7 +731,7 @@ class _OutdoorInputFormBodyMobileState
           return;
         }
         final opt = _psiNoteOptions.firstWhere(
-            (o) => o.label == _selectedPsiNote,
+                (o) => o.label == _selectedPsiNote,
             orElse: () => const MeasurementNoteOption(label: ''));
         if (opt.requireRemark &&
             (_psiRemarkController.text.length < 20 || _psiNotePhotos.isEmpty)) {
@@ -710,10 +756,10 @@ class _OutdoorInputFormBodyMobileState
       }
     }
 
-    final newUnit = _buildUnitModel(isFinal: isFinal);
-    if (newUnit != null) {
+    final savedUnit = _buildUnitModel(isFinal: isFinal);
+    if (savedUnit != null) {
       context.read<InstallationBloc>().add(
-          SaveOutdoorUnit(unit: newUnit, pairedIndoorSerial: autoPairedSN));
+          SaveOutdoorUnit(unit: savedUnit, pairedIndoorSerial: autoPairedSN));
 
       if (isFinal) {
         _isSubmittingFinal = true;
@@ -730,12 +776,11 @@ class _OutdoorInputFormBodyMobileState
 
   @override
   Widget build(BuildContext context) {
-    // --- UI Layout (Sama persis) ---
     bool isElecSkipped = _elecEntries.first.isSkipped ?? false;
     bool isPsiSkipped = _psiEntries.first.isSkipped ?? false;
     final state = context.read<InstallationBloc>().state;
     final indoorUnit = state.draftEntry?.units.firstWhere(
-        (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
+            (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
         orElse: () => InstallationUnitModel(
             serialNo: '',
             unitIndex: -1,
@@ -783,26 +828,19 @@ class _OutdoorInputFormBodyMobileState
                                     style: TextStyle(
                                         color: Colors.grey[600], fontSize: 13))
                               ]))),
+
+                  // --- [PERUBAHAN ALUR 3] BUILDER SN ---
                   Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: _buildSection(
                           title: "Identitas Unit",
-                          child: _buildCustomTextField(
-                              controller: _snController,
-                              label: "Serial Number (Wajib)",
-                              icon: FontAwesomeIcons.barcode,
-                              suffixIcon: IconButton(
-                                  icon: const Icon(FontAwesomeIcons.qrcode,
-                                      color: Color(0xFF1565C0)),
-                                  onPressed: () async {
-                                    final res = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                                const QrScanPage()));
-                                    if (res != null)
-                                      setState(() => _snController.text = res);
-                                  })))),
+                          child: _vendorCode == 'V000062'
+                              ? _buildSthiraSnForm()
+                              : _buildNormalSnForm()
+                      )
+                  ),
+                  // -------------------------------------
+
                   const SizedBox(height: 16),
                   Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -826,24 +864,24 @@ class _OutdoorInputFormBodyMobileState
                                 Expanded(
                                     child: Column(
                                         crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        CrossAxisAlignment.start,
                                         children: [
-                                      Text(
-                                          isPaired
-                                              ? "Terhubung dengan Indoor:"
-                                              : "Indoor Belum Diinput",
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: isPaired
-                                                  ? Colors.blue[900]
-                                                  : Colors.red[900])),
-                                      if (isPaired)
-                                        Text(pairedSN,
-                                            style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold))
-                                    ])),
+                                          Text(
+                                              isPaired
+                                                  ? "Terhubung dengan Indoor:"
+                                                  : "Indoor Belum Diinput",
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isPaired
+                                                      ? Colors.blue[900]
+                                                      : Colors.red[900])),
+                                          if (isPaired)
+                                            Text(pairedSN,
+                                                style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold))
+                                        ])),
                                 if (isPaired)
                                   const Icon(Icons.check_circle,
                                       color: Colors.green, size: 20)
@@ -942,7 +980,7 @@ class _OutdoorInputFormBodyMobileState
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(color: Colors.white, boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -4))
               ]),
@@ -983,6 +1021,85 @@ class _OutdoorInputFormBodyMobileState
     );
   }
 
+  // --- [PERUBAHAN ALUR 3] WIDGET SN NORMAL ---
+  Widget _buildNormalSnForm() {
+    return _buildCustomTextField(
+        controller: _snController,
+        label: "Serial Number (Wajib)",
+        icon: FontAwesomeIcons.barcode,
+        suffixIcon: IconButton(
+            icon: const Icon(FontAwesomeIcons.qrcode, color: Color(0xFF1565C0)),
+            onPressed: () async {
+              final res = await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const QrScanPage()));
+              if (res != null) setState(() => _snController.text = res);
+            }));
+  }
+
+  // --- [PERUBAHAN ALUR 3] WIDGET SN STHIRA ---
+  Widget _buildSthiraSnForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScanPage()));
+              if (res != null) {
+                if (res.contains('|ou|') || res.contains('|OU|')) {
+                  final parts = res.split(RegExp(r'\|ou\|', caseSensitive: false));
+                  if (parts.length == 2) {
+                    setState(() {
+                      _sthiraSnPartController.text = parts[0];
+                      _sthiraTypePartController.text = parts[1];
+                    });
+                    _onFormChanged();
+                  }
+                } else {
+                  _showErrorSnack("Barcode tidak valid! Harus format SN|OU|TIPE.");
+                }
+              }
+            },
+            icon: const Icon(FontAwesomeIcons.qrcode, color: Color(0xFF1565C0), size: 18),
+            label: const Text("Scan Barcode Outdoor"),
+            style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF1565C0)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: _buildCustomTextField(
+                  controller: _sthiraSnPartController,
+                  label: "Nomor SN",
+                  icon: FontAwesomeIcons.hashtag,
+                  hintText: "Cth: 00034"
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 20),
+              child: Text("| OU |", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey)),
+            ),
+            Expanded(
+              flex: 4,
+              child: _buildCustomTextField(
+                  controller: _sthiraTypePartController,
+                  label: "Tipe AC",
+                  icon: FontAwesomeIcons.tag,
+                  hintText: "Cth: SC234"
+              ),
+            ),
+          ],
+        )
+      ],
+    );
+  }
+
   Widget _buildSection({required String title, required Widget child}) {
     return Container(
         width: double.infinity,
@@ -999,7 +1116,7 @@ class _OutdoorInputFormBodyMobileState
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title,
               style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           child
         ]));
@@ -1036,10 +1153,10 @@ class _OutdoorInputFormBodyMobileState
               itemCount: _installPhotos.length + 1,
               separatorBuilder: (ctx, i) => const SizedBox(width: 12),
               itemBuilder: (ctx, index) {
-                // Tombol Tambah Foto
                 if (index == _installPhotos.length) {
-                  if (_installPhotos.length >= 5)
+                  if (_installPhotos.length >= 5) {
                     return const SizedBox.shrink();
+                  }
                   return InkWell(
                     onTap: () => _takePhoto(isInstallPhoto: true),
                     child: Container(
@@ -1053,21 +1170,20 @@ class _OutdoorInputFormBodyMobileState
                       child: _isTakingInstallPhoto
                           ? const Center(child: CircularProgressIndicator())
                           : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                  Icon(Icons.add_a_photo,
-                                      size: 30, color: Colors.grey.shade400),
-                                  const SizedBox(height: 4),
-                                  Text("Tambah",
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontSize: 11))
-                                ]),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_a_photo,
+                                size: 30, color: Colors.grey.shade400),
+                            const SizedBox(height: 4),
+                            Text("Tambah",
+                                style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 11))
+                          ]),
                     ),
                   );
                 }
 
-                // Item Foto
                 final img = _installPhotos[index];
                 return Stack(
                   children: [
@@ -1115,11 +1231,13 @@ class _OutdoorInputFormBodyMobileState
     );
   }
 
+  // --- [PERUBAHAN ALUR 3] Tambah param hintText ---
   Widget _buildCustomTextField(
       {required TextEditingController controller,
-      required String label,
-      required IconData icon,
-      Widget? suffixIcon}) {
+        required String label,
+        required IconData icon,
+        Widget? suffixIcon,
+        String? hintText}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label,
           style: const TextStyle(
@@ -1130,7 +1248,7 @@ class _OutdoorInputFormBodyMobileState
           textCapitalization: TextCapitalization.characters,
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
-              hintText: "Masukkan $label",
+              hintText: hintText ?? "Masukkan $label",
               prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 18),
               suffixIcon: suffixIcon,
               isDense: true,
@@ -1140,7 +1258,7 @@ class _OutdoorInputFormBodyMobileState
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none),
               contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12)))
+              const EdgeInsets.symmetric(vertical: 14, horizontal: 12)))
     ]);
   }
 }

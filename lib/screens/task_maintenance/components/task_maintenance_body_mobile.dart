@@ -318,7 +318,7 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                                             const SizedBox(height: 4),
                                             Text(
                                               hasCriticalError
-                                                  ? "$zombieCount Transaksi gagal di proses. Ketuk untuk memprosesr."
+                                                  ? "$zombieCount Transaksi gagal di proses. Ketuk untuk memproses."
                                                   : "Beberapa foto gagal di-upload. Ketuk untuk memperbaiki.",
                                               style: const TextStyle(
                                                   fontSize: 12,
@@ -353,17 +353,13 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     final rawSuggestions = state.suggestions;
     final enteredStoreCode = _storeCodeController.text.trim().toUpperCase();
 
-    print("test");
-    print(enteredStoreCode);
     if (rawSuggestions.isEmpty) {
       _showSnackBar('Transaksi tidak ditemukan.', Colors.red);
       return;
     }
 
     // 🔥 4. CROSS-CHECK KODE TOKO DENGAN DATA API
-    // Kita filter hanya data yang Kode Tokonya SAMA PERSIS dengan inputan Teknisi
     final suggestions = rawSuggestions.where((s) {
-      print(s.customerCode.trim().toUpperCase());
       return s.customerCode.trim().toUpperCase() == enteredStoreCode;
     }).toList();
 

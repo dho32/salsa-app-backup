@@ -17,6 +17,7 @@ import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_repository.dart';
 import 'components/constants.dart';
 import 'components/salsa_theme.dart';
+import 'components/services/daily_hive_clear_service.dart';
 import 'firebase_options.dart';
 import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
@@ -83,6 +84,7 @@ class _AppInitializerState extends State<AppInitializer> {
 
     // Registrasi adapter
     _registerHiveAdapters();
+    DailyHiveClearService.cleanUpOldMonthData();
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,

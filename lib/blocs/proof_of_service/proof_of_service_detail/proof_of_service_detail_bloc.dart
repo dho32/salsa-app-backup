@@ -5,6 +5,7 @@ import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_se
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_state.dart';
 import 'package:salsa/models/proof_of_service/proof_of_service_detail_model.dart';
+import '../../../models/common/measurement_limits.dart'; // <-- JANGAN LUPA IMPORT INI
 
 import '../../../components/constants.dart';
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
@@ -21,27 +22,55 @@ class ProofOfServiceDetailBloc extends Bloc<ProofOfServiceDetailEvent, ProofOfSe
         ProofOfServiceDetailModel? cachedData = cacheBox.get(event.transNo.trim().toUpperCase());
 
         // 🔥 ANTI-BUG CACHE LAMA 🔥
-        // Jika cache lama masih nempel (unitIndex 0 semua), paksa hapus & ambil baru dari API!
         if (cachedData != null) {
           bool isCacheCorrupted = cachedData.detail.any((d) => d.isGeneric && d.unitIndex == 0);
           if (isCacheCorrupted) {
-            print("⚠️ Cache lama terdeteksi. Menghapus cache...");
             await cacheBox.delete(event.transNo.trim().toUpperCase());
             cachedData = null;
           }
         }
 
+        // 1. Tentukan Data Akhir (Dari Cache atau API)
+        ProofOfServiceDetailModel finalData;
         if (cachedData != null) {
-          final result = await _calculateValidationStatuses(cachedData.detail, event.transNo);
-          emit(ProofOfServiceDetailLoaded(cachedData, result['statuses'], savedSerials: result['serials']));
-          return;
+          finalData = cachedData;
+        } else {
+          finalData = await repository.fetchProofOfServiceDetail(event.transNo);
+          await cacheBox.put(event.transNo.trim().toUpperCase(), finalData);
         }
 
-        final dataFromApi = await repository.fetchProofOfServiceDetail(event.transNo);
-        await cacheBox.put(event.transNo.trim().toUpperCase(), dataFromApi);
+        // --- [TAMBAHAN: RACIK LIMIT DINAMIS POS] ---
+        // 2. Buka kotak Global Master dari Hive
+        // (Pastikan kAppConfigBox sesuai dengan nama konstanta config Akang)
+        final configBox = Hive.box(kAppConfigBox);
+        Map<String, MeasurementLimits> mergedLimits = {};
 
-        final result = await _calculateValidationStatuses(dataFromApi.detail, event.transNo);
-        emit(ProofOfServiceDetailLoaded(dataFromApi, result['statuses'], savedSerials: result['serials']));
+        // Ambil limit global untuk POS (biasanya limits_pos_after)
+        final rawLimits = configBox.get('limits_pos_after');
+        if (rawLimits is Map) {
+          rawLimits.forEach((key, value) {
+            if (key is String && value is MeasurementLimits) {
+              mergedLimits[key] = value;
+            }
+          });
+        }
+
+        // 3. Timpa dengan data dari API (Suhu AC, Ampere, Volt, PSI)
+        if (finalData.customLimitsAfter != null && finalData.customLimitsAfter!.isNotEmpty) {
+          finalData.customLimitsAfter!.forEach((key, value) {
+            mergedLimits[key] = value;
+          });
+        }
+        // ----------------------------------------
+
+        // 4. Kalkulasi Status & Emit
+        final result = await _calculateValidationStatuses(finalData.detail, event.transNo);
+        emit(ProofOfServiceDetailLoaded(
+          finalData,
+          result['statuses'],
+          savedSerials: result['serials'],
+          limitsMap: mergedLimits, // <-- INJECT LIMIT DINAMIS KE STATE
+        ));
 
       } catch (e) {
         emit(ProofOfServiceDetailError("Gagal memuat detail data. Periksa koneksi internet Anda dan coba lagi."));
@@ -74,7 +103,6 @@ class ProofOfServiceDetailBloc extends Bloc<ProofOfServiceDetailEvent, ProofOfSe
         bool isComplete = draft.isCompleted ?? false;
         statuses[mapKey] = isComplete ? ValidationStatus.completed : ValidationStatus.inProgress;
 
-        // 🔥 Ambil SN Asli yang diinput Teknisi untuk ditimpa ke UI
         if (detail.isGeneric && draft.serialNo.isNotEmpty && !draft.serialNo.startsWith('AC')) {
           serials[mapKey] = draft.serialNo;
         }

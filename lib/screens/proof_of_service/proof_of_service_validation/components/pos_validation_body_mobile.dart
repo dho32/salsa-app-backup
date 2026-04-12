@@ -24,6 +24,7 @@ import '../../../../components/widgets/photo_grid.dart';
 import '../../../../components/widgets/remark_photo_picker.dart';
 import '../../../../components/widgets/scan_qr.dart'; // Pastikan import ini ada
 import '../../../../models/common/measurement_entry.dart';
+import '../../../../models/proof_of_service/proof_of_service_detail_model.dart'; // 🔥 IMPORT BARU
 
 class PosValidationBodyMobile extends StatefulWidget {
   final String transNo;
@@ -81,21 +82,42 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
     _serialInputController = TextEditingController();
 
-    // --- Load Limit Dinamis dari Hive ---
+    // 🔥 --- Load Limit Gabungan (Global + API) --- 🔥
     final configBox = Hive.box(kAppConfigBox);
     final rawLimits = configBox.get('limits_pos_after');
-    final Map<String, MeasurementLimits> limitsMap = {};
+    final Map<String, MeasurementLimits> mergedLimits = {};
 
+    // 1. Ambil Limit Global (Bawaan Login)
     if (rawLimits is Map) {
       rawLimits.forEach((key, value) {
         if (key is String && value is MeasurementLimits) {
-          limitsMap[key] = value;
+          mergedLimits[key] = value;
         }
       });
     }
 
-    // Fallback ke kPOSMeasurementLimits jika Hive kosong
-    _limitsPosAfter = limitsMap.isNotEmpty ? limitsMap : kPOSMeasurementLimits;
+    // 2. Timpa dengan Custom Limit dari API Customer
+    try {
+      if (Hive.isBoxOpen(kPosDetailCacheBox)) {
+        final detailBox =
+            Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+        final detailData = detailBox.get(widget.transNo.trim().toUpperCase());
+
+        // Jika di API ada limit khusus, timpa limit global
+        if (detailData != null && detailData.customLimitsAfter != null) {
+          detailData.customLimitsAfter!.forEach((key, value) {
+            mergedLimits[key] = value;
+          });
+        }
+      }
+    } catch (e) {
+      print("Gagal mengambil limit API di UI POS: $e");
+    }
+
+    // 3. Pasang ke UI
+    _limitsPosAfter =
+        mergedLimits.isNotEmpty ? mergedLimits : kPOSMeasurementLimits;
+    // 🔥 ----------------------------------------- 🔥
 
     final state = context.read<PosValidationBloc>().state;
     String initialRemark = '';
@@ -126,9 +148,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
     for (var measurement in measurements) {
       final valueText =
-      measurement.value == measurement.value.truncateToDouble()
-          ? measurement.value.truncate().toString()
-          : measurement.value.toStringAsFixed(1);
+          measurement.value == measurement.value.truncateToDouble()
+              ? measurement.value.truncate().toString()
+              : measurement.value.toStringAsFixed(1);
 
       _controllers[measurement.measurementId] =
           TextEditingController(text: valueText == "0" ? "" : valueText);
@@ -147,7 +169,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     final currentState = context.read<PosValidationBloc>().state;
     if (currentState is PosValidationLoaded) {
       final photoList =
-      isBefore ? currentState.photosBefore : currentState.photosAfter;
+          isBefore ? currentState.photosBefore : currentState.photosAfter;
       if (photoList.length >= 2) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -202,7 +224,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         );
 
         final String? finalImagePath =
-        await WatermarkService.processImage(request);
+            await WatermarkService.processImage(request);
 
         if (finalImagePath == null) return;
 
@@ -273,7 +295,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           deviceModel: userData['device_model'] ?? 'Unknown Device',
         );
         final String? finalImagePath =
-        await WatermarkService.processImage(request);
+            await WatermarkService.processImage(request);
         if (finalImagePath == null) throw Exception("Gagal watermark");
 
         final capturedImageDetail = CapturedImageDetail(
@@ -389,7 +411,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
   Step _buildStep2(BuildContext context, PosValidationLoaded state) {
     final bool isAnyMeasurementSkipped =
-    state.measurementsAfter.any((m) => m.isSkipped ?? false);
+        state.measurementsAfter.any((m) => m.isSkipped ?? false);
 
     return Step(
       title: const Text('Sesudah'),
@@ -433,16 +455,18 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   if (!anyOtherSkipped) {
                     widget.noteController.clear();
                     // 🔥 Reset juga excludeQty jika tidak ada yang diskip
-                    context.read<PosValidationBloc>().add(UpdateExcludeQtyFlag(false));
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateExcludeQtyFlag(false));
                   }
                 }
               },
-              limitsMap: _limitsPosAfter,
+              limitsMap: _limitsPosAfter, // 🔥 KINI SUDAH DINAMIS DARI API
             ),
             if (isAnyMeasurementSkipped)
               Padding(
                 padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: _buildNoteDropdown(
                   context: context,
                   label: 'Catatan (Wajib jika skip pengukuran)',
@@ -463,7 +487,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   // 🔥 TANGKAP FLAG EXCLUDE QTY DI SINI
                   onExcludeQtyChanged: (bool excludeValue) {
                     // Kirim ke BLoC untuk disimpan ke model Hive yang baru
-                    context.read<PosValidationBloc>().add(UpdateExcludeQtyFlag(excludeValue));
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateExcludeQtyFlag(excludeValue));
                   },
                 ),
               ),
@@ -587,7 +613,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     required List<CapturedImageDetail> remarkPhotos,
     ValueChanged<bool>? onExcludeQtyChanged,
   }) {
-    // (Kode sama persis seperti file Akang, saya singkat agar muat)
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
     final filteredOptions = noteOptions
         .where((opt) => !opt.isSystemOnly || opt.label == controller.text)
@@ -608,33 +633,33 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             filled: true,
             fillColor:
-            isReadOnlySystemValue ? Colors.grey.shade200 : Colors.white,
+                isReadOnlySystemValue ? Colors.grey.shade200 : Colors.white,
           ),
           hint: const Text('Pilih Catatan'),
           onChanged: isReadOnlySystemValue
               ? null
               : (value) {
-            onChanged(value);
+                  onChanged(value);
 
-            if (value != null && onExcludeQtyChanged != null) {
-              final selectedOpt = noteOptions.firstWhere(
-                    (opt) => opt.label == value,
-                orElse: () => NoteOption(label: '', excludeQty: false),
-              );
-              onExcludeQtyChanged(selectedOpt.excludeQty);
-            }
+                  if (value != null && onExcludeQtyChanged != null) {
+                    final selectedOpt = noteOptions.firstWhere(
+                      (opt) => opt.label == value,
+                      orElse: () => NoteOption(label: '', excludeQty: false),
+                    );
+                    onExcludeQtyChanged(selectedOpt.excludeQty);
+                  }
 
-            FocusScope.of(context).unfocus();
-          },
+                  FocusScope.of(context).unfocus();
+                },
           items: filteredOptions
               .map((item) => DropdownMenuItem(
-              value: item.label,
-              child: Text(item.label, overflow: TextOverflow.ellipsis)))
+                  value: item.label,
+                  child: Text(item.label, overflow: TextOverflow.ellipsis)))
               .toList(),
           dropdownStyleData: DropdownStyleData(
               maxHeight: maxDropdownHeight,
               decoration:
-              BoxDecoration(borderRadius: BorderRadius.circular(15))),
+                  BoxDecoration(borderRadius: BorderRadius.circular(15))),
           dropdownSearchData: DropdownSearchData(
             searchController: _noteSearchController,
             searchInnerWidgetHeight: 50,
@@ -695,7 +720,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     required VoidCallback onAddPhoto,
     required ValueChanged<String> onRemovePhoto,
   }) {
-    // (Kode sama persis seperti file Akang)
     final Color primary = Theme.of(context).primaryColor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,7 +730,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           child: Text(title,
               style:
-              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
         if (photos.isNotEmpty)
           Padding(
@@ -716,21 +740,21 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           ),
         isLoading
             ? const Center(
-            child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator()))
+                child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator()))
             : Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.camera_alt),
-            label: Text(title),
-            onPressed: onAddPhoto,
-            style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 40),
-                side: BorderSide(color: primary),
-                foregroundColor: primary),
-          ),
-        ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.camera_alt),
+                  label: Text(title),
+                  onPressed: onAddPhoto,
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 40),
+                      side: BorderSide(color: primary),
+                      foregroundColor: primary),
+                ),
+              ),
       ],
     );
   }
@@ -742,7 +766,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         : state.serialNo;
 
     final displayColor =
-    state.isGeneric ? Colors.blue.shade700 : Colors.black54;
+        state.isGeneric ? Colors.blue.shade700 : Colors.black54;
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -759,7 +783,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
                 style:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Row(
@@ -802,9 +826,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
       BuildContext context, PosValidationLoaded state) {
     List<DropdownMenuItem<String>> items = state.availableIndoorSerials
         .map((serial) => DropdownMenuItem(
-      value: serial,
-      child: Text(serial),
-    ))
+              value: serial,
+              child: Text(serial),
+            ))
         .toList();
 
     if (state.pairedIndoorSerial != null &&
@@ -835,16 +859,16 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             items: items,
             onChanged: (newValue) {
               context.read<PosValidationBloc>().add(
-                PairOutdoorWithIndoor(
-                  outdoorSerialNo: widget.serialNo,
-                  indoorSerialNo: newValue,
-                ),
-              );
+                    PairOutdoorWithIndoor(
+                      outdoorSerialNo: widget.serialNo,
+                      indoorSerialNo: newValue,
+                    ),
+                  );
             },
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               contentPadding:
-              EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 16),
             ),
           ),
         ],
@@ -876,8 +900,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   children: [
                     TextSpan(
                       text: state.pairedIndoorSerial!,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),

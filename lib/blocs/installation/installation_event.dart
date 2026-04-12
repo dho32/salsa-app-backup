@@ -158,3 +158,17 @@ class UpdateTransportData extends InstallationEvent {
     this.photo,
   });
 }
+
+class UpdateTidyingData extends InstallationEvent {
+  final bool hasTidyingService;
+  final int tidyingQty;
+
+  const UpdateTidyingData({
+    required this.hasTidyingService,
+    required this.tidyingQty,
+  });
+
+  @override
+  List<Object?> get props => [hasTidyingService, tidyingQty];
+}
+

@@ -314,13 +314,15 @@ class InstallationEntryModelAdapter
       storeFrontPhoto: fields[13] as InstallationPhotoModel?,
       transportDistance: fields[14] as double?,
       transportEvidencePhoto: fields[15] as InstallationPhotoModel?,
+      hasTidyingService: fields[16] == null ? false : fields[16] as bool,
+      tidyingQty: fields[17] == null ? 0 : fields[17] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, InstallationEntryModel obj) {
     writer
-      ..writeByte(16)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -352,7 +354,11 @@ class InstallationEntryModelAdapter
       ..writeByte(14)
       ..write(obj.transportDistance)
       ..writeByte(15)
-      ..write(obj.transportEvidencePhoto);
+      ..write(obj.transportEvidencePhoto)
+      ..writeByte(16)
+      ..write(obj.hasTidyingService)
+      ..writeByte(17)
+      ..write(obj.tidyingQty);
   }
 
   @override

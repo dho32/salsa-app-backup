@@ -12,7 +12,7 @@ class ServiceCallDetailRepository {
       'trans_no': transNo,
       'vendor_id': vendorId,
     };
-    Uri uri = getUrl(pathUrl: 'service_call/detail/v2', params: params);
+    Uri uri = getUrl(pathUrl: 'service_call/detail/v3', params: params);
     final response = await http.get(uri);
 
     try {

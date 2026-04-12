@@ -1,6 +1,6 @@
 import 'package:salsa/models/service_call/problem_source_model.dart';
-
 import '../common/note_option.dart';
+import '../common/measurement_limits.dart'; // Pastikan path ini sesuai
 
 class ServiceCallDetailModel {
   final ServiceCallHeader header;
@@ -16,6 +16,10 @@ class ServiceCallDetailModel {
   final List<NoteOption> noteOutdoorPsiBeforeOptions;
   final List<NoteOption> noteOutdoorPsiAfterOptions;
 
+  // --- [TAMBAHAN: WADAH LIMIT DINAMIS SC] ---
+  final Map<String, MeasurementLimits> customLimitsBefore;
+  final Map<String, MeasurementLimits> customLimitsAfter;
+
   ServiceCallDetailModel({
     required this.header,
     required this.detail,
@@ -29,6 +33,8 @@ class ServiceCallDetailModel {
     required this.noteOutdoorAfterOptions,
     required this.noteOutdoorPsiBeforeOptions,
     required this.noteOutdoorPsiAfterOptions,
+    this.customLimitsBefore = const {},
+    this.customLimitsAfter = const {},
   });
 
   factory ServiceCallDetailModel.fromJson(Map<String, dynamic> json) {
@@ -42,12 +48,38 @@ class ServiceCallDetailModel {
         if (item is Map) {
           return NoteOption.fromJson(Map<String, dynamic>.from(item));
         } else if (item is String) {
-          // Fallback untuk string lama
           return NoteOption(label: item);
         }
         return NoteOption(label: item.toString());
       }).toList();
     }
+
+    // --- [TAMBAHAN: PARSING LIMIT DINAMIS DARI API] ---
+    Map<String, MeasurementLimits> parsedLimitsBefore = {};
+    Map<String, MeasurementLimits> parsedLimitsAfter = {};
+
+    if (json['measurements'] != null && json['measurements']['limits_validation_unit'] != null) {
+      final limitsData = json['measurements']['limits_validation_unit'];
+
+      // Parse SC Before
+      if (limitsData['sc_before'] != null && limitsData['sc_before'] is Map) {
+        limitsData['sc_before'].forEach((key, value) {
+          if (value is Map<String, dynamic>) {
+            parsedLimitsBefore[key] = MeasurementLimits.fromJson(value);
+          }
+        });
+      }
+
+      // Parse SC After
+      if (limitsData['sc_after'] != null && limitsData['sc_after'] is Map) {
+        limitsData['sc_after'].forEach((key, value) {
+          if (value is Map<String, dynamic>) {
+            parsedLimitsAfter[key] = MeasurementLimits.fromJson(value);
+          }
+        });
+      }
+    }
+    // ---------------------------------------------------
 
     return ServiceCallDetailModel(
       header: ServiceCallHeader.fromJson(json['header']),
@@ -64,6 +96,10 @@ class ServiceCallDetailModel {
       noteOutdoorAfterOptions: _parseNotes(json['note_outdoor_after_options']),
       noteOutdoorPsiBeforeOptions: _parseNotes(json['note_outdoor_psi_before_options']),
       noteOutdoorPsiAfterOptions: _parseNotes(json['note_outdoor_psi_after_options']),
+
+      // Masukkan hasil parsing
+      customLimitsBefore: parsedLimitsBefore,
+      customLimitsAfter: parsedLimitsAfter,
     );
   }
 }

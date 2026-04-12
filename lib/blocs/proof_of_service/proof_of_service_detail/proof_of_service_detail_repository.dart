@@ -9,7 +9,7 @@ class ProofOfServiceDetailRepository {
   Future<ProofOfServiceDetailModel> fetchProofOfServiceDetail(String transNo) async {
 
     final params = {'trans_no': transNo};
-    Uri uri = getUrl(pathUrl: 'proof_of_service/detail/v4', params: params);
+    Uri uri = getUrl(pathUrl: 'proof_of_service/detail/v5', params: params);
 
     final response = await http.get(uri);
     print("=================================");

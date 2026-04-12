@@ -41,7 +41,7 @@ class _MaterialInputFormBodyMobileState
 
   // --- ACCESSORIES ---
   String _mountingType = 'NONE';
-  bool _hasJasaPerapihan = false;
+  // [DIHAPUS] _hasJasaPerapihan sudah pindah ke halaman Summary (Global)
 
   Timer? _debounceTimer;
   bool _isSubmittingFinal = false;
@@ -120,11 +120,11 @@ class _MaterialInputFormBodyMobileState
   void _initializeFormData() {
     final materials = widget.existingData.materials;
     _mountingType =
-        materials.mountingType.isNotEmpty ? materials.mountingType : 'NONE';
-    _hasJasaPerapihan = materials.hasJasaPerapihan;
+    materials.mountingType.isNotEmpty ? materials.mountingType : 'NONE';
+    // [DIHAPUS] Inisialisasi _hasJasaPerapihan
 
     final existingAC = materials.pipes.firstWhere(
-        (p) => p.usageType != 'PIPA_DRAIN',
+            (p) => p.usageType != 'PIPA_DRAIN',
         orElse: () => InstallationMaterialItemModel(
             articleId: '',
             articleName: '',
@@ -143,7 +143,7 @@ class _MaterialInputFormBodyMobileState
     }
 
     final existingControl = materials.cables.firstWhere(
-        (c) => c.usageType == 'KABEL_CONTROL',
+            (c) => c.usageType == 'KABEL_CONTROL',
         orElse: () => InstallationMaterialItemModel(
             articleId: '',
             articleName: '',
@@ -171,7 +171,7 @@ class _MaterialInputFormBodyMobileState
     form['articleId'] = (data.articleId.isNotEmpty) ? data.articleId : null;
     form['brandId'] = (data.brandId.isNotEmpty) ? data.brandId : null;
     form['lengthController'].text =
-        (data.length > 0) ? data.length.toString() : '';
+    (data.length > 0) ? data.length.toString() : '';
   }
 
   void _addPipeDrainRow(InstallationMaterialItemModel? data) {
@@ -196,9 +196,9 @@ class _MaterialInputFormBodyMobileState
     if (_cableAdditionalForms.length >= 2) return;
     String defaultType = 'KABEL_POWER';
     bool hasPower =
-        _cableAdditionalForms.any((f) => f['usageType'] == 'KABEL_POWER');
+    _cableAdditionalForms.any((f) => f['usageType'] == 'KABEL_POWER');
     bool hasDuct =
-        _cableAdditionalForms.any((f) => f['usageType'] == 'KABEL_DUCT');
+    _cableAdditionalForms.any((f) => f['usageType'] == 'KABEL_DUCT');
 
     if (hasPower && !hasDuct) {
       defaultType = 'KABEL_DUCT';
@@ -229,14 +229,14 @@ class _MaterialInputFormBodyMobileState
     List<InstallationMaterialItemModel> finalCables = [];
 
     var acItem =
-        _parseRow(_pipeACForm, 'Pipa AC', isFinal, 'PIPA_AC', _pipeOptions);
+    _parseRow(_pipeACForm, 'Pipa AC', isFinal, 'PIPA_AC', _pipeOptions);
     if (acItem != null)
       finalPipes.add(acItem);
     else if (isFinal && _isRowTouched(_pipeACForm)) return null;
 
     for (var form in _pipeDrainForms) {
       var item =
-          _parseRow(form, 'Pipa Drain', isFinal, 'PIPA_DRAIN', _drainOptions);
+      _parseRow(form, 'Pipa Drain', isFinal, 'PIPA_DRAIN', _drainOptions);
       if (item != null)
         finalPipes.add(item);
       else if (isFinal && _isRowTouched(form)) return null;
@@ -251,7 +251,7 @@ class _MaterialInputFormBodyMobileState
     for (var form in _cableAdditionalForms) {
       String usage = form['usageType'];
       List<InstallationMasterOptionModel> opts =
-          (usage == 'KABEL_DUCT') ? _ductOptions : _cableOptions;
+      (usage == 'KABEL_DUCT') ? _ductOptions : _cableOptions;
       var item = _parseRow(form, 'Kabel Tambahan', isFinal, usage, opts);
       if (item != null) {
         finalCables.add(item);
@@ -273,7 +273,7 @@ class _MaterialInputFormBodyMobileState
       pipes: finalPipes,
       cables: finalCables,
       mountingType: _mountingType,
-      hasJasaPerapihan: _hasJasaPerapihan,
+      hasJasaPerapihan: false, // [DIHAPUS] Default false karena dipindah
     );
   }
 
@@ -293,7 +293,6 @@ class _MaterialInputFormBodyMobileState
     final String? brandId = form['brandId'];
     final String lenStr = form['lengthController'].text;
 
-    // Helper to get names safely
     String artName = '';
     String brandName = '';
 
@@ -359,8 +358,7 @@ class _MaterialInputFormBodyMobileState
     if (!isFinal &&
         newMaterials.pipes.isEmpty &&
         newMaterials.cables.isEmpty &&
-        _mountingType == 'NONE' &&
-        !_hasJasaPerapihan) {
+        _mountingType == 'NONE') { // [DIHAPUS] Cek _hasJasaPerapihan
       return;
     }
 
@@ -373,9 +371,9 @@ class _MaterialInputFormBodyMobileState
       _isSubmittingFinal = true;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Data Material Tersimpan"),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
+        content: Text("Data Material Tersimpan"),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
       ));
     }
   }
@@ -387,19 +385,16 @@ class _MaterialInputFormBodyMobileState
         behavior: SnackBarBehavior.floating));
   }
 
-  // --- BUILD ROW WIDGET (LOGIC DROPDOWN) ---
-
   Widget _buildFixedRow(
       {required Map<String, dynamic> form,
-      required List<InstallationMasterOptionModel> articleOptions,
-      required String labelArticle}) {
-    // [NEW] Logic: Ambil List Brand dari Artikel yang dipilih
+        required List<InstallationMasterOptionModel> articleOptions,
+        required String labelArticle}) {
     List<InstallationBrandModel> currentBrands = [];
     if (form['articleId'] != null) {
       try {
         final selectedOpt =
-            articleOptions.firstWhere((e) => e.id == form['articleId']);
-        currentBrands = selectedOpt.brands; // <-- AMBIL DARI SINI
+        articleOptions.firstWhere((e) => e.id == form['articleId']);
+        currentBrands = selectedOpt.brands;
       } catch (_) {}
     }
 
@@ -409,13 +404,13 @@ class _MaterialInputFormBodyMobileState
           value: form['articleId'],
           items: articleOptions
               .map((e) => DropdownMenuItem(
-                  value: e.id,
-                  child: Text(e.name, style: const TextStyle(fontSize: 13))))
+              value: e.id,
+              child: Text(e.name, style: const TextStyle(fontSize: 13))))
               .toList(),
           onChanged: (v) {
             setState(() {
               form['articleId'] = v;
-              form['brandId'] = null; // Reset brand kalau artikel ganti
+              form['brandId'] = null;
             });
             _onFormChanged();
           }),
@@ -428,9 +423,9 @@ class _MaterialInputFormBodyMobileState
                 value: form['brandId'],
                 items: currentBrands
                     .map((e) => DropdownMenuItem(
-                        value: e.id,
-                        child:
-                            Text(e.name, style: const TextStyle(fontSize: 13))))
+                    value: e.id,
+                    child:
+                    Text(e.name, style: const TextStyle(fontSize: 13))))
                     .toList(),
                 onChanged: (v) {
                   setState(() => form['brandId'] = v);
@@ -447,15 +442,15 @@ class _MaterialInputFormBodyMobileState
 
   Widget _buildRemovableRow(
       {required int index,
-      required Map<String, dynamic> form,
-      required List<InstallationMasterOptionModel> articleOptions,
-      required String labelArticle,
-      required VoidCallback onRemove}) {
+        required Map<String, dynamic> form,
+        required List<InstallationMasterOptionModel> articleOptions,
+        required String labelArticle,
+        required VoidCallback onRemove}) {
     List<InstallationBrandModel> currentBrands = [];
     if (form['articleId'] != null) {
       try {
         final selectedOpt =
-            articleOptions.firstWhere((e) => e.id == form['articleId']);
+        articleOptions.firstWhere((e) => e.id == form['articleId']);
         currentBrands = selectedOpt.brands;
       } catch (_) {}
     }
@@ -475,9 +470,9 @@ class _MaterialInputFormBodyMobileState
                   value: form['articleId'],
                   items: articleOptions
                       .map((e) => DropdownMenuItem(
-                          value: e.id,
-                          child: Text(e.name,
-                              style: const TextStyle(fontSize: 13))))
+                      value: e.id,
+                      child: Text(e.name,
+                          style: const TextStyle(fontSize: 13))))
                       .toList(),
                   onChanged: (v) {
                     setState(() {
@@ -507,9 +502,9 @@ class _MaterialInputFormBodyMobileState
                   value: form['brandId'],
                   items: currentBrands
                       .map((e) => DropdownMenuItem(
-                          value: e.id,
-                          child: Text(e.name,
-                              style: const TextStyle(fontSize: 13))))
+                      value: e.id,
+                      child: Text(e.name,
+                          style: const TextStyle(fontSize: 13))))
                       .toList(),
                   onChanged: (v) {
                     setState(() => form['brandId'] = v);
@@ -528,10 +523,9 @@ class _MaterialInputFormBodyMobileState
   Widget _buildAdditionalCableRow(int index) {
     String usage = _cableAdditionalForms[index]['usageType'];
     List<InstallationMasterOptionModel> opts =
-        (usage == 'KABEL_DUCT') ? _ductOptions : _cableOptions;
+    (usage == 'KABEL_DUCT') ? _ductOptions : _cableOptions;
     String label = (usage == 'KABEL_DUCT') ? "Jenis Duct" : "Jenis Kabel";
 
-    // Logic Brand List
     List<InstallationBrandModel> currentBrands = [];
     String? artId = _cableAdditionalForms[index]['articleId'];
     if (artId != null) {
@@ -576,13 +570,13 @@ class _MaterialInputFormBodyMobileState
             value: _cableAdditionalForms[index]['articleId'],
             items: opts
                 .map((e) => DropdownMenuItem(
-                    value: e.id,
-                    child: Text(e.name, style: const TextStyle(fontSize: 13))))
+                value: e.id,
+                child: Text(e.name, style: const TextStyle(fontSize: 13))))
                 .toList(),
             onChanged: (v) {
               setState(() {
                 _cableAdditionalForms[index]['articleId'] = v;
-                _cableAdditionalForms[index]['brandId'] = null; // Reset
+                _cableAdditionalForms[index]['brandId'] = null;
               });
               _onFormChanged();
             }),
@@ -595,9 +589,9 @@ class _MaterialInputFormBodyMobileState
                   value: _cableAdditionalForms[index]['brandId'],
                   items: currentBrands
                       .map((e) => DropdownMenuItem(
-                          value: e.id,
-                          child: Text(e.name,
-                              style: const TextStyle(fontSize: 13))))
+                      value: e.id,
+                      child: Text(e.name,
+                          style: const TextStyle(fontSize: 13))))
                       .toList(),
                   onChanged: (v) {
                     setState(() => _cableAdditionalForms[index]['brandId'] = v);
@@ -614,18 +608,17 @@ class _MaterialInputFormBodyMobileState
     );
   }
 
-  // --- WIDGET HELPER ---
   Widget _buildDropdown(
       {required String label,
-      required String? value,
-      required List<DropdownMenuItem<String>> items, // Ganti tipe param
-      required Function(String?) onChanged}) {
+        required String? value,
+        required List<DropdownMenuItem<String>> items,
+        required Function(String?) onChanged}) {
     return DropdownButtonFormField2<String>(
       isExpanded: true,
       decoration: InputDecoration(
           isDense: true,
           contentPadding:
-              const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+          const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
           labelText: label,
           border: _inputBorder,
           enabledBorder: _inputBorder,
@@ -636,17 +629,11 @@ class _MaterialInputFormBodyMobileState
           style: TextStyle(fontSize: 13, color: Colors.grey)),
       value: value,
       items: items,
-      // Direct pass
       onChanged: onChanged,
       dropdownStyleData: DropdownStyleData(
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(10))),
     );
   }
-
-  // ... (Sisa Widget seperti _buildToggleChip, _buildTextField, _buildRadioTile dll SAMA PERSIS)
-  // Biar hemat tempat, sisa method build bisa dicopy dari kode lama Akang
-  // Bagian yang berubah SIGNIFIKAN hanya di _buildFixedRow, _buildRemovableRow, dan _buildAdditionalCableRow.
-  // Tapi kalau mau full file lagi biar aman, bilang ya Kang!
 
   Widget _buildToggleChip(
       int index, String label, String value, String current) {
@@ -700,7 +687,7 @@ class _MaterialInputFormBodyMobileState
       decoration: InputDecoration(
           isDense: true,
           contentPadding:
-              const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+          const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
           labelText: label,
           border: _inputBorder,
           enabledBorder: _inputBorder,
@@ -734,16 +721,6 @@ class _MaterialInputFormBodyMobileState
         ]),
       ),
     );
-  }
-
-  Widget _buildSwitchTile(String title, bool val, Function(bool) onChange) {
-    return SwitchListTile(
-        title: Text(title, style: const TextStyle(fontSize: 14)),
-        value: val,
-        onChanged: onChange,
-        activeColor: Colors.orange[800],
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-        dense: true);
   }
 
   Widget _buildAddButton(String label, VoidCallback onTap) => SizedBox(
@@ -792,21 +769,21 @@ class _MaterialInputFormBodyMobileState
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      const Text("INDOOR",
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey)),
-                      Text(indoorName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13),
-                          overflow: TextOverflow.ellipsis),
-                      Text(indoorSN,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.indigo[800],
-                              fontWeight: FontWeight.bold))
-                    ]))
+                          const Text("INDOOR",
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey)),
+                          Text(indoorName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13),
+                              overflow: TextOverflow.ellipsis),
+                          Text(indoorSN,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.indigo[800],
+                                  fontWeight: FontWeight.bold))
+                        ]))
               ]),
               const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
@@ -824,21 +801,21 @@ class _MaterialInputFormBodyMobileState
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      const Text("OUTDOOR",
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey)),
-                      Text(widget.target.description,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13),
-                          overflow: TextOverflow.ellipsis),
-                      Text(widget.existingData.serialNo,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.blue[800],
-                              fontWeight: FontWeight.bold))
-                    ]))
+                          const Text("OUTDOOR",
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey)),
+                          Text(widget.target.description,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13),
+                              overflow: TextOverflow.ellipsis),
+                          Text(widget.existingData.serialNo,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.blue[800],
+                                  fontWeight: FontWeight.bold))
+                        ]))
               ]),
             ])));
   }
@@ -897,7 +874,7 @@ class _MaterialInputFormBodyMobileState
                                 onRemove: () => _removePipeDrainRow(e.key))),
                         if (_pipeDrainForms.isEmpty)
                           _buildAddButton("Tambah Pipa Drain",
-                              () => _addPipeDrainRow(null)),
+                                  () => _addPipeDrainRow(null)),
                       ]),
                   const SizedBox(height: 16),
                   _buildSectionCard(
@@ -925,11 +902,11 @@ class _MaterialInputFormBodyMobileState
                             .map((e) => _buildAdditionalCableRow(e.key)),
                         if (_cableAdditionalForms.length < 2)
                           _buildAddButton("Tambah Kabel Power / Duct",
-                              () => _addCableAdditionalRow(null)),
+                                  () => _addCableAdditionalRow(null)),
                       ]),
                   const SizedBox(height: 16),
                   _buildSectionCard(
-                      title: "MOUNTING & LAINNYA",
+                      title: "MOUNTING", // [DIUBAH] Judulnya dirapikan
                       icon: FontAwesomeIcons.screwdriverWrench,
                       color: Colors.grey.shade100,
                       iconColor: Colors.grey.shade700,
@@ -948,19 +925,8 @@ class _MaterialInputFormBodyMobileState
                         _buildRadioTile("Kerangkeng", "KERANGKENG"),
                         const Divider(height: 1),
                         _buildRadioTile("Mounting Outdoor", "MOUNTING_OUTDOOR"),
-                        const SizedBox(height: 16),
-                        const Padding(
-                            padding: EdgeInsets.only(bottom: 8),
-                            child: Text("Biaya Tambahan:",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: Colors.black54))),
-                        _buildSwitchTile(
-                            "Jasa Perapihan Jalur", _hasJasaPerapihan, (v) {
-                          setState(() => _hasJasaPerapihan = v);
-                          _onFormChanged();
-                        }),
+
+                        // [DIHAPUS] Switch Biaya Tambahan Jasa Perapihan
                       ]),
                 ],
               ),
@@ -1002,11 +968,11 @@ class _MaterialInputFormBodyMobileState
 
   Widget _buildSectionCard(
       {required String title,
-      required IconData icon,
-      required Color color,
-      required Color iconColor,
-      required List<Widget> children,
-      bool isMandatory = false}) {
+        required IconData icon,
+        required Color color,
+        required Color iconColor,
+        required List<Widget> children,
+        bool isMandatory = false}) {
     return Card(
       elevation: 2,
       shadowColor: Colors.black12,
@@ -1017,7 +983,7 @@ class _MaterialInputFormBodyMobileState
             decoration: BoxDecoration(
                 color: color,
                 borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(12))),
+                const BorderRadius.vertical(top: Radius.circular(12))),
             child: Row(children: [
               Icon(icon, size: 16, color: iconColor),
               const SizedBox(width: 10),
@@ -1030,7 +996,7 @@ class _MaterialInputFormBodyMobileState
               if (isMandatory)
                 Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
