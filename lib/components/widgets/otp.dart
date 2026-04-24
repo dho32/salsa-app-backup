@@ -26,6 +26,7 @@ class OtpDialog extends StatefulWidget {
   final double storeLong;
   final VoidCallback onVerified;
   final bool isPhotoExisting;
+  final bool isOtpRequired;
 
   const OtpDialog({
     super.key,
@@ -36,6 +37,7 @@ class OtpDialog extends StatefulWidget {
     required this.storeLong,
     required this.onVerified,
     required this.isPhotoExisting,
+    required this.isOtpRequired,
   });
 
   @override
@@ -54,8 +56,12 @@ class _OtpDialogState extends State<OtpDialog> {
   void initState() {
     super.initState();
 
-    context.read<OtpBloc>().add(CheckOtpStatus(widget.transNo,
-        hasExistingPhoto: widget.isPhotoExisting));
+    _showLocationUI = !widget.isOtpRequired;
+
+    if (widget.isOtpRequired) {
+      context.read<OtpBloc>().add(CheckOtpStatus(widget.transNo,
+          hasExistingPhoto: widget.isPhotoExisting));
+    }
 
     context.read<LocationValidationBloc>().add(LoadLocationPhoto(
           widget.transNo,
@@ -411,6 +417,7 @@ class _OtpDialogState extends State<OtpDialog> {
   }
 
   Widget _buildResetButtonIfAvailable() {
+    if (!widget.isOtpRequired) return const SizedBox.shrink();
     return BlocBuilder<OtpBloc, OtpState>(
       builder: (context, otpState) {
         bool showReset = false;

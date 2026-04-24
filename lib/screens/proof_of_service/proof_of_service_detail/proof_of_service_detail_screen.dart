@@ -253,51 +253,54 @@ class _ProofOfServiceDetailScreenState
                       }
                     }
 
-                    showDialog<void>(
-                      context: context,
-                      builder: (_) {
-                        return MultiBlocProvider(
-                          providers: [
-                            BlocProvider.value(value: otpBloc),
-                            BlocProvider.value(value: locationBloc),
-                            BlocProvider.value(
-                                value: context.read<UploadProgressCubit>()),
-                          ],
-                          child: OtpDialog(
-                            transNo: header.transNo,
-                            shipTo: header.shipToCode,
-                            email: header.storeEmail,
-                            storeLat: double.tryParse(header.latitude) ?? 0.0,
-                            storeLong: double.tryParse(header.longitude) ?? 0.0,
-                            isPhotoExisting: isPhotoReady,
-                            onVerified: () {
-                              Navigator.pop(context);
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (_) => const Center(
-                                    child: CircularProgressIndicator()),
-                              );
-                              AuthStorage.getUser().then((user) {
-                                getPublicIpAddress().then((ip) {
-                                  if (!mounted) return; // SAFEGUARD
-                                  context.read<PosSubmittedBloc>().add(
-                                        SubmitPosValidation(
-                                          transNo: header.transNo,
-                                          createdBy: user['user_id'] ?? '',
-                                          createdByName: user['name'] ?? '',
-                                          createdByIP: ip,
-                                          progressCubit: context
-                                              .read<UploadProgressCubit>(),
-                                        ),
-                                      );
+                    OtpStorage.isOtpRequired().then((wajibOtp) {
+                      showDialog<void>(
+                        context: context,
+                        builder: (_) {
+                          return MultiBlocProvider(
+                            providers: [
+                              BlocProvider.value(value: otpBloc),
+                              BlocProvider.value(value: locationBloc),
+                              BlocProvider.value(
+                                  value: context.read<UploadProgressCubit>()),
+                            ],
+                            child: OtpDialog(
+                              transNo: header.transNo,
+                              shipTo: header.shipToCode,
+                              email: header.storeEmail,
+                              storeLat: double.tryParse(header.latitude) ?? 0.0,
+                              storeLong: double.tryParse(header.longitude) ?? 0.0,
+                              isPhotoExisting: isPhotoReady,
+                              isOtpRequired: wajibOtp,
+                              onVerified: () {
+                                Navigator.pop(context);
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (_) => const Center(
+                                      child: CircularProgressIndicator()),
+                                );
+                                AuthStorage.getUser().then((user) {
+                                  getPublicIpAddress().then((ip) {
+                                    if (!mounted) return; // SAFEGUARD
+                                    context.read<PosSubmittedBloc>().add(
+                                      SubmitPosValidation(
+                                        transNo: header.transNo,
+                                        createdBy: user['user_id'] ?? '',
+                                        createdByName: user['name'] ?? '',
+                                        createdByIP: ip,
+                                        progressCubit: context
+                                            .read<UploadProgressCubit>(),
+                                      ),
+                                    );
+                                  });
                                 });
-                              });
-                            },
-                          ),
-                        );
-                      },
-                    );
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    });
                   }
                 }
               },

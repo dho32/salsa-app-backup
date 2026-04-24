@@ -116,3 +116,25 @@ class AuthStorage {
     await prefs.remove(_deviceModelKey);
   }
 }
+
+class OtpStorage {
+  static const _globalOtpKey = 'global_otp_required';
+
+  /// Simpan status OTP secara global (menimpa status sebelumnya)
+  static Future<void> saveOtpFlag(bool isRequired) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_globalOtpKey, isRequired);
+  }
+
+  /// Baca status OTP global saat ini
+  static Future<bool> isOtpRequired() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_globalOtpKey) ?? true; // Default true demi keamanan
+  }
+
+  /// (Opsional) Hapus flag global jika teknisi logout
+  static Future<void> clearOtpFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_globalOtpKey);
+  }
+}

@@ -499,20 +499,16 @@ class _ProofOfServiceDetailBodyMobileState
       PosFormState formState, List<NoteOption> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
 
-    // Batasan untuk suhu akhir, bisa sama atau beda dari suhu awal
-    final minLimit = formState.minFinalTempInLimit;
 
-    final String label = minLimit != null
-        ? 'Suhu Dalam Ruangan (Min: ${minLimit.toStringAsFixed(1)}°C)'
-        : 'Suhu Dalam Ruangan (°C)';
+    final String label = 'Suhu Dalam Ruangan (°C)';
 
     final finalTempLimits = MeasurementLimits(
       id: _finalTempBaseLimits.id,
       label: label,
-      min: minLimit ?? _finalTempBaseLimits.min,
+      min: _finalTempBaseLimits.min,
       max: _finalTempBaseLimits.max,
       unit: _finalTempBaseLimits.unit,
-      normalMin: minLimit ?? _finalTempBaseLimits.normalMin,
+      normalMin: _finalTempBaseLimits.normalMin,
       normalMax: _finalTempBaseLimits.normalMax,
     );
 
@@ -1133,8 +1129,9 @@ class _ProofOfServiceDetailBodyMobileState
                 final tempInValue = double.tryParse(latestFormState.tempIn);
                 final tempOutValue = double.tryParse(latestFormState.tempOut);
                 final finalTempInValue =
-                    double.tryParse(latestFormState.finalTempIn);
-                final minLimit = latestFormState.minFinalTempInLimit;
+                double.tryParse(latestFormState.finalTempIn);
+
+                // 🔥 Kabel 'minLimit' dinamis sudah kita buang!
 
                 if (tempInValue != null) {
                   if (tempInValue < kIndoorLimits.min ||
@@ -1156,8 +1153,8 @@ class _ProofOfServiceDetailBodyMobileState
 
                 if (!latestFormState.isFinalTempInSkipped &&
                     finalTempInValue != null) {
-                  // Gunakan base limit dari API jika 'minLimit' dinamis tidak ada
-                  final baseMin = minLimit ?? _finalTempBaseLimits.min;
+                  // 🔥 POTONG KABEL: Gunakan murni base limit dari API
+                  final baseMin = _finalTempBaseLimits.min;
                   final baseMax = _finalTempBaseLimits.max;
 
                   if (finalTempInValue < baseMin ||
@@ -1169,10 +1166,10 @@ class _ProofOfServiceDetailBodyMobileState
                 }
 
                 context.read<PosSubmittedBloc>().add(FinalValidationRequested(
-                      transNo: header.transNo,
-                      formState: latestFormState,
-                      customerCode: header.shipToCode,
-                    ));
+                  transNo: header.transNo,
+                  formState: latestFormState,
+                  customerCode: header.shipToCode,
+                ));
               } else {
                 // Logika untuk menampilkan snackbar jika form belum siap (ini sudah benar)
                 if (!latestFormState.isPicStoreValid) {

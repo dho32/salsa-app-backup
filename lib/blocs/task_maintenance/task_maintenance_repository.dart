@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../components/shared_function.dart';
 import '../../models/task_maintenance/task_maintenance_model.dart';
+import '../auth/auth_storage.dart';
 
 class TaskMaintenanceRepository {
   Future<List<TransactionSuggestion>> searchTransactions(
@@ -12,13 +13,23 @@ class TaskMaintenanceRepository {
     try {
       final params = {'trans_no': transNo, 'maintenance_by': maintenanceBy};
 
-      Uri uri = getUrl(pathUrl: 'task_maintenance/v3', params: params);
+      Uri uri = getUrl(pathUrl: 'task_maintenance/v4', params: params);
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 'OK') {
           final List<dynamic> results = body['result'] ?? [];
+
+          for (var item in results) {
+            if (item['trans_no'] != null) {
+              final bool isOtpRequired = item['is_otp_required'] ?? true;
+
+              // Simpan ke SharedPreferences
+              await OtpStorage.saveOtpFlag(isOtpRequired);
+            }
+          }
+
           return results
               .map((json) => TransactionSuggestion.fromJson(json))
               .toList();
@@ -125,23 +136,6 @@ class TaskMaintenanceRepository {
             'Gagal memuat list tugas. Code: ${response.statusCode}');
       }
 
-      // await Future.delayed(Duration(seconds: 1)); // Simulasi delay
-      // return [
-      //   TransactionSuggestion(
-      //       transNo: "ZOMBIE-123", // Transaksi Pura-pura
-      //       customerName: "Toko Test",
-      //       customerCode: "XXX",
-      //       status: "NEED_UPLOAD", // Status memicu
-      //       type: "SERVICE"
-      //   ),
-      //   TransactionSuggestion(
-      //       transNo: "ZOMBIE-12453", // Transaksi Pura-pura
-      //       customerName: "Toko Test45",
-      //       customerCode: "XX45X",
-      //       status: "NEED_UPLOAD", // Status memicu
-      //       type: "CUCI"
-      //   )
-      // ];
     } catch (e) {
       // Return list kosong jika gagal koneksi/error, supaya user tetap bisa pakai fitur search manual
       log("Error fetching pending tasks: $e");
