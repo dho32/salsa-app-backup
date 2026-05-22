@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../components/shared_function.dart';
@@ -91,39 +92,33 @@ class LocationValidationBloc
 
       // GPS LOGIC
       Position? position;
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      bool isFresh = false;
-
-      if (lastKnown != null) {
-        final age = DateTime.now().difference(lastKnown.timestamp).inMinutes;
-        if (age < 20) {
-          position = lastKnown;
-          isFresh = true;
-        }
-      }
-
-      if (!isFresh) {
-        try {
-          position = await Geolocator.getCurrentPosition(
-            locationSettings:
-                const LocationSettings(accuracy: LocationAccuracy.high),
-          ).timeout(const Duration(seconds: 10));
-        } catch (e) {
-          emit(const LocationValidationFailure(
-              "Gagal mendeteksi lokasi akurat. Harap geser ke dekat jendela atau area terbuka.",
-              photo: null));
-          return;
-        }
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings:
+              const LocationSettings(accuracy: LocationAccuracy.high),
+        ).timeout(const Duration(seconds: 10));
+      } catch (e) {
+        emit(const LocationValidationFailure(
+            "Gagal mendeteksi lokasi akurat. Harap geser ke dekat jendela atau area terbuka.",
+            photo: null));
+        return;
       }
 
       final String locationString =
-          "Loc: ${position!.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}";
+          "Loc: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}";
 
       // Prepare Watermark
       final userData = await AuthStorage.getUser();
       final technicianName = userData['name'] ?? 'Unknown';
       final deviceModel = userData['device_model'] ?? 'Unknown Device';
       final timestamp = DateTime.now();
+
+      // Ambil timezone dari device
+      final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+      // Format tanggal pakai locale (AMAN)
+      final formattedDate =
+          '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
 
       final appDir = await getApplicationDocumentsDirectory();
       final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
@@ -138,7 +133,7 @@ class LocationValidationBloc
         originalPath: image.path,
         targetPath: targetPath,
         transNo: event.transNo,
-        timestamp: timestamp,
+        formattedDate: formattedDate,
         technicianName: technicianName,
         deviceModel: deviceModel,
         location: locationString,
@@ -205,27 +200,38 @@ class LocationValidationBloc
 
   Future<void> _onSubmitValidation(SubmitLocationValidation event,
       Emitter<LocationValidationState> emit) async {
+    // 🕵️ AMBIL FOTO DARI MEMORY (STATE) DULU SEBELUM LOADING
+    CapturedImageDetail? currentPhoto;
+    if (state is LocationPhotoLoaded) {
+      currentPhoto = (state as LocationPhotoLoaded).photo;
+    } else if (state is LocationValidationFailure) {
+      currentPhoto = (state as LocationValidationFailure).photo;
+    }
+
     emit(LocationValidationLoading());
     await Future.delayed(const Duration(milliseconds: 50));
 
-    final key = generateHiveKey(event.transNo);
-    final txn = transactionBox.get(key) as IPicPhotoStorable?;
-    final photo = txn?.picImageDetail;
+    // Kalau di memory kosong, baru coba cari di Hive
+    if (currentPhoto == null) {
+      final key = generateHiveKey(event.transNo);
+      final txn = transactionBox.get(key) as IPicPhotoStorable?;
+      currentPhoto = txn?.picImageDetail;
+    }
 
-    if (photo == null) {
+    if (currentPhoto == null) {
       emit(const LocationValidationFailure("Harap ambil foto terlebih dahulu"));
       return;
     }
 
     // Validasi final file exist
-    if (!File(photo.imagePath).existsSync()) {
+    if (!File(currentPhoto.imagePath).existsSync()) {
       emit(const LocationValidationFailure(
           "File foto fisik hilang. Harap ambil ulang."));
       return;
     }
 
     final isValid = await LocationHelper.validateLocation(
-      pic: photo,
+      pic: currentPhoto,
       tokoLat: event.tokoLat,
       tokoLng: event.tokoLng,
     );
@@ -234,13 +240,13 @@ class LocationValidationBloc
       emit(LocationValidationSuccess());
     } else {
       final distance = await LocationHelper.calculateDistance(
-        pic: photo,
+        pic: currentPhoto,
         tokoLat: event.tokoLat,
         tokoLng: event.tokoLng,
       );
       emit(LocationValidationFailure(
         "Lokasi foto terlalu jauh (${distance.toStringAsFixed(0)}m). Mohon ambil ulang di lokasi toko.",
-        photo: photo,
+        photo: currentPhoto,
         distance: distance,
       ));
     }

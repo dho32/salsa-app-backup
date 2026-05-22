@@ -10,7 +10,7 @@ class OtpRepository {
       'ship_to': shipTo,
       'is_first': isFirst
     };
-    Uri uri = getUrl(pathUrl: 'otp/request', params: params);
+    Uri uri = getUrl(pathUrl: 'otp/request/v2', params: params);
 
     print(uri);
 

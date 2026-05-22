@@ -63,7 +63,7 @@ class FailedUploadsBodyMobile extends StatelessWidget {
     List<Map<String, dynamic>> result = [];
     Set<String> processedIDs = {};
 
-    // 1. PROSES DATA LOKAL (HIVE) -> INI PASTI MATCH (KUNING)
+    // 1. PROSES DATA LOKAL (HIVE)
     for (var l in localList) {
       String transNo = (l['transNo'] ?? '').toString().trim();
       if (transNo.isEmpty) continue;
@@ -84,7 +84,7 @@ class FailedUploadsBodyMobile extends StatelessWidget {
     for (var a in apiList) {
       String apiID = a.transNo.trim().toUpperCase();
 
-      // Jika ID API ini TIDAK ADA di Hive (processedIDs), berarti NO MATCH -> ZOMBIE (MERAH)
+      // Jika ID API ini TIDAK ADA di Hive (processedIDs)
       if (!processedIDs.contains(apiID)) {
         result.add({
           'transNo': a.transNo,
@@ -93,7 +93,6 @@ class FailedUploadsBodyMobile extends StatelessWidget {
           'failedFiles': [], // Gak ada file lokal
         });
       }
-      // Jika MATCH (ada di Hive), sudah masuk di loop pertama, jadi skip.
     }
 
     return result;
@@ -199,7 +198,8 @@ class FailedUploadsBodyMobile extends StatelessWidget {
                                 ));
                           },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isZombie ? Colors.orangeAccent : Colors.green,
+                      backgroundColor:
+                          isZombie ? Colors.orangeAccent : Colors.green,
                       foregroundColor: Colors.white,
                     ),
                     icon: Icon(isZombie ? Icons.auto_fix_high : Icons.upload,

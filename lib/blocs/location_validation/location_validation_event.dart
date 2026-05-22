@@ -40,11 +40,13 @@ class RemoveLocationPhoto extends LocationValidationEvent {
 
 class SubmitLocationValidation extends LocationValidationEvent {
   final String transNo;
+  final String store;
   final double tokoLat;
   final double tokoLng;
 
-  const SubmitLocationValidation(this.transNo, this.tokoLat, this.tokoLng);
+  const SubmitLocationValidation(
+      this.transNo, this.store, this.tokoLat, this.tokoLng);
 
   @override
-  List<Object?> get props => [transNo, tokoLat, tokoLng];
+  List<Object?> get props => [transNo, store, tokoLat, tokoLng];
 }

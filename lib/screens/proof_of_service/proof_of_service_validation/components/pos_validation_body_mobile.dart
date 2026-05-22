@@ -1,11 +1,12 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Untuk InputFormatter
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
@@ -17,10 +18,13 @@ import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_valid
 import '../../../../blocs/proof_of_service/proof_of_service_validation/pos_validation_state.dart';
 import '../../../../components/constants.dart';
 import '../../../../components/services/watermark_service.dart';
+import '../../../../components/shared_function.dart';
 import '../../../../components/widgets/generic_measurement_input_section.dart';
 import '../../../../components/widgets/photo_grid.dart';
 import '../../../../components/widgets/remark_photo_picker.dart';
+import '../../../../components/widgets/scan_qr.dart'; // Pastikan import ini ada
 import '../../../../models/common/measurement_entry.dart';
+import '../../../../models/proof_of_service/proof_of_service_detail_model.dart'; // 🔥 IMPORT BARU
 
 class PosValidationBodyMobile extends StatefulWidget {
   final String transNo;
@@ -54,6 +58,10 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   bool _isTakingPhotoRemark = false;
   final Map<String, TextEditingController> _controllers = {};
   late final TextEditingController _remarkController;
+
+  // 🔥 Controller Baru untuk Input Serial Number (Generic)
+  late final TextEditingController _serialInputController;
+
   String labelUnitIndoor = "Foto Unit Indoor & Evaporator";
   String labelUnitOutdoor = "Foto Unit Outdoor & Kondensor";
   String labelUnit = "";
@@ -72,26 +80,56 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
       labelUnit = labelUnitOutdoor;
     }
 
-    // --- Load Limit Dinamis dari Hive ---
+    _serialInputController = TextEditingController();
+
+    // 🔥 --- Load Limit Gabungan (Global + API) --- 🔥
     final configBox = Hive.box(kAppConfigBox);
     final rawLimits = configBox.get('limits_pos_after');
-    final Map<String, MeasurementLimits> limitsMap = {};
+    final Map<String, MeasurementLimits> mergedLimits = {};
 
+    // 1. Ambil Limit Global (Bawaan Login)
     if (rawLimits is Map) {
       rawLimits.forEach((key, value) {
         if (key is String && value is MeasurementLimits) {
-          limitsMap[key] = value;
+          mergedLimits[key] = value;
         }
       });
     }
 
-    // Fallback ke kPOSMeasurementLimits jika Hive kosong
-    _limitsPosAfter = limitsMap.isNotEmpty ? limitsMap : kPOSMeasurementLimits;
+    // 2. Timpa dengan Custom Limit dari API Customer
+    try {
+      if (Hive.isBoxOpen(kPosDetailCacheBox)) {
+        final detailBox =
+            Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+        final detailData = detailBox.get(widget.transNo.trim().toUpperCase());
+
+        // Jika di API ada limit khusus, timpa limit global
+        if (detailData != null && detailData.customLimitsAfter != null) {
+          detailData.customLimitsAfter!.forEach((key, value) {
+            mergedLimits[key] = value;
+          });
+        }
+      }
+    } catch (e) {
+      print("Gagal mengambil limit API di UI POS: $e");
+    }
+
+    // 3. Pasang ke UI
+    _limitsPosAfter =
+        mergedLimits.isNotEmpty ? mergedLimits : kPOSMeasurementLimits;
+    // 🔥 ----------------------------------------- 🔥
 
     final state = context.read<PosValidationBloc>().state;
     String initialRemark = '';
     if (state is PosValidationLoaded) {
       initialRemark = state.noteRemark ?? '';
+
+      if (state.isGeneric && state.serialNo.isNotEmpty) {
+        final snUpperCase = state.serialNo.trim().toUpperCase();
+        if (!RegExp(r'^AC\s*-\s*\d+$').hasMatch(snUpperCase)) {
+          _serialInputController.text = state.serialNo;
+        }
+      }
     }
     _remarkController = TextEditingController(text: initialRemark);
   }
@@ -101,6 +139,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     _disposeControllers();
     _noteSearchController.dispose();
     _remarkController.dispose();
+    _serialInputController.dispose(); // 🔥
     super.dispose();
   }
 
@@ -146,7 +185,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     setState(() => _isTakingPhoto = true);
 
     try {
-      // Bersihkan memori gambar sebelum membuka kamera berat (Anti OOM)
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
 
@@ -163,6 +201,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final technicianName = userData['name'] ?? 'Unknown';
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
 
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
@@ -170,16 +211,14 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           await imagesDir.create();
         }
 
-        // Path Target Watermark
         final targetPath = p.join(
             imagesDir.path, 'WM_POS_${timestamp.millisecondsSinceEpoch}.jpg');
 
-        // Proses Watermark di Background
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );
@@ -187,13 +226,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final String? finalImagePath =
             await WatermarkService.processImage(request);
 
-        if (finalImagePath == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Gagal memproses foto")));
-          }
-          return;
-        }
+        if (finalImagePath == null) return;
 
         final capturedImageDetail = CapturedImageDetail(
           imagePath: finalImagePath,
@@ -216,11 +249,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memproses foto: $e')),
-        );
-      }
+      // Error handling
     } finally {
       if (mounted) setState(() => _isTakingPhoto = false);
     }
@@ -228,66 +257,45 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
   Future<void> _handleRemarkPhoto(BuildContext context) async {
     final currentState = context.read<PosValidationBloc>().state;
-
-    // 1. Cek Limit Foto (Misal Max 2)
     if (currentState is PosValidationLoaded) {
       final currentPhotos = currentState.remarkPhotos ?? [];
-      if (currentPhotos.length >= 2) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Maksimal hanya bisa upload 2 foto remark.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (currentPhotos.length >= 5) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Maksimal hanya bisa upload 5 foto remark.')));
         return;
       }
     }
-
     setState(() => _isTakingPhotoRemark = true);
-
     try {
-      // 2. Bersihkan Cache Gambar
       PaintingBinding.instance.imageCache.clear();
-      PaintingBinding.instance.imageCache.clearLiveImages();
-
-      // 3. Ambil Foto
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1080,
-        maxHeight: 1920,
-        imageQuality: 80,
-      );
-
+          source: ImageSource.camera,
+          maxWidth: 1080,
+          maxHeight: 1920,
+          imageQuality: 80);
       if (image != null) {
         final userData = await AuthStorage.getUser();
-        final technicianName = userData['name'] ?? 'Unknown';
-        final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
-
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
-        if (!await imagesDir.exists()) {
-          await imagesDir.create();
-        }
-
-        // 4. Proses Watermark (Sama seperti handlePhoto biasa)
-        final targetPath = p.join(
-            imagesDir.path, 'WM_REMARK_${timestamp.millisecondsSinceEpoch}.jpg');
+        if (!await imagesDir.exists()) await imagesDir.create();
+        final targetPath = p.join(imagesDir.path,
+            'WM_REMARK_${timestamp.millisecondsSinceEpoch}.jpg');
 
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
-          technicianName: technicianName,
-          deviceModel: deviceModel,
+          formattedDate: formattedDate,
+          technicianName: userData['name'] ?? 'Unknown',
+          deviceModel: userData['device_model'] ?? 'Unknown Device',
         );
-
         final String? finalImagePath =
-        await WatermarkService.processImage(request);
-
+            await WatermarkService.processImage(request);
         if (finalImagePath == null) throw Exception("Gagal watermark");
 
         final capturedImageDetail = CapturedImageDetail(
@@ -296,22 +304,17 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           latitude: 0.0,
           longitude: 0.0,
           address: "",
-          technicianName: technicianName,
-          deviceModel: deviceModel,
+          technicianName: userData['name'] ?? 'Unknown',
+          deviceModel: userData['device_model'] ?? 'Unknown',
           transNo: widget.transNo,
         );
-
-        if (mounted) {
-          // 5. Kirim Event AddRemarkPhoto ke BLoC
-          context.read<PosValidationBloc>().add(AddRemarkPhoto(capturedImageDetail));
-        }
+        if (mounted)
+          context
+              .read<PosValidationBloc>()
+              .add(AddRemarkPhoto(capturedImageDetail));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memproses foto: $e')),
-        );
-      }
+      // Error
     } finally {
       if (mounted) setState(() => _isTakingPhotoRemark = false);
     }
@@ -327,10 +330,24 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             if (_remarkController.text != (state.noteRemark ?? '')) {
               _remarkController.text = state.noteRemark ?? '';
             }
+
+            // 🔥 LOGIC BARU JUGA DI SINI
+            if (state.isGeneric && state.serialNo.isNotEmpty) {
+              final snUpperCase = state.serialNo.trim().toUpperCase();
+
+              // Cegah "AC - 1" dkk masuk ke TextField, tapi biarkan hasil scan masuk
+              if (!RegExp(r'^AC\s*-\s*\d+$').hasMatch(snUpperCase) &&
+                  _serialInputController.text != state.serialNo) {
+                if (_serialInputController.text.isEmpty) {
+                  _serialInputController.text = state.serialNo;
+                }
+              }
+            }
           });
         }
       },
       child: BlocBuilder<PosValidationBloc, PosValidationState>(
+        buildWhen: (previous, current) => current is! PosValidationSaveSuccess,
         builder: (context, state) {
           if (state is PosValidationLoading || state is PosValidationInitial) {
             return const Center(child: CircularProgressIndicator());
@@ -367,9 +384,14 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
-            _buildValidationHeader(),
+            _buildValidationHeader(state), // Pass state
+
+            // 🔥 LOGIC BARU: INPUT SN UNTUK GENERIC UNIT 🔥
+            if (state.isGeneric) _buildGenericSerialInput(context, state),
+
             if (state.unitType.toUpperCase() == 'OUT')
               _buildIndoorPairingDropdown(context, state),
+
             buildPhotoSection(
               context: context,
               title: '$labelUnit Sebelum Perawatan',
@@ -398,41 +420,10 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
-            _buildValidationHeader(),
+            _buildValidationHeader(state),
             if (state.unitType.toUpperCase() == 'OUT' &&
                 state.pairedIndoorSerial != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.link, color: Colors.blue.shade700, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            text: 'Dipasangkan dengan Indoor: ',
-                            style: TextStyle(color: Colors.grey.shade800),
-                            children: [
-                              TextSpan(
-                                text: state.pairedIndoorSerial!,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildPairedInfo(state),
             buildPhotoSection(
               context: context,
               title: '$labelUnit Sesudah Perawatan',
@@ -463,17 +454,19 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
                   if (!anyOtherSkipped) {
                     widget.noteController.clear();
+                    // 🔥 Reset juga excludeQty jika tidak ada yang diskip
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateExcludeQtyFlag(false));
                   }
                 }
               },
-              limitsMap: _limitsPosAfter, // Pass limit dinamis
+              limitsMap: _limitsPosAfter, // 🔥 KINI SUDAH DINAMIS DARI API
             ),
             if (isAnyMeasurementSkipped)
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-
-                // Gunakan Widget Dropdown Dinamis
                 child: _buildNoteDropdown(
                   context: context,
                   label: 'Catatan (Wajib jika skip pengukuran)',
@@ -491,6 +484,13 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
 
                     setState(() {});
                   },
+                  // 🔥 TANGKAP FLAG EXCLUDE QTY DI SINI
+                  onExcludeQtyChanged: (bool excludeValue) {
+                    // Kirim ke BLoC untuk disimpan ke model Hive yang baru
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateExcludeQtyFlag(excludeValue));
+                  },
                 ),
               ),
           ],
@@ -499,7 +499,111 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     );
   }
 
-  // --- WIDGET DROPDOWN DINAMIS ---
+  // 🔥 WIDGET BARU: INPUT SERIAL NUMBER 🔥
+  Widget _buildGenericSerialInput(
+      BuildContext context, PosValidationLoaded state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Input Serial Number Unit (*Wajib)",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _serialInputController,
+                  decoration: InputDecoration(
+                    hintText: 'Ketik atau Scan SN...',
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                  ),
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-]')),
+                  ],
+                  onChanged: (value) {
+                    context
+                        .read<PosValidationBloc>()
+                        .add(UpdateInputSerial(value));
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      shape: const CircleBorder(),
+                      padding: const EdgeInsets.all(14),
+                      backgroundColor: Colors.blue.shade700),
+                  onPressed: () async {
+                    final scannedCode = await Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => QrScanPage()));
+
+                    if (scannedCode != null) {
+                      _serialInputController.text = scannedCode;
+                      if (context.mounted) {
+                        context
+                            .read<PosValidationBloc>()
+                            .add(UpdateInputSerial(scannedCode));
+                      }
+                    }
+                  },
+                  child: const Icon(Icons.qr_code_scanner, color: Colors.white))
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🔥 WIDGET BARU: INFO PAIRING OTOMATIS (GHOST PAIRING) 🔥
+  Widget _buildAutoPairingInfo(PosValidationLoaded state) {
+    if (state.pairedIndoorSerial == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.green.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.link, color: Colors.green.shade700, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  text: 'Terhubung Otomatis dengan Indoor: \n',
+                  style: TextStyle(color: Colors.grey.shade800, fontSize: 12),
+                  children: [
+                    TextSpan(
+                      text: state.pairedIndoorSerial!,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.green),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET DROPDOWN (Existing) ---
   Widget _buildNoteDropdown({
     required BuildContext context,
     required String label,
@@ -507,15 +611,12 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     required List<NoteOption> noteOptions,
     required ValueChanged<String?> onChanged,
     required List<CapturedImageDetail> remarkPhotos,
+    ValueChanged<bool>? onExcludeQtyChanged,
   }) {
     final double maxDropdownHeight = MediaQuery.of(context).size.height * 0.4;
-
-    // 1. Filter System Only
-    final filteredOptions = noteOptions.where((opt) {
-      return !opt.isSystemOnly || opt.label == controller.text;
-    }).toList();
-
-    // 2. Cek Read-Only
+    final filteredOptions = noteOptions
+        .where((opt) => !opt.isSystemOnly || opt.label == controller.text)
+        .toList();
     final selectedOptionObj = filteredOptions
         .where((opt) => opt.label == controller.text)
         .firstOrNull;
@@ -530,69 +631,44 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           decoration: InputDecoration(
             labelText: label,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            contentPadding:
-                const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
             filled: true,
             fillColor:
                 isReadOnlySystemValue ? Colors.grey.shade200 : Colors.white,
           ),
-          hint: const Text('Pilih Catatan', style: TextStyle(fontSize: 14)),
+          hint: const Text('Pilih Catatan'),
           onChanged: isReadOnlySystemValue
               ? null
               : (value) {
                   onChanged(value);
+
+                  if (value != null && onExcludeQtyChanged != null) {
+                    final selectedOpt = noteOptions.firstWhere(
+                      (opt) => opt.label == value,
+                      orElse: () => NoteOption(label: '', excludeQty: false),
+                    );
+                    onExcludeQtyChanged(selectedOpt.excludeQty);
+                  }
+
                   FocusScope.of(context).unfocus();
                 },
           items: filteredOptions
-              .map((item) => DropdownMenuItem<String>(
-                    value: item.label,
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text(item.label,
-                            style: const TextStyle(fontSize: 14)),
-                      ),
-                    ),
-                  ))
+              .map((item) => DropdownMenuItem(
+                  value: item.label,
+                  child: Text(item.label, overflow: TextOverflow.ellipsis)))
               .toList(),
-          selectedItemBuilder: (context) {
-            return noteOptions.map((item) {
-              return Text(
-                item.label,
-                style: const TextStyle(
-                    fontSize: 14, overflow: TextOverflow.ellipsis),
-                maxLines: 1,
-              );
-            }).toList();
-          },
           dropdownStyleData: DropdownStyleData(
-            maxHeight: maxDropdownHeight,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
-          ),
-          menuItemStyleData: const MenuItemStyleData(
-            padding: EdgeInsets.symmetric(horizontal: 14),
-          ),
+              maxHeight: maxDropdownHeight,
+              decoration:
+                  BoxDecoration(borderRadius: BorderRadius.circular(15))),
           dropdownSearchData: DropdownSearchData(
             searchController: _noteSearchController,
             searchInnerWidgetHeight: 50,
-            searchInnerWidget: Container(
-              height: 50,
-              padding: const EdgeInsets.all(8),
-              child: TextFormField(
-                expands: true,
-                maxLines: null,
-                controller: _noteSearchController,
-                decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  hintText: 'Cari catatan...',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
+            searchInnerWidget: Padding(
+                padding: const EdgeInsets.all(8),
+                child: TextFormField(
+                    controller: _noteSearchController,
+                    decoration: const InputDecoration(
+                        hintText: 'Cari...', border: OutlineInputBorder()))),
             searchMatchFn: (item, searchValue) => item.value
                 .toString()
                 .toLowerCase()
@@ -609,42 +685,24 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                 padding: const EdgeInsets.only(top: 12.0),
                 child: TextFormField(
                   controller: _remarkController,
-                  // Gunakan controller state
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   decoration: const InputDecoration(
-                    labelText: 'Keterangan Tambahan (*Wajib)',
-                    hintText: 'Jelaskan detail masalah (Min. 20 huruf)...',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding: EdgeInsets.all(12),
-                    prefixIcon: Icon(Icons.edit_note),
-                  ),
-                  onChanged: (val) {
-                    // Simpan ke BLoC
-                    context.read<PosValidationBloc>().add(UpdateNoteRemark(val));
-                  },
-                  validator: (value) {
-                    final text = value ?? '';
-                    if (text.trim().isEmpty) return 'Wajib diisi';
-                    final int charCount = text.replaceAll(' ', '').length;
-                    if (charCount < 20) {
-                      return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
-                    }
-                    return null;
-                  },
-                  maxLines: 2,
+                      labelText: 'Keterangan Tambahan (*Wajib)',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.edit_note)),
+                  onChanged: (val) => context
+                      .read<PosValidationBloc>()
+                      .add(UpdateNoteRemark(val)),
                 ),
               ),
               const SizedBox(height: 12),
-
               RemarkPhotoPicker(
                 photos: remarkPhotos,
                 isLoading: _isTakingPhotoRemark,
-                isReadOnly: false, // Atau sesuaikan dengan logic isCompleted
+                isReadOnly: false,
                 onAddTap: () => _handleRemarkPhoto(context),
-                onRemoveTap: (path) {
-                  context.read<PosValidationBloc>().add(RemoveRemarkPhoto(path));
-                },
+                onRemoveTap: (path) => context
+                    .read<PosValidationBloc>()
+                    .add(RemoveRemarkPhoto(path)),
               ),
             ],
           ),
@@ -652,6 +710,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     );
   }
 
+  // --- WIDGET PHOTO SECTION (Existing) ---
   Widget buildPhotoSection({
     required BuildContext context,
     required String title,
@@ -682,9 +741,8 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         isLoading
             ? const Center(
                 child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(),
-              ))
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator()))
             : Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: OutlinedButton.icon(
@@ -692,17 +750,24 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   label: Text(title),
                   onPressed: onAddPhoto,
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 40),
-                    side: BorderSide(color: primary),
-                    foregroundColor: primary,
-                  ),
+                      minimumSize: const Size(double.infinity, 40),
+                      side: BorderSide(color: primary),
+                      foregroundColor: primary),
                 ),
               ),
       ],
     );
   }
 
-  Widget _buildValidationHeader() {
+  Widget _buildValidationHeader(PosValidationLoaded state) {
+    // 🔥 Gunakan State dari BLoC untuk Serial No, agar update realtime saat user ngetik di Generic
+    final displaySerial = state.isGeneric && state.serialNo.isEmpty
+        ? "Unit #${state.unitIndex}"
+        : state.serialNo;
+
+    final displayColor =
+        state.isGeneric ? Colors.blue.shade700 : Colors.black54;
+
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Card(
@@ -736,13 +801,17 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.qr_code, size: 16, color: Colors.black54),
+                  Icon(state.isGeneric ? Icons.edit : Icons.qr_code,
+                      size: 16, color: displayColor),
                   const SizedBox(width: 8),
                   Text(
-                    widget.serialNo,
+                    displaySerial, // 🔥 Dynamic Serial
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: displayColor,
+                        fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -803,6 +872,42 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPairedInfo(PosValidationLoaded state) {
+    if (state.pairedIndoorSerial == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.link, color: Colors.blue.shade700, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  text: 'Dipasangkan dengan Indoor: ',
+                  style: TextStyle(color: Colors.grey.shade800),
+                  children: [
+                    TextSpan(
+                      text: state.pairedIndoorSerial!,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

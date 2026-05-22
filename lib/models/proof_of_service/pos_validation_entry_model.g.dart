@@ -33,13 +33,17 @@ class PosValidationEntryModelAdapter
       pairedSerialNo: fields[12] as String?,
       noteRemark: fields[13] as String?,
       remarkPhotos: (fields[14] as List?)?.cast<CapturedImageDetail>(),
+      reffLineNo: fields[15] as String?,
+      isGeneric: fields[16] as bool?,
+      unitIndex: fields[17] as int?,
+      excludeQty: fields[18] as bool?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PosValidationEntryModel obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -69,7 +73,15 @@ class PosValidationEntryModelAdapter
       ..writeByte(13)
       ..write(obj.noteRemark)
       ..writeByte(14)
-      ..write(obj.remarkPhotos);
+      ..write(obj.remarkPhotos)
+      ..writeByte(15)
+      ..write(obj.reffLineNo)
+      ..writeByte(16)
+      ..write(obj.isGeneric)
+      ..writeByte(17)
+      ..write(obj.unitIndex)
+      ..writeByte(18)
+      ..write(obj.excludeQty);
   }
 
   @override

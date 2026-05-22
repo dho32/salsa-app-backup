@@ -1,9 +1,6 @@
-/// File: models/proof_of_service/proof_of_service_detail_model.dart
-library;
-
 import 'package:hive/hive.dart';
-
 import '../common/note_option.dart';
+import '../common/measurement_limits.dart'; // <-- JANGAN LUPA IMPORT INI KANG!
 
 part 'proof_of_service_detail_model.g.dart';
 
@@ -15,15 +12,6 @@ class ProofOfServiceDetailModel {
   @HiveField(1)
   final List<ProofOfServiceItemDetail> detail;
 
-  // @HiveField(2)
-  // final List<String>? noteIndoorOptions;
-  //
-  // @HiveField(3)
-  // final List<String>? noteOutdoorOptions;
-  //
-  // @HiveField(4)
-  // final List<String>? unserviceableReasons;
-
   @HiveField(5)
   final List<NoteOption>? noteIndoorOptions;
 
@@ -33,41 +21,59 @@ class ProofOfServiceDetailModel {
   @HiveField(7)
   final List<NoteOption>? unserviceableReasons;
 
+  // --- [TAMBAHAN: WADAH LIMIT DINAMIS POS] ---
+  @HiveField(8)
+  final Map<String, MeasurementLimits>? customLimitsAfter;
+
   ProofOfServiceDetailModel({
     required this.header,
     required this.detail,
     this.noteIndoorOptions,
     this.noteOutdoorOptions,
     this.unserviceableReasons,
+    this.customLimitsAfter, // <-- Tambahan
   });
 
-  // Biarkan factory fromJson tetap ada untuk parsing data dari API
   factory ProofOfServiceDetailModel.fromJson(Map<String, dynamic> json) {
-    List<NoteOption> _parseNotes(dynamic list) {
+    List<NoteOption> parseNotes(dynamic list) {
       if (list == null || list is! List) return [];
       return list.map((item) {
         if (item is Map) {
-          // Format Baru (Object)
           return NoteOption.fromJson(Map<String, dynamic>.from(item));
         } else if (item is String) {
-          // Format Lama (String) - Fallback safety
           return NoteOption.fromJson({'label': item});
         }
         return NoteOption(label: item.toString());
       }).toList();
     }
 
+    // --- [TAMBAHAN: PARSING LIMIT DINAMIS DARI API] ---
+    Map<String, MeasurementLimits> parsedLimitsAfter = {};
+
+    if (json['measurements'] != null && json['measurements']['limits_validation_unit'] != null) {
+      final limitsData = json['measurements']['limits_validation_unit'];
+
+      // Ambil pos_after
+      if (limitsData['pos_after'] != null && limitsData['pos_after'] is Map) {
+        (limitsData['pos_after'] as Map).forEach((key, value) {
+          if (value != null && value is Map) {
+            parsedLimitsAfter[key.toString()] =
+                MeasurementLimits.fromJson(Map<String, dynamic>.from(value));
+          }
+        });
+      }
+    }
+    // ---------------------------------------------------
+
     return ProofOfServiceDetailModel(
       header: ProofOfServiceHeader.fromJson(json['header'] ?? {}),
       detail: (json['detail'] as List<dynamic>? ?? [])
           .map((item) => ProofOfServiceItemDetail.fromJson(item))
           .toList(),
-      // noteIndoorOptions: List<String>.from(json['note_indoor_options'] ?? []),
-      // noteOutdoorOptions: List<String>.from(json['note_outdoor_options'] ?? []),
-      // unserviceableReasons: List<String>.from(json['unserviceable_reasons'] ?? []),
-      noteIndoorOptions: _parseNotes(json['note_indoor_options']),
-      noteOutdoorOptions: _parseNotes(json['note_outdoor_options']),
-      unserviceableReasons: _parseNotes(json['unserviceable_reasons']),
+      noteIndoorOptions: parseNotes(json['note_indoor_options']),
+      noteOutdoorOptions: parseNotes(json['note_outdoor_options']),
+      unserviceableReasons: parseNotes(json['unserviceable_reasons']),
+      customLimitsAfter: parsedLimitsAfter, // <-- Inject ke Sini
     );
   }
 }
@@ -124,7 +130,7 @@ class ProofOfServiceHeader {
   }
 }
 
-@HiveType(typeId: 12) // <-- ID unik lainnya
+@HiveType(typeId: 12)
 class ProofOfServiceItemDetail {
   @HiveField(0)
   final String articleNo;
@@ -136,6 +142,15 @@ class ProofOfServiceItemDetail {
   final String serialNo;
   @HiveField(4)
   final String unitType;
+  @HiveField(5)
+  final String reffLineNo;
+
+  // 🔥 NEW FIELDS FOR GENERIC UNIT 🔥
+  @HiveField(6)
+  final bool isGeneric;
+
+  @HiveField(7)
+  final int unitIndex;
 
   ProofOfServiceItemDetail({
     required this.articleNo,
@@ -143,6 +158,9 @@ class ProofOfServiceItemDetail {
     required this.unitDesc,
     required this.serialNo,
     required this.unitType,
+    required this.reffLineNo,
+    this.isGeneric = false,
+    this.unitIndex = 0,
   });
 
   factory ProofOfServiceItemDetail.fromJson(Map<String, dynamic> json) {
@@ -152,6 +170,12 @@ class ProofOfServiceItemDetail {
       unitDesc: json['article_name_unit'] ?? '',
       serialNo: json['serial_no'] ?? '',
       unitType: json['unit_type'] ?? '',
+      reffLineNo: json['reff_line_no']?.toString() ?? '',
+
+      // 🔥 Parsing Logic 🔥
+      // Mengantisipasi format boolean (true/false) atau integer (1/0)
+      isGeneric: json['is_generic'] == true || json['is_generic'] == 1 || json['is_generic'] == '1',
+      unitIndex: int.tryParse(json['unit_index']?.toString() ?? '0') ?? 0,
     );
   }
 }

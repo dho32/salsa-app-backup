@@ -3,7 +3,7 @@ import 'package:salsa/components/widgets/measurement_input_widget.dart';
 import 'package:salsa/models/common/measurement_entry.dart';
 import 'package:salsa/models/common/measurement_limits.dart';
 
-class GenericMeasurementInputSection extends StatelessWidget {
+class GenericMeasurementInputSection extends StatefulWidget {
   final String transNo;
   final List<MeasurementEntry> measurements;
   final Map<String, TextEditingController> controllers;
@@ -24,8 +24,37 @@ class GenericMeasurementInputSection extends StatelessWidget {
   });
 
   @override
+  State<GenericMeasurementInputSection> createState() =>
+      _GenericMeasurementInputSectionState();
+}
+
+class _GenericMeasurementInputSectionState
+    extends State<GenericMeasurementInputSection> {
+  final Map<String, MeasurementEntry> _localCache = {};
+
+  @override
+  void didUpdateWidget(covariant GenericMeasurementInputSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (var m in widget.measurements) {
+      _localCache[m.measurementId] = m;
+    }
+  }
+
+  // Fungsi helper buat ngirim data ke Parent dengan aman
+  void _safeUpdate(MeasurementEntry updatedEntry) {
+    _localCache[updatedEntry.measurementId] =
+        updatedEntry;
+    widget.onUpdate(updatedEntry);
+  }
+
+  // Fungsi helper buat dapetin data paling baru saat ini
+  MeasurementEntry _getLatestEntry(MeasurementEntry mEntry) {
+    return _localCache[mEntry.measurementId] ?? mEntry;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (measurements.isEmpty) return const SizedBox.shrink();
+    if (widget.measurements.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,14 +68,14 @@ class GenericMeasurementInputSection extends StatelessWidget {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
         ),
-        ...measurements.map(_buildMeasurementItem),
+        ...widget.measurements.map(_buildMeasurementItem),
       ],
     );
   }
 
   Widget _buildMeasurementItem(MeasurementEntry mEntry) {
-    final limits = limitsMap[mEntry.measurementId];
-    final controller = controllers[mEntry.measurementId];
+    final limits = widget.limitsMap[mEntry.measurementId];
+    final controller = widget.controllers[mEntry.measurementId];
 
     if (limits == null) {
       return Padding(
@@ -61,12 +90,12 @@ class GenericMeasurementInputSection extends StatelessWidget {
 
     MeasurementLimits limitsToUse = limits;
 
-    if (mEntry.measurementId == 'temperature' && indoorTemp != null) {
+    if (mEntry.measurementId == 'temperature' && widget.indoorTemp != null) {
       limitsToUse = MeasurementLimits(
         id: limits.id,
         label: limits.label,
         min: limits.min,
-        max: indoorTemp!,
+        max: widget.indoorTemp!,
         normalMin: limits.normalMin,
         normalMax: limits.normalMax,
         unit: limits.unit,
@@ -77,38 +106,41 @@ class GenericMeasurementInputSection extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: MeasurementInputWidget(
         controller: controller,
-        transNo: transNo,
+        transNo: widget.transNo,
         label: limitsToUse.label,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         limits: limitsToUse,
-        initialImage: mEntry.capturedImage,
+        initialImage: _getLatestEntry(mEntry).capturedImage,
         onEditingComplete: (finalValue) {
           final parsedValue = double.tryParse(finalValue);
-          onUpdate(
-            mEntry.copyWith(
-              value: parsedValue ?? mEntry.value,
+          final latest = _getLatestEntry(mEntry);
+          _safeUpdate(
+            latest.copyWith(
+              value: parsedValue ?? latest.value,
             ),
           );
         },
         onImageChanged: (newImage) {
-          onUpdate(mEntry.copyWith(capturedImage: newImage));
+          final latest = _getLatestEntry(mEntry);
+          _safeUpdate(latest.copyWith(capturedImage: newImage));
         },
         isSkipEnabled: true,
-        isSkipped: mEntry.isSkipped ?? false,
+        isSkipped: _getLatestEntry(mEntry).isSkipped ?? false,
         onSkipChanged: (isSkipped) {
+          final latest = _getLatestEntry(mEntry);
           if (isSkipped) {
             controller.clear();
-            onUpdate(
-              mEntry.copyWith(
+            _safeUpdate(
+              latest.copyWith(
                 isSkipped: true,
                 value: 0.0,
                 capturedImage: null,
               ),
             );
           } else {
-            onUpdate(mEntry.copyWith(isSkipped: false));
+            _safeUpdate(latest.copyWith(isSkipped: false));
           }
-          onMaybeResetNote?.call();
+          widget.onMaybeResetNote?.call();
         },
       ),
     );

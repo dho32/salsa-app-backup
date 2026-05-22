@@ -4,7 +4,7 @@ import 'package:salsa/models/common/measurement_entry.dart';
 
 part 'pos_validation_entry_model.g.dart';
 
-@HiveType(typeId: 8) // Pastikan typeId ini unik
+@HiveType(typeId: 8)
 class PosValidationEntryModel extends HiveObject {
   @HiveField(0)
   String transNo;
@@ -51,6 +51,19 @@ class PosValidationEntryModel extends HiveObject {
   @HiveField(14)
   List<CapturedImageDetail>? remarkPhotos;
 
+  @HiveField(15)
+  String? reffLineNo;
+
+  // 🔥 FIELD BARU KHUSUS GENERIC UNIT 🔥
+  @HiveField(16)
+  bool? isGeneric;
+
+  @HiveField(17)
+  int? unitIndex;
+
+  @HiveField(18)
+  bool? excludeQty;
+
   PosValidationEntryModel({
     required this.transNo,
     required this.serialNo,
@@ -67,6 +80,10 @@ class PosValidationEntryModel extends HiveObject {
     this.pairedSerialNo,
     this.noteRemark,
     this.remarkPhotos,
+    this.reffLineNo,
+    this.isGeneric = false, // Default false
+    this.unitIndex = 0,     // Default 0
+    this.excludeQty = false,
   });
 
   factory PosValidationEntryModel.empty() {
@@ -86,6 +103,73 @@ class PosValidationEntryModel extends HiveObject {
       pairedSerialNo: '',
       noteRemark: '',
       remarkPhotos: [],
+      reffLineNo: '',
+      isGeneric: false,
+      unitIndex: 0,
+      excludeQty: false,
     );
+  }
+
+  // Method CopyWith Updated
+  PosValidationEntryModel copyWith({
+    String? transNo,
+    String? serialNo,
+    List<CapturedImageDetail>? photosBefore,
+    List<CapturedImageDetail>? photosAfter,
+    List<MeasurementEntry>? measurementsAfter,
+    bool? isCompleted,
+    String? note,
+    String? articleNo,
+    String? articleDesc,
+    String? articleUnitDesc,
+    int? capacity,
+    String? articleType,
+    String? pairedSerialNo,
+    String? noteRemark,
+    List<CapturedImageDetail>? remarkPhotos,
+    String? reffLineNo,
+    bool? isGeneric, // 🔥
+    int? unitIndex,  // 🔥
+    bool? excludeQty,
+  }) {
+    return PosValidationEntryModel(
+      transNo: transNo ?? this.transNo,
+      serialNo: serialNo ?? this.serialNo,
+      photosBefore: photosBefore ?? this.photosBefore,
+      photosAfter: photosAfter ?? this.photosAfter,
+      measurementsAfter: measurementsAfter ?? this.measurementsAfter,
+      isCompleted: isCompleted ?? this.isCompleted,
+      note: note ?? this.note,
+      articleNo: articleNo ?? this.articleNo,
+      articleDesc: articleDesc ?? this.articleDesc,
+      articleUnitDesc: articleUnitDesc ?? this.articleUnitDesc,
+      capacity: capacity ?? this.capacity,
+      articleType: articleType ?? this.articleType,
+      pairedSerialNo: pairedSerialNo ?? this.pairedSerialNo,
+      noteRemark: noteRemark ?? this.noteRemark,
+      remarkPhotos: remarkPhotos ?? this.remarkPhotos,
+      reffLineNo: reffLineNo ?? this.reffLineNo,
+      isGeneric: isGeneric ?? this.isGeneric, // 🔥
+      unitIndex: unitIndex ?? this.unitIndex, // 🔥
+      excludeQty: excludeQty ?? this.excludeQty,
+    );
+  }
+
+  // Method toJson (diperlukan untuk submit data ke API)
+  Map<String, dynamic> toJson() {
+    return {
+      'trans_no': transNo,
+      'serial_no': serialNo,
+      'article_no': articleNo,
+      'description': articleDesc,
+      'article_name_unit': articleUnitDesc,
+      'unit_type': articleType,
+      'reff_line_no': reffLineNo,
+      'paired_serial_no': pairedSerialNo,
+      'is_completed': isCompleted,
+      'note': note,
+      'note_remark': noteRemark,
+      'exclude_qty': excludeQty,
+    };
   }
 }

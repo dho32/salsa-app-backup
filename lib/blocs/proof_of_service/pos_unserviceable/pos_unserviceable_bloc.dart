@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/auth/auth_storage.dart';
@@ -13,6 +14,7 @@ import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/captured_image_detail.dart';
 import '../../../components/services/hive_clear_service.dart';
 import '../../../components/services/watermark_service.dart';
+import '../../../components/shared_function.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../../models/proof_of_service/proof_of_service_detail_model.dart';
@@ -166,6 +168,13 @@ class PosUnserviceableBloc
       final deviceModel = userData['device_model'] ?? 'Unknown Device';
       final timestamp = DateTime.now();
 
+      // Ambil timezone dari device
+      final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+      // Format tanggal pakai locale (AMAN)
+      final formattedDate =
+          '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
       // 2. Siapkan Direktori Permanen
       final appDir = await getApplicationDocumentsDirectory();
       final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
@@ -182,7 +191,7 @@ class PosUnserviceableBloc
         originalPath: pickedFile.path,
         targetPath: targetPath,
         transNo: transNo,
-        timestamp: timestamp,
+        formattedDate: formattedDate,
         technicianName: technicianName,
         deviceModel: deviceModel,
       );

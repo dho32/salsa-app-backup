@@ -17,22 +17,28 @@ import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_repository.dart';
 import 'components/constants.dart';
 import 'components/salsa_theme.dart';
+import 'components/services/daily_hive_clear_service.dart';
 import 'firebase_options.dart';
 import 'models/common/captured_image_detail.dart';
 import 'models/common/measurement_entry.dart';
 import 'models/common/measurement_limits.dart';
 import 'models/common/note_option.dart';
 import 'models/common/otp_tracking_model.dart';
+import 'models/installation/installation_detail_model.dart';
+import 'models/installation/installation_model.dart';
 import 'models/proof_of_service/pos_transaction_info_model.dart';
 import 'models/proof_of_service/pos_unserviceable_model.dart';
 import 'models/proof_of_service/pos_validation_entry_model.dart';
 import 'models/proof_of_service/proof_of_service_detail_model.dart';
+import 'models/rro_cut_off/rro_cut_off_detail_model.dart';
+import 'models/rro_cut_off/rro_cut_off_entry_model.dart';
 import 'models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import 'models/service_call/service_call_validation_entry_model.dart';
 import 'models/task_maintenance/confirmation_task_queue.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id_ID', null);
   runApp(const AppInitializer());
 }
 
@@ -80,6 +86,7 @@ class _AppInitializerState extends State<AppInitializer> {
 
     // Registrasi adapter
     _registerHiveAdapters();
+    DailyHiveClearService.cleanUpOldMonthData();
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -106,27 +113,52 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(MeasurementLimitsAdapter());
     Hive.registerAdapter(NoteOptionAdapter());
     Hive.registerAdapter(OtpTrackingModelAdapter());
+
+    // Register Adapters Pasang AC (Draft)
+    Hive.registerAdapter(InstallationPhotoModelAdapter());
+    Hive.registerAdapter(InstallationMeasurementModelAdapter());
+    Hive.registerAdapter(InstallationMaterialItemModelAdapter());
+    Hive.registerAdapter(InstallationMaterialsModelAdapter());
+    Hive.registerAdapter(InstallationUnitModelAdapter());
+    Hive.registerAdapter(InstallationEntryModelAdapter());
+
+    // Register Adapters Pasang AC (Detail/Task)
+    Hive.registerAdapter(InstallationHeaderDetailModelAdapter());
+    Hive.registerAdapter(InstallationTargetUnitModelAdapter());
+    Hive.registerAdapter(InstallationMasterOptionModelAdapter());
+    Hive.registerAdapter(InstallationMasterDataModelAdapter());
+    Hive.registerAdapter(InstallationOptionItemModelAdapter());
+    Hive.registerAdapter(InstallationDetailModelAdapter());
+    Hive.registerAdapter(InstallationBrandModelAdapter());
+    Hive.registerAdapter(MaterialEvidenceModelAdapter());
+
+    // Register Adapters RRO Cut Off
+    Hive.registerAdapter(RROCutOffResultAdapter());
+    Hive.registerAdapter(RROCutOffHeaderAdapter());
+    Hive.registerAdapter(RROCutOffDetailItemAdapter());
+    Hive.registerAdapter(RROCutOffSerialNumberAdapter());
+    Hive.registerAdapter(RROCutOffFormModelAdapter());
+    Hive.registerAdapter(RROCutOffEntryModelAdapter());
+    Hive.registerAdapter(RROCutOffPhotoModelAdapter());
   }
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
   Future<void> _loadRetryableData() async {
     try {
       // Gunakan _openBoxSafely untuk setiap box penting
-      // Ini mencegah aplikasi Force Close jika salah satu box korup/beda schema
-
       await _openBoxSafely<ServiceCallValidationEntryModel>(kServiceCallHiveBox);
       await _openBoxSafely<ProofOfServiceDetailData>(kProofOfServiceHiveBox);
       await _openBoxSafely<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
-
-      // Box Utama POS (Sering Crash disini biasanya)
       await _openBoxSafely<PosValidationEntryModel>(kPosValidationHiveBox);
-
       await _openBoxSafely<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-      await _openBoxSafely(null, boxName: 'otp_state'); // Box tanpa tipe generik
+      await _openBoxSafely(null, boxName: 'otp_state');
       await _openBoxSafely<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
       await _openBoxSafely<SCUnserviceableModel>(kScUnserviceableDraftsBox);
       await _openBoxSafely(null, boxName: kAppConfigBox);
       await _openBoxSafely<OtpTrackingModel>(kOtpTrackingBox);
+      await _openBoxSafely<RROCutOffResult>(kRROCutOffDetailBox);
+      await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffEntryBox);
+      await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffFormBox);
     } catch (e) {
       // Jika error sangat fatal (Disk Penuh Total / Permission Error)
       print("💀 Fatal Init Error: $e");

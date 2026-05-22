@@ -1,111 +1,115 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_repository.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
 import 'package:salsa/blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_state.dart';
 import 'package:salsa/models/proof_of_service/proof_of_service_detail_model.dart';
+import '../../../models/common/measurement_limits.dart'; // <-- JANGAN LUPA IMPORT INI
 
 import '../../../components/constants.dart';
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../../models/service_call/validation_status.dart';
 
-class ProofOfServiceDetailBloc
-    extends Bloc<ProofOfServiceDetailEvent, ProofOfServiceDetailState> {
+class ProofOfServiceDetailBloc extends Bloc<ProofOfServiceDetailEvent, ProofOfServiceDetailState> {
   final ProofOfServiceDetailRepository repository;
 
-  ProofOfServiceDetailBloc(this.repository)
-      : super(ProofOfServiceDetailInitial()) {
-    // ## EVENT HANDLER UTAMA DENGAN LOGIKA CACHE ##
+  ProofOfServiceDetailBloc(this.repository) : super(ProofOfServiceDetailInitial()) {
     on<FetchProofOfServiceDetail>((event, emit) async {
       emit(ProofOfServiceDetailLoading());
-
-      // Gunakan satu blok try-catch utama untuk menangani semua kemungkinan error
       try {
-        ProofOfServiceDetailModel? cachedData;
+        final cacheBox = Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+        ProofOfServiceDetailModel? cachedData = cacheBox.get(event.transNo.trim().toUpperCase());
 
-        // --- TAHAP 1: Coba baca cache dengan aman ---
-        // Gunakan try-catch kecil khusus untuk operasi baca cache.
-        try {
-          final cacheBox =
-              Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-          cachedData = cacheBox.get(event.transNo.trim().toUpperCase());
-        } catch (e) {
-          // Jika GAGAL membaca cache (karena data lama/rusak),
-          // kita cetak pesannya, tapi biarkan aplikasi berjalan terus.
-          print(
-              "🟡 Gagal membaca cache (kemungkinan data lama). Akan mengambil dari API. Error: $e");
-          // `cachedData` akan tetap null, sehingga alur akan lanjut ke Tahap 3.
-        }
-
-        // --- TAHAP 2: Proses cache jika berhasil dibaca ---
+        // 🔥 ANTI-BUG CACHE LAMA 🔥
         if (cachedData != null) {
-          print("✅ Data ditemukan di cache. Memproses...");
-          final statuses =
-              await _calculateValidationStatuses(cachedData.detail);
-          emit(ProofOfServiceDetailLoaded(cachedData, statuses));
-          return; // Berhasil, proses selesai.
+          bool isCacheCorrupted = cachedData.detail.any((d) => d.isGeneric && d.unitIndex == 0);
+          if (isCacheCorrupted) {
+            await cacheBox.delete(event.transNo.trim().toUpperCase());
+            cachedData = null;
+          }
         }
 
-        // --- TAHAP 3: Jika cache kosong atau gagal dibaca, ambil dari API ---
-        print("🟡 Cache kosong atau tidak valid. Mengambil data dari API...");
-        final dataFromApi =
-            await repository.fetchProofOfServiceDetail(event.transNo);
+        // 1. Tentukan Data Akhir (Dari Cache atau API)
+        ProofOfServiceDetailModel finalData;
+        if (cachedData != null) {
+          finalData = cachedData;
+        } else {
+          finalData = await repository.fetchProofOfServiceDetail(event.transNo);
+          await cacheBox.put(event.transNo.trim().toUpperCase(), finalData);
+        }
 
-        // Timpa/simpan cache dengan data baru yang bersih
-        final cacheBox =
-            Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
-        await cacheBox.put(event.transNo.trim().toUpperCase(), dataFromApi);
-        print("💾 Data dari API berhasil disimpan/ditimpa ke cache.");
+        // --- [TAMBAHAN: RACIK LIMIT DINAMIS POS] ---
+        // 2. Buka kotak Global Master dari Hive
+        // (Pastikan kAppConfigBox sesuai dengan nama konstanta config Akang)
+        final configBox = Hive.box(kAppConfigBox);
+        Map<String, MeasurementLimits> mergedLimits = {};
 
-        final statuses = await _calculateValidationStatuses(dataFromApi.detail);
-        emit(ProofOfServiceDetailLoaded(dataFromApi, statuses));
+        // Ambil limit global untuk POS (biasanya limits_pos_after)
+        final rawLimits = configBox.get('limits_pos_after');
+        if (rawLimits is Map) {
+          rawLimits.forEach((key, value) {
+            if (key is String && value is MeasurementLimits) {
+              mergedLimits[key] = value;
+            }
+          });
+        }
+
+        // 3. Timpa dengan data dari API (Suhu AC, Ampere, Volt, PSI)
+        if (finalData.customLimitsAfter != null && finalData.customLimitsAfter!.isNotEmpty) {
+          finalData.customLimitsAfter!.forEach((key, value) {
+            mergedLimits[key] = value;
+          });
+        }
+        // ----------------------------------------
+
+        // 4. Kalkulasi Status & Emit
+        final result = await _calculateValidationStatuses(finalData.detail, event.transNo);
+        emit(ProofOfServiceDetailLoaded(
+          finalData,
+          result['statuses'],
+          savedSerials: result['serials'],
+          limitsMap: mergedLimits, // <-- INJECT LIMIT DINAMIS KE STATE
+        ));
+
       } catch (e) {
-        // --- TAHAP 4: Tangkap semua error lainnya ---
-        emit(ProofOfServiceDetailError(
-            "Gagal memuat detail data. Periksa koneksi internet Anda dan coba lagi."));
+        emit(ProofOfServiceDetailError("Gagal memuat detail data. Periksa koneksi internet Anda dan coba lagi."));
       }
     });
   }
 
-  // Helper function
-  Future<Map<String, ValidationStatus>> _calculateValidationStatuses(
-      List<ProofOfServiceItemDetail> details) async {
-    final box = Hive.box<PosValidationEntryModel>(kPosValidationHiveBox);
+  Future<Map<String, dynamic>> _calculateValidationStatuses(List<ProofOfServiceItemDetail> details, String transNo) async {
+    final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
     final statuses = <String, ValidationStatus>{};
+    final serials = <String, String>{}; // 🔥 Keranjang SN
 
     for (final detail in details) {
-      final key = detail.serialNo.trim().toUpperCase();
+      final mapKey = detail.isGeneric
+          ? '${detail.unitType}_${detail.unitIndex}'
+          : detail.serialNo.trim().toUpperCase();
+
       PosValidationEntryModel? draft;
 
-      // Tambahkan try-catch di sini untuk menangani data cache yang tidak kompatibel
-      try {
-        draft = box.get(key);
-      } catch (e) {
-        print('🔴 Gagal membaca draft validasi untuk SN $key. Menghapus data rusak...');
-        // Jika gagal membaca, hapus data yang rusak agar tidak error lagi nanti
-        await box.delete(key);
-        // Anggap saja tidak ada draft
-        draft = null;
+      if (detail.isGeneric) {
+        final hiveKey = 'GEN_${transNo}_${detail.unitIndex}_${detail.unitType}';
+        draft = box.get(hiveKey);
+        draft ??= box.values.firstWhereOrNull((e) =>
+        e.transNo == transNo && e.unitIndex == detail.unitIndex && e.articleType == detail.unitType);
+      } else {
+        try { draft = box.get(mapKey); } catch (e) { await box.delete(mapKey); draft = null; }
       }
 
       if (draft != null) {
         bool isComplete = draft.isCompleted ?? false;
-        if (isComplete) {
-          statuses[key] = ValidationStatus.completed;
-        } else {
-          statuses[key] = ValidationStatus.inProgress;
+        statuses[mapKey] = isComplete ? ValidationStatus.completed : ValidationStatus.inProgress;
+
+        if (detail.isGeneric && draft.serialNo.isNotEmpty && !draft.serialNo.startsWith('AC')) {
+          serials[mapKey] = draft.serialNo;
         }
       } else {
-        statuses[key] = ValidationStatus.notStarted;
+        statuses[mapKey] = ValidationStatus.notStarted;
       }
     }
-
-    // Bagian ini tidak perlu diubah
-    for (final detail in details) {
-      final key = detail.serialNo.trim().toUpperCase();
-      statuses.putIfAbsent(key, () => ValidationStatus.notStarted);
-    }
-
-    return statuses;
+    return {'statuses': statuses, 'serials': serials};
   }
 }

@@ -23,13 +23,14 @@ class ProofOfServiceDetailModelAdapter
       noteIndoorOptions: (fields[5] as List?)?.cast<NoteOption>(),
       noteOutdoorOptions: (fields[6] as List?)?.cast<NoteOption>(),
       unserviceableReasons: (fields[7] as List?)?.cast<NoteOption>(),
+      customLimitsAfter: (fields[8] as Map?)?.cast<String, MeasurementLimits>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceDetailModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.header)
       ..writeByte(1)
@@ -39,7 +40,9 @@ class ProofOfServiceDetailModelAdapter
       ..writeByte(6)
       ..write(obj.noteOutdoorOptions)
       ..writeByte(7)
-      ..write(obj.unserviceableReasons);
+      ..write(obj.unserviceableReasons)
+      ..writeByte(8)
+      ..write(obj.customLimitsAfter);
   }
 
   @override
@@ -131,13 +134,16 @@ class ProofOfServiceItemDetailAdapter
       unitDesc: fields[2] as String,
       serialNo: fields[3] as String,
       unitType: fields[4] as String,
+      reffLineNo: fields[5] as String,
+      isGeneric: fields[6] as bool,
+      unitIndex: fields[7] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceItemDetail obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.articleNo)
       ..writeByte(1)
@@ -147,7 +153,13 @@ class ProofOfServiceItemDetailAdapter
       ..writeByte(3)
       ..write(obj.serialNo)
       ..writeByte(4)
-      ..write(obj.unitType);
+      ..write(obj.unitType)
+      ..writeByte(5)
+      ..write(obj.reffLineNo)
+      ..writeByte(6)
+      ..write(obj.isGeneric)
+      ..writeByte(7)
+      ..write(obj.unitIndex);
   }
 
   @override

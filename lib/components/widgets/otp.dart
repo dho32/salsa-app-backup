@@ -26,6 +26,7 @@ class OtpDialog extends StatefulWidget {
   final double storeLong;
   final VoidCallback onVerified;
   final bool isPhotoExisting;
+  final bool isOtpRequired;
 
   const OtpDialog({
     super.key,
@@ -36,6 +37,7 @@ class OtpDialog extends StatefulWidget {
     required this.storeLong,
     required this.onVerified,
     required this.isPhotoExisting,
+    required this.isOtpRequired,
   });
 
   @override
@@ -54,8 +56,12 @@ class _OtpDialogState extends State<OtpDialog> {
   void initState() {
     super.initState();
 
-    context.read<OtpBloc>().add(CheckOtpStatus(widget.transNo,
-        hasExistingPhoto: widget.isPhotoExisting));
+    _showLocationUI = !widget.isOtpRequired;
+
+    if (widget.isOtpRequired) {
+      context.read<OtpBloc>().add(CheckOtpStatus(widget.transNo,
+          hasExistingPhoto: widget.isPhotoExisting));
+    }
 
     context.read<LocationValidationBloc>().add(LoadLocationPhoto(
           widget.transNo,
@@ -250,12 +256,17 @@ class _OtpDialogState extends State<OtpDialog> {
 
   Widget _buildResendArea(OtpState state) {
     if (state is OtpSent) {
+      final int currentAttempt = (3 - state.retryLeft) + 1;
+      final int maxAttempt = 3;
+
       if (state.retryLeft == 0) {
         return Column(
           key: const ValueKey('limit_reached'),
           children: [
-            const Text("Batas permintaan OTP habis.",
-                style: TextStyle(color: Colors.red)),
+            const Text(
+              "Batas permintaan OTP habis (3/3).", // Tampilkan mentok
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -273,23 +284,48 @@ class _OtpDialogState extends State<OtpDialog> {
         );
       }
 
-      if (state.cooldown > 0) {
-        return Text('Kirim ulang dalam ${state.cooldown} detik',
-            key: const ValueKey('timer'),
-            style: const TextStyle(
-                color: Colors.grey, fontWeight: FontWeight.bold));
-      } else {
-        return TextButton(
-          key: const ValueKey('resend_btn'),
-          onPressed: () {
-            _pinController.clear();
-            context
-                .read<OtpBloc>()
-                .add(ResendOtp(widget.transNo, widget.shipTo, '0'));
-          },
-          child: const Text('Tidak menerima kode? Kirim Ulang'),
-        );
-      }
+      // Tampilan Counter & Timer
+      return Column(
+        children: [
+          // 🔥 COUNTER PERCOBAAN
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Text(
+              "Percobaan $currentAttempt dari $maxAttempt",
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade800),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Logic Tombol Kirim Ulang
+          if (state.cooldown > 0)
+            Text(
+              'Kirim ulang dalam ${state.cooldown} detik',
+              key: const ValueKey('timer'),
+              style: const TextStyle(
+                  color: Colors.grey, fontWeight: FontWeight.bold),
+            )
+          else
+            TextButton(
+              key: const ValueKey('resend_btn'),
+              onPressed: () {
+                _pinController.clear();
+                context
+                    .read<OtpBloc>()
+                    .add(ResendOtp(widget.transNo, widget.shipTo, '0'));
+              },
+              child: const Text('Tidak menerima kode? Kirim Ulang'),
+            ),
+        ],
+      );
     }
     return const SizedBox.shrink();
   }
@@ -330,7 +366,8 @@ class _OtpDialogState extends State<OtpDialog> {
             ),
             const SizedBox(height: 8),
             if (distanceToShow != null && distanceToShow > kDistance)
-              _buildDistanceWarning(distanceToShow),
+              _buildDistanceWarning(widget.shipTo, distanceToShow,
+                  photoToShow.latitude, photoToShow.longitude),
 
             TextButton(
               onPressed: () {
@@ -346,6 +383,7 @@ class _OtpDialogState extends State<OtpDialog> {
                 context.read<LocationValidationBloc>().add(
                       SubmitLocationValidation(
                         widget.transNo,
+                        widget.shipTo,
                         widget.storeLat,
                         widget.storeLong,
                       ),
@@ -380,6 +418,7 @@ class _OtpDialogState extends State<OtpDialog> {
   }
 
   Widget _buildResetButtonIfAvailable() {
+    if (!widget.isOtpRequired) return const SizedBox.shrink();
     return BlocBuilder<OtpBloc, OtpState>(
       builder: (context, otpState) {
         bool showReset = false;
@@ -395,16 +434,22 @@ class _OtpDialogState extends State<OtpDialog> {
             padding: const EdgeInsets.only(top: 25.0),
             child: RichText(
               text: TextSpan(
-                style: const TextStyle(color: Colors.black, fontSize: 12), // default text color
+                style: const TextStyle(color: Colors.black, fontSize: 12),
+                // default text color
                 children: [
-                  const TextSpan(text: 'OTP dapat diajukan kembali. ', ),
+                  const TextSpan(
+                    text: 'OTP dapat diajukan kembali. ',
+                  ),
                   TextSpan(
                     text: 'klik untuk reset.',
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                    style:
+                        const TextStyle(color: Colors.redAccent, fontSize: 12),
                     recognizer: TapGestureRecognizer()
                       ..onTap = () {
                         context.read<OtpBloc>().add(ResetOtp(widget.transNo));
-                        context.read<LocationValidationBloc>().add(RemoveLocationPhoto(widget.transNo));
+                        context
+                            .read<LocationValidationBloc>()
+                            .add(RemoveLocationPhoto(widget.transNo));
                         setState(() => _showLocationUI = false);
                       },
                   ),
@@ -418,7 +463,8 @@ class _OtpDialogState extends State<OtpDialog> {
     );
   }
 
-  Widget _buildDistanceWarning(double distance) {
+  Widget _buildDistanceWarning(
+      String shipTo, double distance, double lat, double long) {
     return Padding(
       padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
       child: Card(
@@ -431,15 +477,26 @@ class _OtpDialogState extends State<OtpDialog> {
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  "Jarak dari toko: ${NumberFormat("#,##0", "id_ID").format(distance)} meter. Lokasi terlalu jauh.",
-                  style: TextStyle(
-                      color: Colors.orange.shade900,
-                      fontWeight: FontWeight.bold),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Anda berjarak ${NumberFormat("#,##0", "id_ID").format(distance)} m \ndari toko $shipTo",
+                      style: TextStyle(
+                          color: Colors.orange.shade900,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      "lat : $lat\nlong : $long",
+                      style: TextStyle(
+                          color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
               ),
             ],

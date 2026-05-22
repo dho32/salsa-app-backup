@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:salsa/components/widgets/remark_photo_picker.dart';
@@ -18,6 +19,7 @@ import '../../../../../models/common/measurement_limits.dart';
 import '../../blocs/auth/auth_storage.dart';
 import '../../models/common/captured_image_detail.dart';
 import '../services/watermark_service.dart';
+import '../shared_function.dart';
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
@@ -153,6 +155,13 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
+        // Ambil timezone dari device
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+
+        // Format tanggal pakai locale (AMAN)
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+
         final appDir = await getApplicationDocumentsDirectory();
         final imagesDir = Directory(p.join(appDir.path, 'remark_photos'));
         if (!await imagesDir.exists()) await imagesDir.create();
@@ -165,7 +174,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           originalPath: image.path,
           targetPath: targetPath,
           transNo: widget.transNo,
-          timestamp: timestamp,
+          formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
         );
@@ -216,6 +225,22 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
     final controller = _getController(mEntry);
 
+    // 🔥 HELPER BARU: Mengambil data PALING MUTAKHIR dari BLoC
+    // Ini senjata rahasia buat ngebunuh bug "Data Overwrite" (Hilang Foto)
+    MeasurementEntry getLatestEntry() {
+      final currentState = context.read<ValidationDropdownBloc>().state;
+      if (currentState is ValidationDropdownLoaded) {
+        final currentList = widget.isBefore
+            ? currentState.capturedMeasurementsBefore
+            : currentState.capturedMeasurementsAfter;
+        // Cari data terbarunya, kalau ga ketemu baru pakai mEntry bawaan
+        return currentList.firstWhere(
+                (e) => e.measurementId == mEntry.measurementId,
+            orElse: () => mEntry);
+      }
+      return mEntry;
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
       child: MeasurementInputWidget(
@@ -227,38 +252,38 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         initialImage: mEntry.capturedImage,
         onEditingComplete: (newValue) {
           final updatedValue = double.tryParse(newValue) ?? 0.0;
+          final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(mEntry.copyWith(value: updatedValue))
-              : UpdateMeasurementAfter(mEntry.copyWith(value: updatedValue));
+              ? UpdateMeasurementBefore(latestEntry.copyWith(value: updatedValue))
+              : UpdateMeasurementAfter(latestEntry.copyWith(value: updatedValue));
           context.read<ValidationDropdownBloc>().add(event);
         },
         onImageChanged: (newImage) {
+          final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(
-                  mEntry.copyWith(capturedImage: newImage))
-              : UpdateMeasurementAfter(
-                  mEntry.copyWith(capturedImage: newImage));
+              ? UpdateMeasurementBefore(latestEntry.copyWith(capturedImage: newImage))
+              : UpdateMeasurementAfter(latestEntry.copyWith(capturedImage: newImage));
           context.read<ValidationDropdownBloc>().add(event);
         },
         isSkipEnabled: true,
         isSkipped: mEntry.isSkipped ?? false,
         onSkipChanged: (isSkipped) {
+          final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(mEntry.copyWith(
-                  isSkipped: isSkipped,
-                  value: 0.0,
-                  capturedImage: null,
-                  remark: ''))
-              : UpdateMeasurementAfter(mEntry.copyWith(
-                  isSkipped: isSkipped,
-                  value: 0.0,
-                  capturedImage: null,
-                  remark: ''));
+              ? UpdateMeasurementBefore(latestEntry.copyWith(
+              isSkipped: isSkipped,
+              value: 0.0,
+              capturedImage: null,
+              remark: ''))
+              : UpdateMeasurementAfter(latestEntry.copyWith(
+              isSkipped: isSkipped,
+              value: 0.0,
+              capturedImage: null,
+              remark: ''));
           context.read<ValidationDropdownBloc>().add(event);
+
           if (isSkipped) {
             controller.clear();
-          }
-          if (isSkipped) {
             context.read<ValidationDropdownBloc>().add(NoteChanged(null,
                 noteType: _noteType(mEntry.measurementId),
                 isBefore: widget.isBefore));

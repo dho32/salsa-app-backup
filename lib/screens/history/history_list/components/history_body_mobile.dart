@@ -246,7 +246,12 @@ class _HistoryBodyMobileState extends State<HistoryBodyMobile> {
                           transNo: transaction.transNo,
                         )));
           } else {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => PosHistoryDetailScreen(transNo: transaction.transNo,)));
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => PosHistoryDetailScreen(
+                          transNo: transaction.transNo,
+                        )));
           }
         },
         borderRadius: BorderRadius.circular(16),
@@ -303,12 +308,13 @@ class _HistoryBodyMobileState extends State<HistoryBodyMobile> {
               Row(
                 children: [
                   Expanded(
-                      child: _buildInfoItem(
-                          Icons.calendar_today_outlined,
-                          'Tanggal Servis',
-                          DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(
-                              DateTime.parse(transaction.serviceDate)
-                                  .toLocal()))),
+                    child: _buildInfoItem(
+                      Icons.calendar_today_outlined,
+                      'Tanggal Servis',
+                      DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(
+                          DateTime.parse(transaction.serviceDate)),
+                    ),
+                  ),
                   const SizedBox(width: 24),
                   Expanded(
                       child: _buildInfoItem(Icons.layers_outlined,

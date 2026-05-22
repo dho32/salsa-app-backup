@@ -68,7 +68,7 @@ class _ProofOfServiceDetailScreenState
 
   Future<void> _openHiveBox() async {
     final box =
-    await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+        await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
     if (mounted) {
       setState(() {
         _transactionInfoBox = box;
@@ -95,13 +95,13 @@ class _ProofOfServiceDetailScreenState
         providers: [
           BlocProvider(
             create: (context) =>
-            ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
-              ..add(FetchProofOfServiceDetail(widget.transNo)),
+                ProofOfServiceDetailBloc(ProofOfServiceDetailRepository())
+                  ..add(FetchProofOfServiceDetail(widget.transNo)),
           ),
           BlocProvider(
             create: (context) {
               final bloc =
-              PosSubmittedBloc(repository: PosSubmittedRepository());
+                  PosSubmittedBloc(repository: PosSubmittedRepository());
               Hive.openBox<Map<dynamic, dynamic>>(kPosValidationPartialHiveBox)
                   .then((box) {
                 if (box.containsKey(widget.transNo)) {
@@ -117,7 +117,8 @@ class _ProofOfServiceDetailScreenState
           BlocProvider(
             create: (context) => FailedUploadsBloc(
               progressCubit: context.read<UploadProgressCubit>(),
-              repository: context.read<FailedUploadsRepository>(), // INJECT REPO
+              repository:
+                  context.read<FailedUploadsRepository>(), // INJECT REPO
             )..add(LoadFailedUploads()),
           ),
 
@@ -129,10 +130,12 @@ class _ProofOfServiceDetailScreenState
               if (detailState is ProofOfServiceDetailLoaded) {
                 initialAllUnitsValidated =
                     detailState.data.detail.every((detail) {
-                      final serialKey = detail.serialNo.trim().toUpperCase();
-                      return detailState.validationStatuses[serialKey] ==
-                          ValidationStatus.completed;
-                    });
+                  final mapKey = detail.isGeneric
+                      ? '${detail.unitType}_${detail.unitIndex}'
+                      : detail.serialNo.trim().toUpperCase();
+                  return detailState.validationStatuses[mapKey] ==
+                      ValidationStatus.completed;
+                });
               }
               return PosFormCubit(
                 transNo: widget.transNo,
@@ -159,7 +162,8 @@ class _ProofOfServiceDetailScreenState
                 lat = double.tryParse(detailState.data.header.latitude) ?? 0;
                 long = double.tryParse(detailState.data.header.longitude) ?? 0;
               }
-              return LocationValidationBloc(transactionBox: _transactionInfoBox!)
+              return LocationValidationBloc(
+                  transactionBox: _transactionInfoBox!)
                 ..add(LoadLocationPhoto(widget.transNo, lat, long));
             },
           ),
@@ -169,7 +173,8 @@ class _ProofOfServiceDetailScreenState
             BlocListener<LocationValidationBloc, LocationValidationState>(
               listener: (context, state) {
                 if (state is LocationPhotoLoaded && state.photo != null) {
-                  print("🔄 [POS Sync] Foto baru diterima, update PosFormCubit!");
+                  print(
+                      "🔄 [POS Sync] Foto baru diterima, update PosFormCubit!");
                   context.read<PosFormCubit>().picImageChanged(state.photo!);
                 }
               },
@@ -194,7 +199,8 @@ class _ProofOfServiceDetailScreenState
                 } else if (state is PosValidationSuccess) {
                   if (Navigator.canPop(context)) Navigator.pop(context);
                   ConfirmationService().processQueue();
-                  showSuccessDialog(context, "Data berhasil dikirim.", onOk: () {
+                  showSuccessDialog(context, "Data berhasil dikirim.",
+                      onOk: () {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   });
                 } else if (state is PosValidationFailure) {
@@ -247,51 +253,54 @@ class _ProofOfServiceDetailScreenState
                       }
                     }
 
-                    showDialog<void>(
-                      context: context,
-                      builder: (_) {
-                        return MultiBlocProvider(
-                          providers: [
-                            BlocProvider.value(value: otpBloc),
-                            BlocProvider.value(value: locationBloc),
-                            BlocProvider.value(
-                                value: context.read<UploadProgressCubit>()),
-                          ],
-                          child: OtpDialog(
-                            transNo: header.transNo,
-                            shipTo: header.shipToCode,
-                            email: header.storeEmail,
-                            storeLat: double.tryParse(header.latitude) ?? 0.0,
-                            storeLong: double.tryParse(header.longitude) ?? 0.0,
-                            isPhotoExisting: isPhotoReady,
-                            onVerified: () {
-                              Navigator.pop(context);
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (_) => const Center(
-                                    child: CircularProgressIndicator()),
-                              );
-                              AuthStorage.getUser().then((user) {
-                                getPublicIpAddress().then((ip) {
-                                  if (!mounted) return; // SAFEGUARD
-                                  context.read<PosSubmittedBloc>().add(
-                                    SubmitPosValidation(
-                                      transNo: header.transNo,
-                                      createdBy: user['user_id'] ?? '',
-                                      createdByName: user['name'] ?? '',
-                                      createdByIP: ip,
-                                      progressCubit:
-                                      context.read<UploadProgressCubit>(),
-                                    ),
-                                  );
+                    OtpStorage.isOtpRequired().then((wajibOtp) {
+                      showDialog<void>(
+                        context: context,
+                        builder: (_) {
+                          return MultiBlocProvider(
+                            providers: [
+                              BlocProvider.value(value: otpBloc),
+                              BlocProvider.value(value: locationBloc),
+                              BlocProvider.value(
+                                  value: context.read<UploadProgressCubit>()),
+                            ],
+                            child: OtpDialog(
+                              transNo: header.transNo,
+                              shipTo: header.shipToCode,
+                              email: header.storeEmail,
+                              storeLat: double.tryParse(header.latitude) ?? 0.0,
+                              storeLong: double.tryParse(header.longitude) ?? 0.0,
+                              isPhotoExisting: isPhotoReady,
+                              isOtpRequired: wajibOtp,
+                              onVerified: () {
+                                Navigator.pop(context);
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (_) => const Center(
+                                      child: CircularProgressIndicator()),
+                                );
+                                AuthStorage.getUser().then((user) {
+                                  getPublicIpAddress().then((ip) {
+                                    if (!mounted) return; // SAFEGUARD
+                                    context.read<PosSubmittedBloc>().add(
+                                      SubmitPosValidation(
+                                        transNo: header.transNo,
+                                        createdBy: user['user_id'] ?? '',
+                                        createdByName: user['name'] ?? '',
+                                        createdByIP: ip,
+                                        progressCubit: context
+                                            .read<UploadProgressCubit>(),
+                                      ),
+                                    );
+                                  });
                                 });
-                              });
-                            },
-                          ),
-                        );
-                      },
-                    );
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    });
                   }
                 }
               },
@@ -301,9 +310,11 @@ class _ProofOfServiceDetailScreenState
                 if (detailState is ProofOfServiceDetailLoaded) {
                   final formCubit = context.read<PosFormCubit>();
                   final allUnitsValidated =
-                  detailState.data.detail.every((detail) {
-                    final serialKey = detail.serialNo.trim().toUpperCase();
-                    return detailState.validationStatuses[serialKey] ==
+                      detailState.data.detail.every((detail) {
+                    final mapKey = detail.isGeneric
+                        ? '${detail.unitType}_${detail.unitIndex}'
+                        : detail.serialNo.trim().toUpperCase();
+                    return detailState.validationStatuses[mapKey] ==
                         ValidationStatus.completed;
                   });
                   formCubit.updateAllUnitsValidated(allUnitsValidated);
@@ -345,7 +356,7 @@ class _ProofOfServiceDetailScreenState
                                   style: ElevatedButton.styleFrom(
                                     foregroundColor: Colors.orange.shade900,
                                     backgroundColor:
-                                    Colors.white.withOpacity(0.9),
+                                        Colors.white.withOpacity(0.9),
                                     shape: const StadiumBorder(),
                                     elevation: 2,
                                     visualDensity: VisualDensity.compact,
@@ -355,13 +366,13 @@ class _ProofOfServiceDetailScreenState
                                         detailState.data.unserviceableReasons ??
                                             [];
                                     final List<String> reasons =
-                                    rawReasons.map((e) => e.label).toList();
+                                        rawReasons.map((e) => e.label).toList();
                                     final String transNo =
                                         detailState.data.header.transNo;
                                     final posUnserviceableBloc =
-                                    context.read<PosUnserviceableBloc>();
+                                        context.read<PosUnserviceableBloc>();
                                     final uploadProgressCubit =
-                                    context.read<UploadProgressCubit>();
+                                        context.read<UploadProgressCubit>();
 
                                     Navigator.push(
                                       context,

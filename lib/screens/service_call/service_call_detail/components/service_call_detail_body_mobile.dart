@@ -485,57 +485,60 @@ class _ServiceCallDetailBodyMobileState
                               }
                             }
 
-                            showDialog<void>(
-                              context: context,
-                              builder: (_) {
-                                return MultiBlocProvider(
-                                  providers: [
-                                    BlocProvider.value(value: otpBloc),
-                                    BlocProvider.value(value: locationBloc),
-                                    BlocProvider.value(
-                                        value: context
-                                            .read<UploadProgressCubit>()),
-                                  ],
-                                  child: OtpDialog(
-                                    transNo: widget.transNo,
-                                    shipTo: header.storeId,
-                                    email: header.storeEmail,
-                                    storeLat: storeLat,
-                                    storeLong: storeLong,
-                                    isPhotoExisting: isPhotoReady,
-                                    onVerified: () {
-                                      Navigator.pop(context);
-                                      showDialog(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (_) => const Center(
-                                            child: CircularProgressIndicator()),
-                                      );
+                            OtpStorage.isOtpRequired().then((wajibOtp) {
+                              showDialog<void>(
+                                context: context,
+                                builder: (_) {
+                                  return MultiBlocProvider(
+                                    providers: [
+                                      BlocProvider.value(value: otpBloc),
+                                      BlocProvider.value(value: locationBloc),
+                                      BlocProvider.value(
+                                          value: context
+                                              .read<UploadProgressCubit>()),
+                                    ],
+                                    child: OtpDialog(
+                                      transNo: widget.transNo,
+                                      shipTo: header.storeId,
+                                      email: header.storeEmail,
+                                      storeLat: storeLat,
+                                      storeLong: storeLong,
+                                      isPhotoExisting: isPhotoReady,
+                                      isOtpRequired: wajibOtp, // 🔥 OPER FLAG KE DIALOG
+                                      onVerified: () {
+                                        Navigator.pop(context);
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (_) => const Center(
+                                              child: CircularProgressIndicator()),
+                                        );
 
-                                      final progressCubit =
-                                      context.read<UploadProgressCubit>();
-                                      context
-                                          .read<ServiceCallSubmittedBloc>()
-                                          .add(
-                                        SubmitValidation(
-                                          transNo: header.transNo,
-                                          createdBy: maintenanceBy,
-                                          createdByName:
-                                          formState.technician1,
-                                          createdByIP: maintenanceByIP,
-                                          pathAttachment:
-                                          header.pathAttachment,
-                                          progressCubit: progressCubit,
-                                          formState: formState,
-                                          storeName: header.storeName,
-                                          ahoNumber: state.ahoNumber,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
-                            );
+                                        final progressCubit =
+                                        context.read<UploadProgressCubit>();
+                                        context
+                                            .read<ServiceCallSubmittedBloc>()
+                                            .add(
+                                          SubmitValidation(
+                                            transNo: header.transNo,
+                                            createdBy: maintenanceBy,
+                                            createdByName:
+                                            formState.technician1,
+                                            createdByIP: maintenanceByIP,
+                                            pathAttachment:
+                                            header.pathAttachment,
+                                            progressCubit: progressCubit,
+                                            formState: formState,
+                                            storeName: header.storeName,
+                                            ahoNumber: state.ahoNumber,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              );
+                            });
                           } else if (state is ValidationUploadPartial) {
                             if (Navigator.canPop(context)) {
                               Navigator.pop(context);
@@ -1072,12 +1075,11 @@ class _ServiceCallDetailBodyMobileState
       List<NoteOption> noteOptions) {
     final formCubit = context.read<ScFormCubit>();
     final baseLimits = _scFinalTempBaseLimits;
-    final double minLimit = formState.minFinalTempInLimit ?? baseLimits.min;
     final String label = baseLimits.label;
     final finalTempLimits = MeasurementLimits(
       id: baseLimits.id,
       label: label,
-      min: minLimit,
+      min: baseLimits.min,
       max: baseLimits.max,
       unit: baseLimits.unit,
       normalMin: baseLimits.normalMin,

@@ -6,13 +6,10 @@ import 'package:salsa/components/shared_function.dart';
 import 'package:salsa/models/proof_of_service/proof_of_service_detail_model.dart';
 
 class ProofOfServiceDetailRepository {
-  /// Mengambil data detail Proof of Service dari API.
   Future<ProofOfServiceDetailModel> fetchProofOfServiceDetail(String transNo) async {
-    // Siapkan parameter untuk API call
-    final params = {'trans_no': transNo};
 
-    // Ganti 'proof_of_service/detail' dengan endpoint API Anda yang sebenarnya
-    Uri uri = getUrl(pathUrl: 'proof_of_service/detail/v2', params: params);
+    final params = {'trans_no': transNo};
+    Uri uri = getUrl(pathUrl: 'proof_of_service/detail/v5', params: params);
 
     final response = await http.get(uri);
     print("=================================");
