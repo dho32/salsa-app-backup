@@ -54,7 +54,6 @@ class MeasurementLimits {
       min: _parseDouble(json['min']),
       max: _parseDouble(json['max']),
       unit: json['unit'] as String? ?? '',
-      // Ambil 'snake_case' dari API dan mapping ke 'camelCase' model
       normalMin: _parseDouble(json['normal_min']),
       normalMax: _parseDouble(json['normal_max']),
     );

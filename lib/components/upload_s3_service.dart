@@ -15,6 +15,7 @@ import '../models/installation/installation_model.dart';
 import '../models/proof_of_service/pos_transaction_info_model.dart';
 import '../models/proof_of_service/pos_unserviceable_model.dart';
 import '../models/proof_of_service/pos_validation_entry_model.dart';
+import '../models/rro_cut_off/rro_cut_off_entry_model.dart';
 import '../models/service_call/sc_unserviceable_model.dart';
 import '../models/service_call/transaction_info_model.dart';
 
@@ -404,10 +405,12 @@ Future<InstallationUploadResult> uploadInstallationFiles({
   }
 
   if (draft.storeFrontPhoto != null) {
-    localFileMap[draft.storeFrontPhoto!.imageFileName] = draft.storeFrontPhoto!.imagePath;
+    localFileMap[draft.storeFrontPhoto!.imageFileName] =
+        draft.storeFrontPhoto!.imagePath;
   }
   if (draft.hasTransport && draft.transportEvidencePhoto != null) {
-    localFileMap[draft.transportEvidencePhoto!.imageFileName] = draft.transportEvidencePhoto!.imagePath;
+    localFileMap[draft.transportEvidencePhoto!.imageFileName] =
+        draft.transportEvidencePhoto!.imagePath;
   }
   for (var u in draft.units) {
     for (var m in u.measurements) {
@@ -511,6 +514,159 @@ Future<InstallationUploadResult> uploadInstallationFiles({
   }
 
   return InstallationUploadResult(
+      successCount: successCount,
+      failureCount: failureCount,
+      failedFiles: failedFiles);
+}
+
+// --- TAMBAH FUNGSI RRO CUT OFF ---
+Future<UploadResult> uploadRROCutOffFiles({
+  required Map<String, dynamic> apiResult,
+  required UploadProgressCubit progressCubit,
+  required String transNo,
+}) async {
+  // A. Buka Brankas Entry Unit
+  Box<RROCutOffEntryModel>? entryBox;
+  if (Hive.isBoxOpen(kRROCutOffEntryBox)) {
+    entryBox = Hive.box<RROCutOffEntryModel>(kRROCutOffEntryBox);
+  } else {
+    entryBox = await Hive.openBox<RROCutOffEntryModel>(kRROCutOffEntryBox);
+  }
+
+  // B. Kumpulkan Local Paths
+  Map<String, String> localFileMap = {};
+
+  // 1. Kumpulkan Foto Unit (Pakai Model Baru)
+  final unitEntries =
+      entryBox.values.where((e) => e.transNo == transNo).toList();
+  for (var unit in unitEntries) {
+    for (var photo in unit.photos) {
+      localFileMap[photo.imageFileName] = photo.imagePath;
+    }
+  }
+
+  // 2. Kumpulkan Foto Toko & Foto PIC dari Draft Box
+  try {
+    Box draftBox;
+    if (Hive.isBoxOpen('rro_form_draft_box')) {
+      draftBox = Hive.box('rro_form_draft_box');
+    } else {
+      draftBox = await Hive.openBox('rro_form_draft_box');
+    }
+
+    // Foto Toko Depan
+    final storeFrontPath =
+        draftBox.get('${transNo}_storeFrontPhoto', defaultValue: '');
+    if (storeFrontPath.isNotEmpty) {
+      final fileName = storeFrontPath.split('/').last;
+      localFileMap[fileName] = storeFrontPath;
+    }
+
+    // 🔥 TAMBAHAN: Foto Validasi PIC
+    final picPhotoPath =
+        draftBox.get('${transNo}_picPhotoPath', defaultValue: '');
+    if (picPhotoPath.isNotEmpty) {
+      final fileName = picPhotoPath.split('/').last;
+      localFileMap[fileName] = picPhotoPath;
+    }
+  } catch (e) {
+    print("Error baca foto toko/pic: $e");
+  }
+
+  print("📦 ISI LOCAL FILE MAP: ${localFileMap.keys}");
+
+  // C. Build Tasks dari Presigned URL
+  List<Map<String, String>> uploadQueue = [];
+  try {
+    final details = apiResult['result']['detail'] as List;
+
+    // 🔥 PERBAIKAN LOOPING: Harus masuk dulu ke array 'uploads'
+    for (var d in details) {
+      if (d['uploads'] != null) {
+        final uploads = d['uploads'] as List;
+        for (var u in uploads) {
+          final fname = u['filename'].toString();
+          final url = u['url'].toString();
+
+          if (localFileMap.containsKey(fname)) {
+            uploadQueue.add(
+                {'filename': fname, 'url': url, 'path': localFileMap[fname]!});
+          } else {
+            print("⚠️ Local file not found for: $fname");
+          }
+        }
+      }
+    }
+  } catch (e) {
+    print("Error parsing uploads JSON: $e");
+  }
+
+  // D. Eksekusi Loop dengan Cubit Progress
+  int totalFiles = uploadQueue.length;
+  progressCubit.setTotal(totalFiles);
+
+  print("🚀 TOTAL FILE YANG AKAN DIUPLOAD KE S3: $totalFiles");
+
+  if (totalFiles == 0) {
+    progressCubit.updateProgress(0, 0, 'Selesai');
+    return UploadResult(successCount: 0, failureCount: 0, failedFiles: []);
+  }
+
+  int successCount = 0;
+  int failureCount = 0;
+  List<String> failedFiles = [];
+  List<String> successfulUrls = [];
+
+  for (int i = 0; i < totalFiles; i++) {
+    final task = uploadQueue[i];
+    final fileName = task['filename']!;
+    final url = task['url']!;
+    final path = task['path']!;
+
+    progressCubit.updateProgress(
+        i + 1, totalFiles, "Mengupload ${i + 1} dari $totalFiles foto...");
+
+    try {
+      final file = File(path);
+      if (!await file.exists()) throw Exception("File not found");
+
+      final bytes = await file.readAsBytes();
+      // Kalau ngga ketemu mimetype-nya, kita tembak default 'image/jpeg' biar S3 ga nolak
+      final mimeType = lookupMimeType(path) ?? 'image/jpeg';
+
+      final response = await http
+          .put(
+            Uri.parse(url),
+            headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
+            body: bytes,
+          )
+          .timeout(const Duration(minutes: 2));
+
+      if (response.statusCode == 200) {
+        successCount++;
+        successfulUrls.add(url);
+        print("✅ Upload success: $fileName");
+      } else {
+        throw Exception("HTTP ${response.statusCode}");
+      }
+    } catch (e) {
+      String errorMsg = e.toString();
+      if (e is TimeoutException)
+        errorMsg = "Timeout";
+      else if (e is SocketException) errorMsg = "Network Error";
+
+      print("❌ Upload Failed: $fileName -> $errorMsg");
+      failureCount++;
+      failedFiles.add("$fileName ($errorMsg)");
+    }
+  }
+
+  // Notifikasi backend kalau ada yang sukses
+  if (successfulUrls.isNotEmpty) {
+    await notifyBackendBatch(successfulUrls);
+  }
+
+  return UploadResult(
       successCount: successCount,
       failureCount: failureCount,
       failedFiles: failedFiles);

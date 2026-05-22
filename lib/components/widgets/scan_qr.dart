@@ -74,7 +74,8 @@ class _QrScanPageState extends State<QrScanPage> {
       if (scanned == null) return;
 
       setState(() => _isProcessing = true);
-      await controller!.pauseCamera(); // Langsung pause agar tidak scan berulang
+      await controller!
+          .pauseCamera(); // Langsung pause agar tidak scan berulang
 
       try {
         // final resolvedUrl = await _resolveFinalUrl(scanned);

@@ -225,6 +225,22 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
     final controller = _getController(mEntry);
 
+    // 🔥 HELPER BARU: Mengambil data PALING MUTAKHIR dari BLoC
+    // Ini senjata rahasia buat ngebunuh bug "Data Overwrite" (Hilang Foto)
+    MeasurementEntry getLatestEntry() {
+      final currentState = context.read<ValidationDropdownBloc>().state;
+      if (currentState is ValidationDropdownLoaded) {
+        final currentList = widget.isBefore
+            ? currentState.capturedMeasurementsBefore
+            : currentState.capturedMeasurementsAfter;
+        // Cari data terbarunya, kalau ga ketemu baru pakai mEntry bawaan
+        return currentList.firstWhere(
+                (e) => e.measurementId == mEntry.measurementId,
+            orElse: () => mEntry);
+      }
+      return mEntry;
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
       child: MeasurementInputWidget(
@@ -236,38 +252,38 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         initialImage: mEntry.capturedImage,
         onEditingComplete: (newValue) {
           final updatedValue = double.tryParse(newValue) ?? 0.0;
+          final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(mEntry.copyWith(value: updatedValue))
-              : UpdateMeasurementAfter(mEntry.copyWith(value: updatedValue));
+              ? UpdateMeasurementBefore(latestEntry.copyWith(value: updatedValue))
+              : UpdateMeasurementAfter(latestEntry.copyWith(value: updatedValue));
           context.read<ValidationDropdownBloc>().add(event);
         },
         onImageChanged: (newImage) {
+          final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(
-                  mEntry.copyWith(capturedImage: newImage))
-              : UpdateMeasurementAfter(
-                  mEntry.copyWith(capturedImage: newImage));
+              ? UpdateMeasurementBefore(latestEntry.copyWith(capturedImage: newImage))
+              : UpdateMeasurementAfter(latestEntry.copyWith(capturedImage: newImage));
           context.read<ValidationDropdownBloc>().add(event);
         },
         isSkipEnabled: true,
         isSkipped: mEntry.isSkipped ?? false,
         onSkipChanged: (isSkipped) {
+          final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(mEntry.copyWith(
-                  isSkipped: isSkipped,
-                  value: 0.0,
-                  capturedImage: null,
-                  remark: ''))
-              : UpdateMeasurementAfter(mEntry.copyWith(
-                  isSkipped: isSkipped,
-                  value: 0.0,
-                  capturedImage: null,
-                  remark: ''));
+              ? UpdateMeasurementBefore(latestEntry.copyWith(
+              isSkipped: isSkipped,
+              value: 0.0,
+              capturedImage: null,
+              remark: ''))
+              : UpdateMeasurementAfter(latestEntry.copyWith(
+              isSkipped: isSkipped,
+              value: 0.0,
+              capturedImage: null,
+              remark: ''));
           context.read<ValidationDropdownBloc>().add(event);
+
           if (isSkipped) {
             controller.clear();
-          }
-          if (isSkipped) {
             context.read<ValidationDropdownBloc>().add(NoteChanged(null,
                 noteType: _noteType(mEntry.measurementId),
                 isBefore: widget.isBefore));

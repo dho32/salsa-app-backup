@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:salsa/screens/rro_cut_off/rro_cut_off_detail/rro_cut_off_detail_screen.dart';
 import 'package:salsa/screens/task_maintenance/components/widget/task_maintenance_widgets.dart';
 import '../../../blocs/failed_uploads/failed_uploads_bloc.dart';
 import '../../../blocs/task_maintenance/task_maintenance_bloc.dart';
@@ -504,9 +505,13 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     } else if (suggestion.type == 'CUCI') {
       destinationScreen =
           ProofOfServiceDetailScreen(transNo: suggestion.transNo);
-    } else if (suggestion.type == 'INSTALLATION' ||
-        suggestion.type == 'INSTALLATION') {
+    } else if (suggestion.type == 'INSTALLATION') {
       destinationScreen = InstallationDetailScreen(
+        transNo: suggestion.transNo,
+        vendorId: widget.userData['maintenance_by']!,
+      );
+    } else if (suggestion.type == 'RRO') {
+      destinationScreen = RROCutOffDetailScreen(
         transNo: suggestion.transNo,
         vendorId: widget.userData['maintenance_by']!,
       );

@@ -30,6 +30,8 @@ import 'models/proof_of_service/pos_transaction_info_model.dart';
 import 'models/proof_of_service/pos_unserviceable_model.dart';
 import 'models/proof_of_service/pos_validation_entry_model.dart';
 import 'models/proof_of_service/proof_of_service_detail_model.dart';
+import 'models/rro_cut_off/rro_cut_off_detail_model.dart';
+import 'models/rro_cut_off/rro_cut_off_entry_model.dart';
 import 'models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import 'models/service_call/service_call_validation_entry_model.dart';
 import 'models/task_maintenance/confirmation_task_queue.dart';
@@ -111,6 +113,7 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(MeasurementLimitsAdapter());
     Hive.registerAdapter(NoteOptionAdapter());
     Hive.registerAdapter(OtpTrackingModelAdapter());
+
     // Register Adapters Pasang AC (Draft)
     Hive.registerAdapter(InstallationPhotoModelAdapter());
     Hive.registerAdapter(InstallationMeasurementModelAdapter());
@@ -119,7 +122,7 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(InstallationUnitModelAdapter());
     Hive.registerAdapter(InstallationEntryModelAdapter());
 
-// Register Adapters Pasang AC (Detail/Task)
+    // Register Adapters Pasang AC (Detail/Task)
     Hive.registerAdapter(InstallationHeaderDetailModelAdapter());
     Hive.registerAdapter(InstallationTargetUnitModelAdapter());
     Hive.registerAdapter(InstallationMasterOptionModelAdapter());
@@ -128,6 +131,15 @@ class _AppInitializerState extends State<AppInitializer> {
     Hive.registerAdapter(InstallationDetailModelAdapter());
     Hive.registerAdapter(InstallationBrandModelAdapter());
     Hive.registerAdapter(MaterialEvidenceModelAdapter());
+
+    // Register Adapters RRO Cut Off
+    Hive.registerAdapter(RROCutOffResultAdapter());
+    Hive.registerAdapter(RROCutOffHeaderAdapter());
+    Hive.registerAdapter(RROCutOffDetailItemAdapter());
+    Hive.registerAdapter(RROCutOffSerialNumberAdapter());
+    Hive.registerAdapter(RROCutOffFormModelAdapter());
+    Hive.registerAdapter(RROCutOffEntryModelAdapter());
+    Hive.registerAdapter(RROCutOffPhotoModelAdapter());
   }
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
@@ -144,6 +156,9 @@ class _AppInitializerState extends State<AppInitializer> {
       await _openBoxSafely<SCUnserviceableModel>(kScUnserviceableDraftsBox);
       await _openBoxSafely(null, boxName: kAppConfigBox);
       await _openBoxSafely<OtpTrackingModel>(kOtpTrackingBox);
+      await _openBoxSafely<RROCutOffResult>(kRROCutOffDetailBox);
+      await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffEntryBox);
+      await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffFormBox);
     } catch (e) {
       // Jika error sangat fatal (Disk Penuh Total / Permission Error)
       print("💀 Fatal Init Error: $e");

@@ -4,7 +4,7 @@ import '../common/measurement_limits.dart';
 
 part 'installation_detail_model.g.dart';
 
-// --- TYPE ID: 210 - 220 ---
+// --- TYPE ID: 210 - 219 ---
 
 @HiveType(typeId: 210)
 class InstallationHeaderDetailModel {

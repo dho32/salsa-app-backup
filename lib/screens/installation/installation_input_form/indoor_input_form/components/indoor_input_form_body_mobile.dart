@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -54,6 +55,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
   final _sthiraSnPartController = TextEditingController();
   final _sthiraTypePartController = TextEditingController();
   String _vendorCode = '';
+
   // --------------------------------------------------------
 
   final TextEditingController _remarkController = TextEditingController();
@@ -74,6 +76,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
   bool _isProcessingWatermark = false;
 
   bool _isSubmittingFinal = false;
+
   bool get _isOriginalCompleted => widget.existingData?.status == 'COMPLETED';
 
   @override
@@ -176,7 +179,9 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       // ----------------------------------------------------------------
 
       _remarkController.text = widget.existingData!.remark;
-      _notePhotos = widget.existingData!.remarkPhotos.map((p) => _mapPhotoModelToDetail(p)).toList();
+      _notePhotos = widget.existingData!.remarkPhotos
+          .map((p) => _mapPhotoModelToDetail(p))
+          .toList();
     }
 
     double initialVal = 0;
@@ -185,7 +190,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
 
     if (widget.existingData != null) {
       final tempMetric = widget.existingData!.measurements.firstWhere(
-              (m) => m.measurementId == _kTempId,
+          (m) => m.measurementId == _kTempId,
           orElse: () => InstallationMeasurementModel(
               measurementId: '', unit: '', value: 0));
 
@@ -231,7 +236,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
     _measurementEntries = [entry];
 
     _measurementControllers[_kTempId] = TextEditingController(
-        text: initialSkip ? '' : (initialVal == 0 ? '' : initialVal.toString()));
+        text:
+            initialSkip ? '' : (initialVal == 0 ? '' : initialVal.toString()));
 
     _measurementControllers[_kTempId]?.addListener(_onFormChanged);
   }
@@ -258,7 +264,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
     }
     if (matchedOption != null) {
       _selectedNoteReason = matchedOption;
-      if (_remarkController.text.isEmpty && fullNote.length > matchedOption.length + 3) {
+      if (_remarkController.text.isEmpty &&
+          fullNote.length > matchedOption.length + 3) {
         _remarkController.text = fullNote.substring(matchedOption.length + 3);
       }
     } else {
@@ -281,19 +288,19 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
     } else {
       finalSn = _snController.text.toUpperCase().trim();
     }
+
     // ------------------------------------------------
-
-    if (isFinal && finalSn.isEmpty) return null;
-
     // Validasi tambahan jika Final dan Sthira
     if (isFinal && _vendorCode == 'V000062') {
-      if (_sthiraSnPartController.text.isEmpty || _sthiraTypePartController.text.isEmpty) {
+      if (_sthiraSnPartController.text.isEmpty ||
+          _sthiraTypePartController.text.isEmpty) {
         _showErrorSnack("Nomor SN dan Tipe AC wajib diisi lengkap!");
         return null;
       }
     }
 
-    final tempEntry = _measurementEntries.firstWhere((e) => e.measurementId == _kTempId);
+    final tempEntry =
+        _measurementEntries.firstWhere((e) => e.measurementId == _kTempId);
     final bool isSkipped = tempEntry.isSkipped ?? false;
 
     InstallationPhotoModel? measurementPhoto;
@@ -335,18 +342,21 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       remarkManual = _remarkController.text;
 
       if (_notePhotos.isNotEmpty) {
-        remarkPhotosModel = _notePhotos.map((p) => _buildPhotoModel(p)).toList();
+        remarkPhotosModel =
+            _notePhotos.map((p) => _buildPhotoModel(p)).toList();
       }
     }
 
-    String currentStatus = isFinal ? 'COMPLETED' : (_isOriginalCompleted ? 'COMPLETED' : 'DRAFT');
+    String currentStatus =
+        isFinal ? 'COMPLETED' : (_isOriginalCompleted ? 'COMPLETED' : 'DRAFT');
 
     return InstallationUnitModel(
       unitIndex: widget.target.unitIndex,
       articleNo: widget.target.articleNo,
       articleDesc: widget.target.description,
       articleType: 'IN',
-      serialNo: finalSn, // <-- Menggunakan SN yang sudah dijahit
+      serialNo: finalSn,
+      // <-- Menggunakan SN yang sudah dijahit
       note: noteDropdown,
       measurements: measurements,
       materials: InstallationMaterialsModel(),
@@ -393,7 +403,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
 
         final user = await AuthStorage.getUser();
         final directory = await getApplicationDocumentsDirectory();
-        final String fileName = 'WM_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String fileName =
+            'WM_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final String targetPath = p.join(directory.path, fileName);
         final String techName = user['name'] ?? 'Teknisi';
         final timestamp = DateTime.now();
@@ -459,7 +470,10 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
   }
 
   void _openImageViewer(CapturedImageDetail img) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageDetail: img)));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => FullScreenImageViewer(imageDetail: img)));
   }
 
   InstallationPhotoModel _buildPhotoModel(CapturedImageDetail img) {
@@ -489,14 +503,17 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       final currentState = context.read<InstallationBloc>().state;
       final draft = currentState.draftEntry;
       if (draft != null && draft.units.isNotEmpty) {
-        final isDuplicate = draft.units.any((u) => u.serialNo == snToValidate && u.unitIndex != widget.target.unitIndex);
+        final isDuplicate = draft.units.any((u) =>
+            u.serialNo == snToValidate &&
+            u.unitIndex != widget.target.unitIndex);
         if (isDuplicate) {
           _showErrorSnack("Serial Number sudah digunakan di unit lain!");
           return;
         }
       }
 
-      final tempEntry = _measurementEntries.firstWhere((e) => e.measurementId == _kTempId);
+      final tempEntry =
+          _measurementEntries.firstWhere((e) => e.measurementId == _kTempId);
       final bool isSkipped = tempEntry.isSkipped ?? false;
 
       if (!isSkipped) {
@@ -516,7 +533,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
           return;
         }
         final option = _noteOptions.firstWhere(
-                (o) => o.label == _selectedNoteReason,
+            (o) => o.label == _selectedNoteReason,
             orElse: () => const MeasurementNoteOption(label: ''));
         if (option.requireRemark) {
           if (_remarkController.text.trim().length < 20) {
@@ -568,7 +585,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isAnyMeasurementSkipped = _measurementEntries.any((m) => m.isSkipped == true);
+    final bool isAnyMeasurementSkipped =
+        _measurementEntries.any((m) => m.isSkipped == true);
 
     return PopScope(
       canPop: false,
@@ -602,10 +620,12 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(widget.target.description,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
                             const SizedBox(height: 4),
                             Text("Article No: ${widget.target.articleNo}",
-                                style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                                style: TextStyle(
+                                    color: Colors.grey[600], fontSize: 13)),
                           ]),
                     ),
                   ),
@@ -636,8 +656,11 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                     indoorTemp: null,
                     onUpdate: (updatedEntry) {
                       setState(() {
-                        final index = _measurementEntries.indexWhere((e) => e.measurementId == updatedEntry.measurementId);
-                        if (index != -1) _measurementEntries[index] = updatedEntry;
+                        final index = _measurementEntries.indexWhere((e) =>
+                            e.measurementId == updatedEntry.measurementId);
+                        if (index != -1) {
+                          _measurementEntries[index] = updatedEntry;
+                        }
                         if (updatedEntry.isSkipped == false) {
                           _selectedNoteReason = null;
                           _remarkController.clear();
@@ -649,7 +672,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                   ),
                   if (isAnyMeasurementSkipped)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       child: _buildSection(
                         title: "Catatan Kendala Suhu",
                         child: MeasurementNoteDropdown(
@@ -666,9 +690,11 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                           },
                           photos: _notePhotos,
                           isTakingPhoto: _isTakingNotePhoto,
-                          onAddPhoto: () => _handleTakePhoto(isInstallPhoto: false),
+                          onAddPhoto: () =>
+                              _handleTakePhoto(isInstallPhoto: false),
                           onRemovePhoto: (path) {
-                            setState(() => _notePhotos.removeWhere((p) => p.imagePath == path));
+                            setState(() => _notePhotos
+                                .removeWhere((p) => p.imagePath == path));
                             _onFormChanged();
                           },
                         ),
@@ -681,23 +707,40 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(color: Colors.white, boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4))
             ]),
             child: ElevatedButton(
-              onPressed: _isProcessingWatermark ? null : () => _dispatchSave(isFinal: true),
+              onPressed: _isProcessingWatermark
+                  ? null
+                  : () => _dispatchSave(isFinal: true),
               style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 0),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              child:
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 if (_isProcessingWatermark)
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
                 else
                   const Icon(Icons.save_as_outlined, color: Colors.white),
                 const SizedBox(width: 8),
-                Text(_isProcessingWatermark ? "MEMPROSES FOTO..." : "SIMPAN DATA INDOOR",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))
+                Text(
+                    _isProcessingWatermark
+                        ? "MEMPROSES FOTO..."
+                        : "SIMPAN DATA INDOOR",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.white))
               ]),
             ),
           ),
@@ -715,7 +758,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       suffixIcon: IconButton(
         icon: const Icon(FontAwesomeIcons.qrcode, color: Color(0xFF1565C0)),
         onPressed: () async {
-          final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScanPage()));
+          final res = await Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const QrScanPage()));
           if (res != null) setState(() => _snController.text = res);
         },
       ),
@@ -732,11 +776,13 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: () async {
-              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScanPage()));
+              final res = await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const QrScanPage()));
               if (res != null) {
                 // Kalau hasil scan dari alat, langsung pecah masukin ke kotak
                 if (res.contains('|in|') || res.contains('|IN|')) {
-                  final parts = res.split(RegExp(r'\|in\|', caseSensitive: false));
+                  final parts =
+                      res.split(RegExp(r'\|in\|', caseSensitive: false));
                   if (parts.length == 2) {
                     setState(() {
                       _sthiraSnPartController.text = parts[0];
@@ -745,16 +791,18 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                     _onFormChanged();
                   }
                 } else {
-                  _showErrorSnack("Barcode tidak valid for vendor ini. Harus format SN|IN|TIPE.");
+                  _showErrorSnack(
+                      "Barcode tidak valid for vendor ini. Harus format SN|IN|TIPE.");
                 }
               }
             },
-            icon: const Icon(FontAwesomeIcons.qrcode, color: Color(0xFF1565C0), size: 18),
+            icon: const Icon(FontAwesomeIcons.qrcode,
+                color: Color(0xFF1565C0), size: 18),
             label: const Text("Scan Barcode"),
             style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFF1565C0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-            ),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
           ),
         ),
         const SizedBox(height: 16),
@@ -768,23 +816,23 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                   controller: _sthiraSnPartController,
                   label: "Nomor SN",
                   icon: FontAwesomeIcons.hashtag,
-                  hintText: "Cth: 00034"
-              ),
+                  hintText: "Cth: 00034"),
             ),
-
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 20),
-              child: Text("| IN |", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey)),
+              child: Text("| IN |",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.blueGrey)),
             ),
-
             Expanded(
               flex: 4,
               child: _buildCustomTextField(
                   controller: _sthiraTypePartController,
                   label: "Tipe AC",
                   icon: FontAwesomeIcons.tag,
-                  hintText: "Cth: SC234"
-              ),
+                  hintText: "Cth: SC234"),
             ),
           ],
         )
@@ -802,9 +850,17 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text("Foto Unit Terpasang",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey)),
               Text("${_installPhotos.length}/5 Foto",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _installPhotos.length == 5 ? Colors.red : Colors.blue)),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: _installPhotos.length == 5
+                          ? Colors.red
+                          : Colors.blue)),
             ],
           ),
           const SizedBox(height: 12),
@@ -826,14 +882,22 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                       decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid)),
+                          border: Border.all(
+                              color: Colors.grey.shade300,
+                              style: BorderStyle.solid)),
                       child: _isTakingInstallPhoto
                           ? const Center(child: CircularProgressIndicator())
-                          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(Icons.add_a_photo, size: 30, color: Colors.grey.shade400),
-                        const SizedBox(height: 4),
-                        Text("Tambah", style: TextStyle(color: Colors.grey.shade600, fontSize: 11))
-                      ]),
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                  Icon(Icons.add_a_photo,
+                                      size: 30, color: Colors.grey.shade400),
+                                  const SizedBox(height: 4),
+                                  Text("Tambah",
+                                      style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 11))
+                                ]),
                     ),
                   );
                 }
@@ -845,7 +909,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                       onTap: () => _openImageViewer(img),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Image.file(File(img.imagePath), width: 120, height: 120, fit: BoxFit.cover),
+                        child: Image.file(File(img.imagePath),
+                            width: 120, height: 120, fit: BoxFit.cover),
                       ),
                     ),
                     Positioned(
@@ -858,8 +923,10 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                         },
                         child: Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                          child: const Icon(Icons.close, size: 14, color: Colors.red),
+                          decoration: const BoxDecoration(
+                              color: Colors.white, shape: BoxShape.circle),
+                          child: const Icon(Icons.close,
+                              size: 14, color: Colors.red),
                         ),
                       ),
                     )
@@ -871,7 +938,11 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
           if (_isProcessingWatermark && _isTakingInstallPhoto)
             const Padding(
               padding: EdgeInsets.only(top: 8),
-              child: Text("Sedang memberi watermark...", style: TextStyle(fontSize: 11, color: Colors.orange, fontStyle: FontStyle.italic)),
+              child: Text("Sedang memberi watermark...",
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange,
+                      fontStyle: FontStyle.italic)),
             )
         ],
       ),
@@ -885,9 +956,16 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
         decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.grey.shade300, blurRadius: 6, offset: const Offset(0, 2))]),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.grey.shade300,
+                  blurRadius: 6,
+                  offset: const Offset(0, 2))
+            ]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           child
         ]));
@@ -896,26 +974,38 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
   // --- [PERUBAHAN ALUR 3] Menerima Parameter hintText tambahan ---
   Widget _buildCustomTextField(
       {required TextEditingController controller,
-        required String label,
-        required IconData icon,
-        Widget? suffixIcon,
-        String? hintText}) {
+      required String label,
+      required IconData icon,
+      Widget? suffixIcon,
+      String? hintText}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+      Text(label,
+          style: const TextStyle(
+              fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
       const SizedBox(height: 6),
       TextFormField(
-          controller: controller,
-          textCapitalization: TextCapitalization.characters,
-          style: const TextStyle(fontSize: 14),
-          decoration: InputDecoration(
-              hintText: hintText ?? "Masukkan $label",
-              prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 18),
-              suffixIcon: suffixIcon,
-              isDense: true,
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12)))
+        controller: controller,
+        textCapitalization: TextCapitalization.characters,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+            hintText: hintText ?? "Masukkan $label",
+            prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 18),
+            suffixIcon: suffixIcon,
+            isDense: true,
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 12)),
+        inputFormatters: [
+          TextInputFormatter.withFunction(
+            (oldValue, newValue) =>
+                newValue.copyWith(text: newValue.text.toUpperCase()),
+          ),
+        ],
+      )
     ]);
   }
 }

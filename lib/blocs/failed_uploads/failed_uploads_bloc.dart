@@ -10,10 +10,11 @@ import '../../models/installation/installation_model.dart';
 import '../../models/proof_of_service/pos_unserviceable_model.dart';
 import '../../models/service_call/sc_unserviceable_model.dart';
 import '../../models/task_maintenance/confirmation_task_queue.dart';
-import '../../models/task_maintenance/task_maintenance_model.dart'; // Import Model Suggestion
+import '../../models/task_maintenance/task_maintenance_model.dart';
 import '../../screens/common/services/confirmation_service.dart';
 import '../service/service_repository.dart';
 import 'failed_uploads_repository.dart';
+import '../../../models/rro_cut_off/rro_cut_off_entry_model.dart';
 
 part 'failed_uploads_event.dart';
 
@@ -33,8 +34,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     on<RetryTransaction>(_onRetryTransaction);
     on<ClearSnackbarMessage>(_onClearSnackbarMessage);
     on<ClearSuccessMessage>(_onClearSuccessMessage);
-
-    // 🔥 EVENT BARU: Untuk Sinkronisasi Zombie & Total Issues
     on<SyncWithApiPending>(_onSyncWithApiPending);
 
     _listenToHiveChanges();
@@ -43,19 +42,16 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
   // --- 1. SYNC LOGIC (OPTIMASI ZOMBIE) ---
   void _onSyncWithApiPending(
       SyncWithApiPending event, Emitter<FailedUploadsState> emit) {
-    // Ambil transNo dari Hive yang sudah ada di state saat ini
     final localTransNos =
-    state.failedTransactions.map((t) => t['transNo'] as String).toSet();
+        state.failedTransactions.map((t) => t['transNo'] as String).toSet();
 
     int zombieCount = 0;
     for (var apiTask in event.apiPendingList) {
-      // Jika di API ada status pending tapi di HP tidak ada datanya (Zombie)
       if (!localTransNos.contains(apiTask.transNo)) {
         zombieCount++;
       }
     }
 
-    // Update state dengan angka zombie dan total issues tanpa menghapus data lain
     emit(state.copyWith(
       zombieCount: zombieCount,
       totalIssues: state.failedTransactions.length + zombieCount,
@@ -90,9 +86,9 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       await loadFromBox(kServiceCallValidationPartialHiveBox, 'SC');
       await loadFromBox(kPosUnserviceablePartialBox, 'POS_UNSERVICEABLE');
       await loadFromBox(kScUnserviceablePartialBox, 'SC_UNSERVICEABLE');
-      await loadFromBox(kFailedUploadsBox, 'INSTALLATION');
+      await loadFromBox(
+          kFailedUploadsBox, 'INSTALLATION'); // RRO otomatis nebeng di sini
 
-      // Setelah load dari Hive, update total issues (Zombie tetap nol sampai SyncWithApiPending dipanggil)
       emit(state.copyWith(
         status: FailedUploadsStatus.loaded,
         failedTransactions: allFailedTyped,
@@ -126,30 +122,30 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         await repository.resetTransactionData(event.transNo);
 
         final updatedList =
-        List<Map<String, dynamic>>.from(state.failedTransactions)
-          ..removeWhere((t) => t['transNo'] == event.transNo);
+            List<Map<String, dynamic>>.from(state.failedTransactions)
+              ..removeWhere((t) => t['transNo'] == event.transNo);
 
         emit(state.copyWith(
           status: FailedUploadsStatus.success,
           failedTransactions: updatedList,
           zombieCount: (state.zombieCount - 1).clamp(0, 999),
-          // Kurangi zombie count
           totalIssues: (state.totalIssues - 1).clamp(0, 999),
           clearUploadingTransNo: true,
           successMessage:
-          "Status transaksi ${event.transNo} berhasil di-reset.",
+              "Status transaksi ${event.transNo} berhasil di-reset.",
         ));
         return;
       }
 
       // === KASUS 2: NORMAL RETRY (UPLOAD S3) ===
       final transactionData = state.failedTransactions.firstWhere(
-            (t) => t['transNo'] == event.transNo,
+        (t) => t['transNo'] == event.transNo,
         orElse: () => {},
       );
 
-      if (transactionData.isEmpty)
+      if (transactionData.isEmpty) {
         throw Exception("Data lokal tidak ditemukan.");
+      }
 
       final String moduleType =
           transactionData['module']?.toString() ?? 'UNKNOWN';
@@ -168,11 +164,12 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         result = await uploadAllImagesToS3(event.transNo, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'POS_UNSERVICEABLE') {
-        if (!Hive.isBoxOpen(kPosUnserviceableDraftsBox))
+        if (!Hive.isBoxOpen(kPosUnserviceableDraftsBox)) {
           await Hive.openBox<PosUnserviceableModel>(kPosUnserviceableDraftsBox);
+        }
         final report =
-        Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox)
-            .get(event.transNo);
+            Hive.box<PosUnserviceableModel>(kPosUnserviceableDraftsBox)
+                .get(event.transNo);
         if (report == null) throw Exception("Draft tidak ditemukan.");
         result = await uploadPOSUnserviceableImagesToS3(report, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
@@ -186,45 +183,44 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         result = await uploadSCUnserviceableImagesToS3(report, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
       } else if (moduleType == 'INSTALLATION') {
-        // A. Ambil Data Draft
         if (!Hive.isBoxOpen(kInstallationDraftBox)) {
           await Hive.openBox<InstallationEntryModel>(kInstallationDraftBox);
         }
-
-        final draftBox = Hive.box<InstallationEntryModel>(kInstallationDraftBox);
+        final draftBox =
+            Hive.box<InstallationEntryModel>(kInstallationDraftBox);
         final draft = draftBox.get(event.transNo);
-
         if (draft == null) throw Exception("Draft Instalasi tidak ditemukan.");
 
         final apiResultMock = {
           'result': {'detail': presignedDetail}
         };
-
         final uploadRes = await uploadInstallationFiles(
             apiResult: apiResultMock,
             progressCubit: progressCubit,
-            draft: draft
-        );
-
+            draft: draft);
         result = UploadResult(
             successCount: uploadRes.successCount,
             failureCount: uploadRes.failureCount,
-            failedFiles: uploadRes.failedFiles
-        );
-
+            failedFiles: uploadRes.failedFiles);
+      } else if (moduleType == 'RRO_CUT_OFF') {
+        final apiResultMock = {
+          'result': {'detail': presignedDetail}
+        };
+        result = await uploadRROCutOffFiles(
+            apiResult: apiResultMock,
+            progressCubit: progressCubit,
+            transNo: event.transNo);
       } else {
         throw Exception('Modul tidak dikenal.');
       }
 
       if (result.allSuccess) {
         try {
-          final response = await serviceRepo.confirmUploadSuccess(event.transNo);
+          final response =
+              await serviceRepo.confirmUploadSuccess(event.transNo);
 
           if (response['status'] == 'OK') {
-
-            // --- [AWAL PERBAIKAN: EKSEKUSI MATI DATA DARI HIVE] ---
-
-            // 1. Hapus kartu pending dari Failed Uploads Box (Sesuai Modulnya)
+            // 1. Hapus kartu pending dari Failed Uploads Box
             String? targetBoxName = _getBoxNameForModule(moduleType);
             if (targetBoxName != null) {
               Box<Map<dynamic, dynamic>> box;
@@ -236,24 +232,50 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
               await box.delete(event.transNo);
             }
 
-            // 2. Khusus Installation: Hapus juga Draft Utama biar HP teknisi nggak penuh
+            // 2. Khusus Installation & RRO: Hapus juga Draft Utama
             if (moduleType == 'INSTALLATION') {
               Box<InstallationEntryModel> draftBox;
               if (Hive.isBoxOpen(kInstallationDraftBox)) {
-                draftBox = Hive.box<InstallationEntryModel>(kInstallationDraftBox);
+                draftBox =
+                    Hive.box<InstallationEntryModel>(kInstallationDraftBox);
               } else {
-                draftBox = await Hive.openBox<InstallationEntryModel>(kInstallationDraftBox);
+                draftBox = await Hive.openBox<InstallationEntryModel>(
+                    kInstallationDraftBox);
               }
               await draftBox.delete(event.transNo);
             }
+            // 🔥 TAMBAHAN 2: CLEANUP DRAFT RRO 🔥
+            else if (moduleType == 'RRO_CUT_OFF') {
+              final draftBox = await Hive.openBox('rro_form_draft_box');
+              await draftBox.deleteAll([
+                '${event.transNo}_picName',
+                '${event.transNo}_picPhone',
+                '${event.transNo}_picNik',
+                '${event.transNo}_picPosition',
+                '${event.transNo}_tech1',
+                '${event.transNo}_tech2',
+                '${event.transNo}_tech3',
+                '${event.transNo}_storeFrontPhoto',
+                '${event.transNo}_storeFrontLat',
+                '${event.transNo}_storeFrontLng',
+                '${event.transNo}_picPhotoPath',
+                '${event.transNo}_picLat',
+                '${event.transNo}_picLng'
+              ]);
 
-            // --- [AKHIR PERBAIKAN] ---
+              final entryBox =
+                  await Hive.openBox<RROCutOffEntryModel>(kRROCutOffEntryBox);
+              final keysToDelete = entryBox.keys
+                  .where((k) => entryBox.get(k)?.transNo == event.transNo)
+                  .toList();
+              await entryBox.deleteAll(keysToDelete);
+            }
 
             await clearTransactionData(event.transNo);
-            // await _addToConfirmationQueueIfNeeded(event.transNo, moduleType);
 
-            final updatedList = List<Map<String, dynamic>>.from(state.failedTransactions)
-              ..removeWhere((t) => t['transNo'] == event.transNo);
+            final updatedList =
+                List<Map<String, dynamic>>.from(state.failedTransactions)
+                  ..removeWhere((t) => t['transNo'] == event.transNo);
 
             emit(state.copyWith(
               status: FailedUploadsStatus.success,
@@ -267,7 +289,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
               status: FailedUploadsStatus.loaded,
               clearUploadingTransNo: true,
               errorMessage:
-              "Foto terunggah, tapi gagal update status server: ${response['message']}",
+                  "Foto terunggah, tapi gagal update status server: ${response['message']}",
             ));
           }
         } catch (e) {
@@ -296,7 +318,6 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     }
   }
 
-  // --- SISA HELPER & LISTENER TETAP SAMA ---
   void _onClearSnackbarMessage(
       ClearSnackbarMessage event, Emitter<FailedUploadsState> emit) {
     emit(state.copyWith(clearSnackbarMessage: true, clearRetryResult: true));
@@ -337,12 +358,13 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
 
   @override
   Future<void> close() {
-    for (var sub in _hiveSubscriptions) sub.cancel();
+    for (var sub in _hiveSubscriptions) {
+      sub.cancel();
+    }
     _hiveSubscriptions.clear();
     return super.close();
   }
 
-  // Helper Sync Cache
   Future<void> _updateFailedTransactionInCache(
       String transNo,
       String moduleType,
@@ -369,6 +391,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     }
   }
 
+  // 🔥 TAMBAHAN 3: KASIH TAHU BLOC LOKASI KOTAK RRO 🔥
   String? _getBoxNameForModule(String moduleType) {
     switch (moduleType) {
       case 'POS':
@@ -380,6 +403,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       case 'SC_UNSERVICEABLE':
         return kScUnserviceablePartialBox;
       case 'INSTALLATION':
+      case 'RRO_CUT_OFF': // Sama dengan instalasi, disimpen di failed uploads global
         return kFailedUploadsBox;
       default:
         return null;
@@ -391,7 +415,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
     if (moduleType == 'POS' || moduleType == 'SC') {
       try {
         final queueBox =
-        await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+            await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
         final key = transNo.trim().toUpperCase();
         if (!queueBox.containsKey(key)) {
           await queueBox.put(key, ConfirmationTaskModel(transNo: key));

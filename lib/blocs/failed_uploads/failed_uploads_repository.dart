@@ -11,14 +11,12 @@ class FailedUploadsRepository {
       log("🔵 [ZOMBIE] Requesting RESET for: $transNo");
 
       // 1. Setup Endpoint (Sesuaikan path backend Akang)
-      // Contoh: 'task_maintenance/reset_evidence_status'
-      Uri uri = getUrl(pathUrl: 'failed_upload');
+      Uri uri = getUrl(pathUrl: 'failed_upload/V2');
 
       // 2. Setup Body Request
       final params = {
         'trans_no': transNo,
-        // Tambahkan parameter lain jika backend butuh (misal updated_by)
-        // 'updated_by': 'username_akang'
+        'no_pict': true
       };
 
       JsonEncoder encoder = const JsonEncoder.withIndent('  ');
@@ -29,12 +27,10 @@ class FailedUploadsRepository {
       log("================================");
 
       // 3. Eksekusi Request
-      // Gunakan token header jika diperlukan (biasanya ada helpernya)
       final response = await http.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
-          // 'Authorization': 'Bearer $token', // Jangan lupa token jika butuh
         },
         body: jsonEncode(params),
       );

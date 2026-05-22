@@ -48,7 +48,6 @@ class MeasurementInputWidget extends StatefulWidget {
 }
 
 class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
-  CapturedImageDetail? _currentImage;
   bool _isLoading = false;
   double _currentSliderValue = 0.0;
   String? _errorText;
@@ -57,10 +56,18 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   @override
   void initState() {
     super.initState();
-    _currentImage = widget.initialImage;
     _updateSliderAndValidate(widget.controller.text, widget.limits);
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
+  }
+
+  // 🔥 TAMBAHAN PENTING: Update UI kalau data dari BLoC berubah (misal diclear/swap)
+  @override
+  void didUpdateWidget(covariant MeasurementInputWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller.text != oldWidget.controller.text) {
+      _updateSliderFromText(widget.controller.text);
+    }
   }
 
   @override
@@ -76,7 +83,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
       setState(() {
         _errorText = _getValidationError(widget.controller.text, widget.limits);
         _updateSliderFromText(text);
-        widget.onEditingComplete?.call(text);
+        widget.onEditingComplete?.call(text); // 🔥 Tetap kirim saat un-focus
       });
     }
   }
@@ -121,7 +128,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   }
 
   Future<void> _takePhoto() async {
-    if (_currentImage != null) return;
+    if (widget.initialImage != null) return; // 🔥 Cegah double klik
     setState(() => _isLoading = true);
 
     try {
@@ -142,10 +149,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         final deviceModel = userData['device_model'] ?? 'Unknown Device';
         final timestamp = DateTime.now();
 
-        // Ambil timezone dari device
         final zone = getIndonesianTimezoneAbbreviation(timestamp);
-
-        // Format tanggal pakai locale (AMAN)
         final formattedDate =
             '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
 
@@ -167,10 +171,10 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         );
 
         final String? finalImagePath =
-            await WatermarkService.processImage(request);
+        await WatermarkService.processImage(request);
 
         if (finalImagePath != null) {
-          _currentImage = CapturedImageDetail(
+          final capturedImg = CapturedImageDetail(
             imagePath: finalImagePath,
             timestamp: timestamp,
             latitude: 0,
@@ -180,7 +184,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             deviceModel: deviceModel,
             transNo: widget.transNo,
           );
-          widget.onImageChanged?.call(_currentImage);
+          // 🔥 Langsung lempar foto ke BLoC (biar BLoC yg simpen)
+          widget.onImageChanged?.call(capturedImg);
         }
       }
     } catch (e) {
@@ -191,9 +196,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   }
 
   void removePhoto() {
-    setState(() {
-      _currentImage = null;
-    });
+    // 🔥 Minta BLoC buat hapus fotonya
     widget.onImageChanged?.call(null);
   }
 
@@ -254,6 +257,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   }
 
   Widget _buildInputContent(Color primary) {
+    // 🔥 PERHATIKAN: Sekarang kita pakai widget.initialImage sebagai sumber kebenaran (Source of Truth)
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
@@ -261,12 +265,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         children: [
           _isLoading
               ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : _currentImage != null
-                  ? _buildPhotoPreview()
-                  : _buildPhotoButton(primary),
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
+              : widget.initialImage != null // 🔥 Cek langsung dari Data BLoC
+              ? _buildPhotoPreview(widget.initialImage!)
+              : _buildPhotoButton(primary),
           const SizedBox(height: 16),
           _buildSliderAndTextfield(),
           const Padding(
@@ -296,7 +300,8 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     );
   }
 
-  Widget _buildPhotoPreview() {
+  // 🔥 Fungsi preview sekarang nerima data dari parameter
+  Widget _buildPhotoPreview(CapturedImageDetail currentImage) {
     return Stack(
       alignment: Alignment.topRight,
       children: [
@@ -305,15 +310,15 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             context,
             MaterialPageRoute(
               builder: (_) =>
-                  FullScreenImageViewer(imageDetail: _currentImage!),
+                  FullScreenImageViewer(imageDetail: currentImage),
             ),
           ),
           child: Hero(
-            tag: _currentImage!.imagePath,
+            tag: currentImage.imagePath,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.file(
-                File(_currentImage!.imagePath),
+                File(currentImage.imagePath),
                 cacheWidth: 800,
                 cacheHeight: 800,
                 width: 500,
@@ -329,7 +334,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
           ),
         ),
         GestureDetector(
-          onTap: removePhoto,
+          onTap: removePhoto, // 🔥 Lempar perintah hapus ke BLoC
           child: Container(
             decoration: BoxDecoration(
               color: Colors.black54,
@@ -373,8 +378,14 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
                   );
                   _errorText = null;
                   widget.onChanged?.call(newText);
-                  widget.onEditingComplete?.call(newText);
+                  // 🔥 Jangan kirim update ke BLoC dari dalam sini pas di-slide (biar ga spam event).
+                  // Biarin onEditingComplete (pas blur/keyboard tutup) yg ngirim!
                 });
+              },
+              // 🔥 Kirim update ke BLoC saat user lepas jari dari slider
+              onChangeEnd: (newValue) {
+                final newText = _formatValue(newValue);
+                widget.onEditingComplete?.call(newText);
               },
             ),
           ),
@@ -387,7 +398,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               focusNode: _focusNode,
               controller: widget.controller,
               keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
               onChanged: widget.onChanged,
               decoration: InputDecoration(

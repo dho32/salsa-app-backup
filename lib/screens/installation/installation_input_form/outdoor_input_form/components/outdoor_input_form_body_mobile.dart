@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -54,6 +55,7 @@ class _OutdoorInputFormBodyMobileState
   final _sthiraSnPartController = TextEditingController();
   final _sthiraTypePartController = TextEditingController();
   String _vendorCode = '';
+
   // --------------------------------------------
 
   // -- Controllers ELEKTRIKAL (FISIK) --
@@ -184,7 +186,7 @@ class _OutdoorInputFormBodyMobileState
         state.taskDetail!.noteOutdoorOptions.isNotEmpty) {
       _elecNoteOptions = state.taskDetail!.noteOutdoorOptions
           .map((opt) => MeasurementNoteOption(
-          label: opt.label, requireRemark: opt.requireRemark))
+              label: opt.label, requireRemark: opt.requireRemark))
           .toList();
     } else {
       _elecNoteOptions = [
@@ -196,7 +198,7 @@ class _OutdoorInputFormBodyMobileState
         state.taskDetail!.noteOutdoorPSIOptions.isNotEmpty) {
       _psiNoteOptions = state.taskDetail!.noteOutdoorPSIOptions
           .map((opt) => MeasurementNoteOption(
-          label: opt.label, requireRemark: opt.requireRemark))
+              label: opt.label, requireRemark: opt.requireRemark))
           .toList();
     } else {
       _psiNoteOptions = _elecNoteOptions;
@@ -238,7 +240,7 @@ class _OutdoorInputFormBodyMobileState
 
       if (widget.existingData != null) {
         final m = widget.existingData!.measurements.firstWhere(
-                (e) => e.measurementId == id,
+            (e) => e.measurementId == id,
             orElse: () => InstallationMeasurementModel(
                 measurementId: id, unit: '', value: 0));
 
@@ -296,9 +298,9 @@ class _OutdoorInputFormBodyMobileState
         } else if (widget.existingData!.note != null &&
             widget.existingData!.note!.contains("PSI")) {
           _loadExistingNote(widget.existingData!.note!, _psiNoteOptions,
-                  (reason, remark) {
-                _selectedPsiNote = reason;
-              });
+              (reason, remark) {
+            _selectedPsiNote = reason;
+          });
         }
       }
 
@@ -349,8 +351,8 @@ class _OutdoorInputFormBodyMobileState
 
   Future<void> _takePhoto(
       {bool isInstallPhoto = false,
-        bool isElec = false,
-        bool isPsi = false}) async {
+      bool isElec = false,
+      bool isPsi = false}) async {
     if (isInstallPhoto) {
       if (_installPhotos.length >= 5) {
         _showErrorSnack("Maksimal 5 foto dokumentasi.");
@@ -508,7 +510,7 @@ class _OutdoorInputFormBodyMobileState
 
     final state = context.read<InstallationBloc>().state;
     final indoorUnit = state.draftEntry?.units.firstWhere(
-            (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
+        (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
         orElse: () => InstallationUnitModel(
             serialNo: '',
             unitIndex: -1,
@@ -524,7 +526,8 @@ class _OutdoorInputFormBodyMobileState
 
     // Validasi Sthira
     if (isFinal && _vendorCode == 'V000062') {
-      if (_sthiraSnPartController.text.isEmpty || _sthiraTypePartController.text.isEmpty) {
+      if (_sthiraSnPartController.text.isEmpty ||
+          _sthiraTypePartController.text.isEmpty) {
         _showErrorSnack("Nomor SN dan Tipe AC wajib diisi lengkap!");
         return null;
       }
@@ -573,8 +576,7 @@ class _OutdoorInputFormBodyMobileState
           value: isElecSkipped ? 0 : e.value,
           isSkipped: isElecSkipped,
           note: '',
-          photo: mPhoto
-      ));
+          photo: mPhoto));
     }
 
     final psiE = _psiEntries.first;
@@ -589,8 +591,7 @@ class _OutdoorInputFormBodyMobileState
         value: isPsiSkipped ? 0 : psiE.value,
         isSkipped: isPsiSkipped,
         note: '',
-        photo: psiMPhoto
-    ));
+        photo: psiMPhoto));
 
     for (int i = 0; i < _installPhotos.length; i++) {
       final img = _installPhotos[i];
@@ -606,14 +607,15 @@ class _OutdoorInputFormBodyMobileState
     }
 
     String currentStatus =
-    isFinal ? 'COMPLETED' : (_isOriginalCompleted ? 'COMPLETED' : 'DRAFT');
+        isFinal ? 'COMPLETED' : (_isOriginalCompleted ? 'COMPLETED' : 'DRAFT');
 
     return InstallationUnitModel(
       unitIndex: widget.target.unitIndex,
       articleNo: widget.target.articleNo,
       articleDesc: widget.target.description,
       articleType: 'OUT',
-      serialNo: finalSn, // <-- Jahitan SN masuk sini
+      serialNo: finalSn,
+      // <-- Jahitan SN masuk sini
 
       note: noteOutdoor,
       remark: remarkOutdoor,
@@ -660,7 +662,7 @@ class _OutdoorInputFormBodyMobileState
 
     final state = context.read<InstallationBloc>().state;
     final indoorUnit = state.draftEntry?.units.firstWhere(
-            (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
+        (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
         orElse: () => InstallationUnitModel(
             serialNo: '',
             unitIndex: -1,
@@ -690,7 +692,8 @@ class _OutdoorInputFormBodyMobileState
       final draft = state.draftEntry;
       if (draft != null && draft.units.isNotEmpty) {
         final isDuplicate = draft.units.any((u) =>
-        u.serialNo == snToValidate && u.unitIndex != widget.target.unitIndex);
+            u.serialNo == snToValidate &&
+            u.unitIndex != widget.target.unitIndex);
         if (isDuplicate) {
           _showErrorSnack("Serial Number sudah digunakan di unit lain!");
           return;
@@ -704,7 +707,7 @@ class _OutdoorInputFormBodyMobileState
           return;
         }
         final opt = _elecNoteOptions.firstWhere(
-                (o) => o.label == _selectedElecNote,
+            (o) => o.label == _selectedElecNote,
             orElse: () => const MeasurementNoteOption(label: ''));
         if (opt.requireRemark &&
             (_elecRemarkController.text.length < 20 ||
@@ -731,7 +734,7 @@ class _OutdoorInputFormBodyMobileState
           return;
         }
         final opt = _psiNoteOptions.firstWhere(
-                (o) => o.label == _selectedPsiNote,
+            (o) => o.label == _selectedPsiNote,
             orElse: () => const MeasurementNoteOption(label: ''));
         if (opt.requireRemark &&
             (_psiRemarkController.text.length < 20 || _psiNotePhotos.isEmpty)) {
@@ -780,7 +783,7 @@ class _OutdoorInputFormBodyMobileState
     bool isPsiSkipped = _psiEntries.first.isSkipped ?? false;
     final state = context.read<InstallationBloc>().state;
     final indoorUnit = state.draftEntry?.units.firstWhere(
-            (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
+        (u) => u.unitIndex == widget.target.unitIndex && u.articleType == 'IN',
         orElse: () => InstallationUnitModel(
             serialNo: '',
             unitIndex: -1,
@@ -836,9 +839,7 @@ class _OutdoorInputFormBodyMobileState
                           title: "Identitas Unit",
                           child: _vendorCode == 'V000062'
                               ? _buildSthiraSnForm()
-                              : _buildNormalSnForm()
-                      )
-                  ),
+                              : _buildNormalSnForm())),
                   // -------------------------------------
 
                   const SizedBox(height: 16),
@@ -864,24 +865,24 @@ class _OutdoorInputFormBodyMobileState
                                 Expanded(
                                     child: Column(
                                         crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                              isPaired
-                                                  ? "Terhubung dengan Indoor:"
-                                                  : "Indoor Belum Diinput",
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: isPaired
-                                                      ? Colors.blue[900]
-                                                      : Colors.red[900])),
-                                          if (isPaired)
-                                            Text(pairedSN,
-                                                style: const TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold))
-                                        ])),
+                                      Text(
+                                          isPaired
+                                              ? "Terhubung dengan Indoor:"
+                                              : "Indoor Belum Diinput",
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: isPaired
+                                                  ? Colors.blue[900]
+                                                  : Colors.red[900])),
+                                      if (isPaired)
+                                        Text(pairedSN,
+                                            style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold))
+                                    ])),
                                 if (isPaired)
                                   const Icon(Icons.check_circle,
                                       color: Colors.green, size: 20)
@@ -1045,10 +1046,12 @@ class _OutdoorInputFormBodyMobileState
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: () async {
-              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScanPage()));
+              final res = await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const QrScanPage()));
               if (res != null) {
                 if (res.contains('|ou|') || res.contains('|OU|')) {
-                  final parts = res.split(RegExp(r'\|ou\|', caseSensitive: false));
+                  final parts =
+                      res.split(RegExp(r'\|ou\|', caseSensitive: false));
                   if (parts.length == 2) {
                     setState(() {
                       _sthiraSnPartController.text = parts[0];
@@ -1057,16 +1060,18 @@ class _OutdoorInputFormBodyMobileState
                     _onFormChanged();
                   }
                 } else {
-                  _showErrorSnack("Barcode tidak valid! Harus format SN|OU|TIPE.");
+                  _showErrorSnack(
+                      "Barcode tidak valid! Harus format SN|OU|TIPE.");
                 }
               }
             },
-            icon: const Icon(FontAwesomeIcons.qrcode, color: Color(0xFF1565C0), size: 18),
+            icon: const Icon(FontAwesomeIcons.qrcode,
+                color: Color(0xFF1565C0), size: 18),
             label: const Text("Scan Barcode Outdoor"),
             style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFF1565C0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-            ),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
           ),
         ),
         const SizedBox(height: 16),
@@ -1078,12 +1083,15 @@ class _OutdoorInputFormBodyMobileState
                   controller: _sthiraSnPartController,
                   label: "Nomor SN",
                   icon: FontAwesomeIcons.hashtag,
-                  hintText: "Cth: 00034"
-              ),
+                  hintText: "Cth: 00034"),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 20),
-              child: Text("| OU |", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey)),
+              child: Text("| OU |",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.blueGrey)),
             ),
             Expanded(
               flex: 4,
@@ -1091,8 +1099,7 @@ class _OutdoorInputFormBodyMobileState
                   controller: _sthiraTypePartController,
                   label: "Tipe AC",
                   icon: FontAwesomeIcons.tag,
-                  hintText: "Cth: SC234"
-              ),
+                  hintText: "Cth: SC234"),
             ),
           ],
         )
@@ -1116,7 +1123,7 @@ class _OutdoorInputFormBodyMobileState
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title,
               style:
-              const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           child
         ]));
@@ -1170,16 +1177,16 @@ class _OutdoorInputFormBodyMobileState
                       child: _isTakingInstallPhoto
                           ? const Center(child: CircularProgressIndicator())
                           : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo,
-                                size: 30, color: Colors.grey.shade400),
-                            const SizedBox(height: 4),
-                            Text("Tambah",
-                                style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 11))
-                          ]),
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                  Icon(Icons.add_a_photo,
+                                      size: 30, color: Colors.grey.shade400),
+                                  const SizedBox(height: 4),
+                                  Text("Tambah",
+                                      style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 11))
+                                ]),
                     ),
                   );
                 }
@@ -1234,31 +1241,38 @@ class _OutdoorInputFormBodyMobileState
   // --- [PERUBAHAN ALUR 3] Tambah param hintText ---
   Widget _buildCustomTextField(
       {required TextEditingController controller,
-        required String label,
-        required IconData icon,
-        Widget? suffixIcon,
-        String? hintText}) {
+      required String label,
+      required IconData icon,
+      Widget? suffixIcon,
+      String? hintText}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label,
           style: const TextStyle(
               fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
       const SizedBox(height: 6),
       TextFormField(
-          controller: controller,
-          textCapitalization: TextCapitalization.characters,
-          style: const TextStyle(fontSize: 14),
-          decoration: InputDecoration(
-              hintText: hintText ?? "Masukkan $label",
-              prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 18),
-              suffixIcon: suffixIcon,
-              isDense: true,
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
-              contentPadding:
-              const EdgeInsets.symmetric(vertical: 14, horizontal: 12)))
+        controller: controller,
+        textCapitalization: TextCapitalization.characters,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+            hintText: hintText ?? "Masukkan $label",
+            prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 18),
+            suffixIcon: suffixIcon,
+            isDense: true,
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 12)),
+        inputFormatters: [
+          TextInputFormatter.withFunction(
+            (oldValue, newValue) =>
+                newValue.copyWith(text: newValue.text.toUpperCase()),
+          ),
+        ],
+      )
     ]);
   }
 }

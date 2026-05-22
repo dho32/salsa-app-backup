@@ -40,6 +40,9 @@ const String kInstallationDetailBox = 'installation_detail_box';
 // Box untuk menyimpan Inputan/Draft User (Write)
 const String kInstallationDraftBox = 'installation_draft_box';
 const String kFailedUploadsBox = 'failed_uploads_box';
+const String kRROCutOffDetailBox = 'rro_cut_off_detail_box';
+const String kRROCutOffEntryBox = 'rro_cut_off_entry_box';
+const String kRROCutOffFormBox = 'rro_cut_off_form_box';
 
 ///string
 const kStringDialogUnitProblem = """
