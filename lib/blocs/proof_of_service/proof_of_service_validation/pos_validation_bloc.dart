@@ -89,6 +89,17 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       }
     }
 
+    // Fix: Clear stale pairing if the paired indoor SN no longer exists in the
+    // available list (e.g., technician changed the indoor SN without re-saving
+    // this outdoor unit).
+    if (event.unitType.toUpperCase() == 'OUT' &&
+        pairedSerial != null &&
+        pairedSerial.isNotEmpty &&
+        event.allIndoorSerials.isNotEmpty &&
+        !event.allIndoorSerials.contains(pairedSerial)) {
+      pairedSerial = null;
+    }
+
     if (loadedData != null && (loadedData.isCompleted ?? false)) {
       add(MarkAsInProgress(
         transNo: event.transNo,
@@ -214,9 +225,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
       );
 
       await box.put(hiveKey, entry);
-    } catch (e) {
-      print("Gagal auto-save ke Hive: $e");
-    }
+    } catch (_) {}
   }
 
   void _onChangeStep(
@@ -299,18 +308,18 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
   Future<void> _onUpdateNoteAfter(
       UpdateNoteAfter event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
-      final currentState = state as PosValidationLoaded;
-      emit(currentState.copyWith(note: event.note));
-      await _saveToHive(currentState.copyWith(note: event.note));
+      final newState = (state as PosValidationLoaded).copyWith(note: event.note);
+      emit(newState);
+      await _saveToHive(newState);
     }
   }
 
   Future<void> _onUpdateNoteRemark(
       UpdateNoteRemark event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
-      final currentState = state as PosValidationLoaded;
-      emit(currentState.copyWith(noteRemark: event.remark));
-      await _saveToHive(currentState.copyWith(noteRemark: event.remark));
+      final newState = (state as PosValidationLoaded).copyWith(noteRemark: event.remark);
+      emit(newState);
+      await _saveToHive(newState);
     }
   }
 
@@ -340,14 +349,14 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
     }
   }
 
-  void _onPairOutdoor(
-      PairOutdoorWithIndoor event, Emitter<PosValidationState> emit) {
+  Future<void> _onPairOutdoor(
+      PairOutdoorWithIndoor event, Emitter<PosValidationState> emit) async {
     if (state is PosValidationLoaded) {
       final currentState = state as PosValidationLoaded;
       final newState =
       currentState.copyWith(pairedIndoorSerial: event.indoorSerialNo);
       emit(newState);
-      _saveToHive(newState);
+      await _saveToHive(newState);
     }
   }
 
@@ -378,7 +387,7 @@ class PosValidationBloc extends Bloc<PosValidationEvent, PosValidationState> {
           for (var outUnit in affectedOutdoors) {
             final updatedOut = outUnit.copyWith(pairedSerialNo: newSerial);
             final outKey = _getSafeHiveKey(updatedOut.serialNo,
-                updatedOut.transNo, updatedOut.unitIndex ?? 0, 'OUT', true);
+                updatedOut.transNo, updatedOut.unitIndex ?? 0, 'OUT', outUnit.isGeneric ?? false);
             await box.put(outKey, updatedOut);
           }
         }

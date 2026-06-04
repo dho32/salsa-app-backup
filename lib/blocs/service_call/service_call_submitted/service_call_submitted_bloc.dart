@@ -200,7 +200,7 @@ class ServiceCallSubmittedBloc
             emit(ValidationFailure("Gagal konfirmasi status ke server: $e"));
           }
         } else {
-          final cacheBox = Hive.box<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox);
+          final cacheBox = await Hive.openBox<Map<dynamic, dynamic>>(kServiceCallValidationPartialHiveBox);
           await cacheBox.put(event.transNo, {
             'transNo': event.transNo,
             'failedFiles': uploadResult.failedFiles,

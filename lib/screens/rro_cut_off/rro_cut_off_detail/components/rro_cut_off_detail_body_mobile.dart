@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -43,6 +44,9 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
 
   bool _isWH = false;
   bool _isLoadingUser = true;
+  List<Map<String, String>> _technicianList = [];
+  final TextEditingController _tech2SearchController = TextEditingController();
+  final TextEditingController _tech3SearchController = TextEditingController();
 
   // 🔥 VARIABLE UNTUK TOGGLE PIC
   bool _isAdaPic = true;
@@ -67,7 +71,7 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
   }
 
   void _saveDraftLocally() {
-    Hive.openBox('rro_form_draft_box').then((box) {
+    Hive.openBox(kRROFormDraftBox).then((box) {
       box.put('${widget.transNo}_picName', _picNameController.text);
       box.put('${widget.transNo}_picPhone', _picPhoneController.text);
       box.put('${widget.transNo}_picNik', _picNikController.text);
@@ -90,7 +94,16 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
       final userName = user['name']?.toString() ?? '';
       _isWH = vendorCode.isEmpty || vendorCode.toUpperCase() == 'WH';
 
-      final box = await Hive.openBox('rro_form_draft_box');
+      final configBox = Hive.box(kAppConfigBox);
+      final rawList = configBox.get('technician_list');
+      if (rawList is List) {
+        _technicianList = rawList.whereType<Map>().map((t) => {
+          'technician_id': (t['technician_id'] ?? '') as String,
+          'technician_name': (t['technician_name'] ?? '') as String,
+        }).toList();
+      }
+
+      final box = await Hive.openBox(kRROFormDraftBox);
       final savedPicName = box.get('${widget.transNo}_picName', defaultValue: '');
       final savedPicPhone = box.get('${widget.transNo}_picPhone', defaultValue: '');
       final savedPicNik = box.get('${widget.transNo}_picNik', defaultValue: '');
@@ -214,6 +227,8 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
     _technician1Controller.dispose();
     _technician2Controller.dispose();
     _technician3Controller.dispose();
+    _tech2SearchController.dispose();
+    _tech3SearchController.dispose();
     super.dispose();
   }
 
@@ -658,6 +673,8 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
     final formCubit = context.read<RROFormCubit>();
     if (_isLoadingUser) return const Center(child: CircularProgressIndicator());
 
+    final bool useDropdown = _isWH && _technicianList.isNotEmpty;
+
     return _buildSection(
       title: 'Teknisi Bertugas',
       child: Column(
@@ -670,29 +687,73 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
             onChanged: (value) => formCubit.technician1Changed(value),
           ),
           const SizedBox(height: 12),
-          _buildCustomTextField(
-            controller: _technician2Controller,
-            hintText: 'Teknisi 2',
-            icon: Icons.engineering,
-            onChanged: (value) => formCubit.technician2Changed(value),
-          ),
+          if (useDropdown)
+            _buildTechnicianDropdown(
+              context: context,
+              label: 'Teknisi 2',
+              value: formState.technician2,
+              excludedName: formState.technician3,
+              searchController: _tech2SearchController,
+              onChanged: (value) {
+                formCubit.technician2Changed(value ?? '');
+                _saveDraftLocally();
+              },
+              onClear: formState.technician2.isNotEmpty ? () {
+                formCubit.technician2Changed('');
+                _saveDraftLocally();
+              } : null,
+            )
+          else
+            _buildCustomTextField(
+              controller: _technician2Controller,
+              hintText: 'Teknisi 2',
+              icon: Icons.engineering,
+              onChanged: (value) => formCubit.technician2Changed(value),
+            ),
           const SizedBox(height: 8),
           if (formState.showTechnician3)
-            _buildCustomTextField(
-              controller: _technician3Controller,
-              hintText: 'Teknisi 3',
-              icon: Icons.engineering,
-              onChanged: (value) => formCubit.technician3Changed(value),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.cancel, color: Colors.red),
-                onPressed: () {
-                  _technician3Controller.clear();
-                  formCubit.technician3Changed('');
-                  _saveDraftLocally();
-                  formCubit.toggleTechnician3(false);
-                },
-              ),
-            )
+            if (useDropdown)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTechnicianDropdown(
+                      context: context,
+                      label: 'Teknisi 3',
+                      value: formState.technician3,
+                      excludedName: formState.technician2,
+                      searchController: _tech3SearchController,
+                      onChanged: (value) {
+                        formCubit.technician3Changed(value ?? '');
+                        _saveDraftLocally();
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.cancel, color: Colors.red),
+                    onPressed: () {
+                      formCubit.technician3Changed('');
+                      _saveDraftLocally();
+                      formCubit.toggleTechnician3(false);
+                    },
+                  ),
+                ],
+              )
+            else
+              _buildCustomTextField(
+                controller: _technician3Controller,
+                hintText: 'Teknisi 3',
+                icon: Icons.engineering,
+                onChanged: (value) => formCubit.technician3Changed(value),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.cancel, color: Colors.red),
+                  onPressed: () {
+                    _technician3Controller.clear();
+                    formCubit.technician3Changed('');
+                    _saveDraftLocally();
+                    formCubit.toggleTechnician3(false);
+                  },
+                ),
+              )
           else
             Align(
               alignment: Alignment.centerRight,
@@ -705,6 +766,88 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
         ],
       ),
     );
+  }
+
+  Widget _buildTechnicianDropdown({
+    required BuildContext context,
+    required String label,
+    required String value,
+    required String excludedName,
+    required TextEditingController searchController,
+    required ValueChanged<String?> onChanged,
+    VoidCallback? onClear,
+  }) {
+    final filtered = _technicianList
+        .where((t) => excludedName.isEmpty || t['technician_name'] != excludedName)
+        .toList();
+    final currentValue = filtered.any((t) => t['technician_name'] == value) ? value : null;
+
+    final dropdown = DropdownButtonFormField2<String>(
+      value: currentValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(Icons.engineering, color: Colors.grey.shade600, size: 20),
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      hint: Text(label, style: const TextStyle(fontSize: 14)),
+      onChanged: onChanged,
+      items: filtered
+          .map((t) => DropdownMenuItem<String>(
+                value: t['technician_name'],
+                child: Text(
+                  t['technician_name'] ?? '',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ))
+          .toList(),
+      dropdownStyleData: DropdownStyleData(
+        maxHeight: MediaQuery.of(context).size.height * 0.4,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+      ),
+      dropdownSearchData: DropdownSearchData(
+        searchController: searchController,
+        searchInnerWidgetHeight: 50,
+        searchInnerWidget: Padding(
+          padding: const EdgeInsets.all(8),
+          child: TextFormField(
+            controller: searchController,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              hintText: 'Cari teknisi...',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
+        searchMatchFn: (item, searchValue) =>
+            item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+      ),
+      onMenuStateChange: (isOpen) {
+        if (!isOpen) searchController.clear();
+      },
+    );
+
+    if (onClear != null) {
+      return Row(
+        children: [
+          Expanded(child: dropdown),
+          IconButton(
+            onPressed: onClear,
+            icon: const Icon(Icons.cancel, color: Colors.red),
+          ),
+        ],
+      );
+    }
+    return dropdown;
   }
 
   Widget _buildUnitGroupCard(

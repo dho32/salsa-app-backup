@@ -261,8 +261,12 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         onImageChanged: (newImage) {
           final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
           final event = widget.isBefore
-              ? UpdateMeasurementBefore(latestEntry.copyWith(capturedImage: newImage))
-              : UpdateMeasurementAfter(latestEntry.copyWith(capturedImage: newImage));
+              ? UpdateMeasurementBefore(newImage == null
+                  ? latestEntry.copyWith(clearCapturedImage: true)
+                  : latestEntry.copyWith(capturedImage: newImage))
+              : UpdateMeasurementAfter(newImage == null
+                  ? latestEntry.copyWith(clearCapturedImage: true)
+                  : latestEntry.copyWith(capturedImage: newImage));
           context.read<ValidationDropdownBloc>().add(event);
         },
         isSkipEnabled: true,
@@ -273,12 +277,12 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
               ? UpdateMeasurementBefore(latestEntry.copyWith(
               isSkipped: isSkipped,
               value: 0.0,
-              capturedImage: null,
+              clearCapturedImage: true,
               remark: ''))
               : UpdateMeasurementAfter(latestEntry.copyWith(
               isSkipped: isSkipped,
               value: 0.0,
-              capturedImage: null,
+              clearCapturedImage: true,
               remark: ''));
           context.read<ValidationDropdownBloc>().add(event);
 

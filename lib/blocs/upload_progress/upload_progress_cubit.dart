@@ -11,5 +11,6 @@ class UploadProgressCubit extends Cubit<UploadProgressState> {
   void updateProgress(int current, int total, String s) =>
       emit(UploadProgressState(current: current, total: total));
 
-  void setTotal(int totalToUpload) {}
+  void setTotal(int totalToUpload) =>
+      emit(UploadProgressState(current: state.current, total: totalToUpload));
 }

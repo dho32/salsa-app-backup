@@ -12,8 +12,6 @@ class OtpRepository {
     };
     Uri uri = getUrl(pathUrl: 'otp/request/v2', params: params);
 
-    print(uri);
-
     try {
       await http.get(uri).timeout(const Duration(seconds: 30));
     } catch (e) {
@@ -30,10 +28,7 @@ class OtpRepository {
 
     Uri uri = getUrl(pathUrl: 'otp/validate');
 
-    print(uri);
-
     try {
-      print("masuk hit");
       final response = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
@@ -44,9 +39,6 @@ class OtpRepository {
         final json = jsonDecode(response.body);
         final status = json['status']?.toString().toUpperCase() ?? '';
         final message = json['message']?.toString().toUpperCase() ?? '';
-
-        print(status);
-        print(message);
         return status == 'OK' && message == 'SUCCESS';
       }
       return false;

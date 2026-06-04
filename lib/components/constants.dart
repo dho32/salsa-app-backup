@@ -43,6 +43,7 @@ const String kFailedUploadsBox = 'failed_uploads_box';
 const String kRROCutOffDetailBox = 'rro_cut_off_detail_box';
 const String kRROCutOffEntryBox = 'rro_cut_off_entry_box';
 const String kRROCutOffFormBox = 'rro_cut_off_form_box';
+const String kRROFormDraftBox = 'rro_form_draft_box';
 
 ///string
 const kStringDialogUnitProblem = """

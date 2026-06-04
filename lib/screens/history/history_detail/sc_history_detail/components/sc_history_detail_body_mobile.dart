@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:salsa/components/widgets/full_screen_image_viewer.dart';
@@ -517,17 +518,23 @@ Widget _buildAllMeasurements(BuildContext context, List<ScHistoryMeasurement> be
   final outdoorMeasurements =
       before.where((m) => !m.name.contains('suhu')).toList();
 
+  final indoorBefore = before.firstWhereOrNull((m) => m.name.contains('suhu'));
+  final indoorAfter = after.firstWhereOrNull((m) => m.name.contains('suhu'));
+  final tegBefore = before.firstWhereOrNull((m) => m.name.contains('tegangan'));
+  final tegAfter = after.firstWhereOrNull((m) => m.name.contains('tegangan'));
+  final arusBefore = before.firstWhereOrNull((m) => m.name.contains('arus'));
+  final arusAfter = after.firstWhereOrNull((m) => m.name.contains('arus'));
+  final tekananBefore = before.firstWhereOrNull((m) => m.name.contains('tekanan'));
+  final tekananAfter = after.firstWhereOrNull((m) => m.name.contains('tekanan'));
+
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      if (indoorMeasurements.isNotEmpty) ...[
+      if (indoorMeasurements.isNotEmpty && indoorBefore != null && indoorAfter != null) ...[
         const Text("Pengukuran Unit Indoor",
             style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        _buildSingleMeasurementRow(context,
-          before.firstWhere((m) => m.name.contains('suhu')),
-          after.firstWhere((m) => m.name.contains('suhu')),
-        ),
+        _buildSingleMeasurementRow(context, indoorBefore, indoorAfter),
         const SizedBox(height: 16),
       ],
       if (outdoorMeasurements.isNotEmpty) ...[
@@ -536,20 +543,14 @@ Widget _buildAllMeasurements(BuildContext context, List<ScHistoryMeasurement> be
         Text("Serial No. Outdoor: $outdoorSerialNo",
             style: const TextStyle(fontSize: 12, color: Colors.grey)),
         const SizedBox(height: 12),
-        _buildSingleMeasurementRow(context,
-          before.firstWhere((m) => m.name.contains('tegangan')),
-          after.firstWhere((m) => m.name.contains('tegangan')),
-        ),
+        if (tegBefore != null && tegAfter != null)
+          _buildSingleMeasurementRow(context, tegBefore, tegAfter),
         const SizedBox(height: 8),
-        _buildSingleMeasurementRow(context,
-          before.firstWhere((m) => m.name.contains('arus')),
-          after.firstWhere((m) => m.name.contains('arus')),
-        ),
+        if (arusBefore != null && arusAfter != null)
+          _buildSingleMeasurementRow(context, arusBefore, arusAfter),
         const SizedBox(height: 8),
-        _buildSingleMeasurementRow(context,
-          before.firstWhere((m) => m.name.contains('tekanan')),
-          after.firstWhere((m) => m.name.contains('tekanan')),
-        ),
+        if (tekananBefore != null && tekananAfter != null)
+          _buildSingleMeasurementRow(context, tekananBefore, tekananAfter),
       ],
     ],
   );

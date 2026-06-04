@@ -638,20 +638,12 @@ class _InstallationSummaryBodyMobileState
     final Map<String, double> pipeMap = {};
     final Map<String, double> cableMap = {};
 
-    for (var unit in draft.units) {
-      InstallationUnitModel? outdoor;
-      try {
-        outdoor = draft.units.firstWhere(
-                (u) => u.unitIndex == unit.unitIndex && u.articleType == 'OUT');
-      } catch (_) {}
-
-      if (outdoor != null) {
-        for (var p in outdoor.materials.pipes) {
-          pipeMap[p.articleName] = (pipeMap[p.articleName] ?? 0) + p.length;
-        }
-        for (var c in outdoor.materials.cables) {
-          cableMap[c.articleName] = (cableMap[c.articleName] ?? 0) + c.length;
-        }
+    for (var outdoor in draft.units.where((u) => u.articleType == 'OUT')) {
+      for (var p in outdoor.materials.pipes) {
+        pipeMap[p.articleName] = (pipeMap[p.articleName] ?? 0) + p.length;
+      }
+      for (var c in outdoor.materials.cables) {
+        cableMap[c.articleName] = (cableMap[c.articleName] ?? 0) + c.length;
       }
     }
     if (pipeMap.isEmpty && cableMap.isEmpty) return const SizedBox.shrink();

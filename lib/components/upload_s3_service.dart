@@ -100,8 +100,6 @@ Future<UploadResult> uploadAllImagesToS3(
         final fileKey = '$serialNo - $filename';
         allPossibleTasks.add(_UploadTask(
             url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
-      } else if (filename != null && filename.isNotEmpty) {
-        print('⚠️ SC: No matching local image found for $filename. Skipping.');
       }
     }
   }
@@ -174,8 +172,6 @@ Future<UploadResult> uploadPosImagesToS3(
         final fileKey = '$serialNo - $filename';
         allPossibleTasks.add(_UploadTask(
             url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
-      } else if (filename != null && filename.isNotEmpty) {
-        print('⚠️ POS: No matching local image found for $filename. Skipping.');
       }
     }
   }
@@ -207,9 +203,6 @@ Future<UploadResult> uploadPOSUnserviceableImagesToS3(
       final filePath = localFileMap[filename]!;
       allPossibleTasks.add(_UploadTask(
           url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
-    } else if (filename != null && filename.isNotEmpty) {
-      print(
-          '⚠️ POS Unserviceable: No matching local image for $filename. Skipping.');
     }
   }
 
@@ -240,9 +233,6 @@ Future<UploadResult> uploadSCUnserviceableImagesToS3(
       final filePath = localFileMap[filename]!;
       allPossibleTasks.add(_UploadTask(
           url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
-    } else if (filename != null && filename.isNotEmpty) {
-      print(
-          '⚠️ SC Unserviceable: No matching local image for $filename. Skipping.');
     }
   }
 
@@ -257,8 +247,6 @@ List<_UploadTask> _filterTasks(
     return allTasks;
   }
 
-  print("🚦 Menerapkan filter untuk retry: $filter");
-
   final Set<String> filterKeys = filter.map((failedFileString) {
     String keyPart = failedFileString.replaceFirst("[MISSING] ", "");
     if (keyPart.contains(" (")) {
@@ -267,16 +255,7 @@ List<_UploadTask> _filterTasks(
     return keyPart.trim();
   }).toSet();
 
-  print("🔑 Kunci filter yang diekstrak: $filterKeys");
-
-  final tasksToExecute = allTasks.where((task) {
-    final bool shouldUpload = filterKeys.contains(task.fileKey);
-    print("  - Mengecek task key: ${task.fileKey} -> Upload? $shouldUpload");
-    return shouldUpload;
-  }).toList();
-
-  print("📊 Jumlah task setelah filter: ${tasksToExecute.length}");
-  return tasksToExecute;
+  return allTasks.where((task) => filterKeys.contains(task.fileKey)).toList();
 }
 
 Future<UploadResult> _executeUploadTasks(
@@ -284,11 +263,9 @@ Future<UploadResult> _executeUploadTasks(
   UploadProgressCubit? progressCubit,
 ) async {
   int totalToUpload = tasksToExecute.length;
-  // progressCubit?.reset();
   progressCubit?.setTotal(totalToUpload);
 
   if (tasksToExecute.isEmpty) {
-    print("ℹ️ Tidak ada task yang perlu dieksekusi.");
     progressCubit?.updateProgress(0, 0, 'Selesai (tidak ada file)');
     return UploadResult(successCount: 0, failureCount: 0, failedFiles: []);
   }
@@ -303,14 +280,12 @@ Future<UploadResult> _executeUploadTasks(
     final task = tasksToExecute[i];
     final currentCount = i + 1;
 
-    // Update progress SEBELUM mencoba upload file ini
     progressCubit?.updateProgress(
         currentCount, totalToUpload, 'Mengupload ${task.fileKey}...');
 
     try {
       final file = File(task.filePath);
       if (!await file.exists()) {
-        print("🔴 File not found for task: ${task.fileKey}");
         throw Exception("file tidak ditemukan");
       }
 
@@ -318,51 +293,35 @@ Future<UploadResult> _executeUploadTasks(
       final mimeType =
           lookupMimeType(task.filePath) ?? 'application/octet-stream';
 
-      // Lakukan upload
       final response = await http
           .put(
             Uri.parse(task.url),
             headers: {'Content-Type': mimeType, 'x-amz-acl': 'public-read'},
             body: bytes,
           )
-          .timeout(const Duration(minutes: 2)); // Timeout tetap bagus
+          .timeout(const Duration(minutes: 2));
 
-      // Cek status code
       if (response.statusCode == 200) {
         successCount++;
-        // await notifyBackendSuccess(task.url);
         successfulUrls.add(task.url);
-        print("✅ Upload success: ${task.fileKey}");
       } else {
-        // Gagal karena respons server non-200
         throw Exception("HTTP ${response.statusCode}");
       }
     } on TimeoutException {
-      // Gagal karena timeout
-      print("❌ Upload failed (Timeout): ${task.fileKey}");
       failureCount++;
       failedFileDetails.add("${task.fileKey} (Timeout)");
-    } on SocketException catch (e) {
-      // Gagal karena masalah jaringan (DNS lookup, koneksi ditolak, internet mati, dll.)
-      print("❌ Upload failed (SocketException): ${task.fileKey} -> $e");
+    } on SocketException {
       failureCount++;
-      failedFileDetails.add("${task.fileKey} (Network Error)"); // Pesan generik
-    } on http.ClientException catch (e) {
-      // Gagal karena masalah HTTP client lain
-      print("❌ Upload failed (ClientException): ${task.fileKey} -> $e");
+      failedFileDetails.add("${task.fileKey} (Network Error)");
+    } on http.ClientException {
       failureCount++;
-      failedFileDetails
-          .add("${task.fileKey} (Connection Error)"); // Pesan generik
+      failedFileDetails.add("${task.fileKey} (Connection Error)");
     } catch (e) {
-      // Gagal karena alasan lain (file hilang, error tak terduga)
-      print("❌ Upload failed (Exception): ${task.fileKey} -> $e");
       failureCount++;
-      // Cek apakah error karena file hilang
       if (e.toString().contains("file tidak ditemukan")) {
         failedFileDetails.add("${task.fileKey} (file tidak ditemukan)");
-        missingKeys.add(task.fileKey); // Tetap tandai missing
+        missingKeys.add(task.fileKey);
       } else {
-        // Batasi panjang pesan error agar tidak terlalu panjang
         failedFileDetails.add(
             "${task.fileKey} (Error: ${e.toString().substring(0, min(e.toString().length, 30))}...)");
       }
@@ -396,7 +355,6 @@ Future<InstallationUploadResult> uploadInstallationFiles({
   required UploadProgressCubit progressCubit,
   required InstallationEntryModel draft,
 }) async {
-  // A. Collect Local Paths
   Map<String, String> localFileMap = {};
   void collect(List<InstallationPhotoModel> photos) {
     for (var p in photos) {
@@ -427,7 +385,6 @@ Future<InstallationUploadResult> uploadInstallationFiles({
   }
   collect(draft.finalPhotos);
 
-  // B. Build Tasks
   List<Map<String, String>> uploadQueue = [];
   try {
     final details = apiResult['result']['detail'] as List;
@@ -439,16 +396,11 @@ Future<InstallationUploadResult> uploadInstallationFiles({
         if (localFileMap.containsKey(fname)) {
           uploadQueue.add(
               {'filename': fname, 'url': url, 'path': localFileMap[fname]!});
-        } else {
-          print("⚠️ Local file not found for: $fname");
         }
       }
     }
-  } catch (e) {
-    print("Error parsing uploads: $e");
-  }
+  } catch (_) {}
 
-  // C. Execute Loop
   int totalFiles = uploadQueue.length;
   progressCubit.setTotal(totalFiles);
 
@@ -489,9 +441,7 @@ Future<InstallationUploadResult> uploadInstallationFiles({
 
       if (response.statusCode == 200) {
         successCount++;
-        // await notifyBackendSuccess(url); // Lapor Backend per file
         successfulUrls.add(url);
-        print("✅ Upload success: $fileName");
       } else {
         throw Exception("HTTP ${response.statusCode}");
       }
@@ -502,8 +452,6 @@ Future<InstallationUploadResult> uploadInstallationFiles({
       } else if (e is SocketException) {
         errorMsg = "Network Error";
       }
-
-      print("❌ Upload Failed: $fileName -> $errorMsg");
       failureCount++;
       failedFiles.add("$fileName ($errorMsg)");
     }
@@ -519,13 +467,11 @@ Future<InstallationUploadResult> uploadInstallationFiles({
       failedFiles: failedFiles);
 }
 
-// --- TAMBAH FUNGSI RRO CUT OFF ---
 Future<UploadResult> uploadRROCutOffFiles({
   required Map<String, dynamic> apiResult,
   required UploadProgressCubit progressCubit,
   required String transNo,
 }) async {
-  // A. Buka Brankas Entry Unit
   Box<RROCutOffEntryModel>? entryBox;
   if (Hive.isBoxOpen(kRROCutOffEntryBox)) {
     entryBox = Hive.box<RROCutOffEntryModel>(kRROCutOffEntryBox);
@@ -533,10 +479,8 @@ Future<UploadResult> uploadRROCutOffFiles({
     entryBox = await Hive.openBox<RROCutOffEntryModel>(kRROCutOffEntryBox);
   }
 
-  // B. Kumpulkan Local Paths
   Map<String, String> localFileMap = {};
 
-  // 1. Kumpulkan Foto Unit (Pakai Model Baru)
   final unitEntries =
       entryBox.values.where((e) => e.transNo == transNo).toList();
   for (var unit in unitEntries) {
@@ -545,67 +489,47 @@ Future<UploadResult> uploadRROCutOffFiles({
     }
   }
 
-  // 2. Kumpulkan Foto Toko & Foto PIC dari Draft Box
   try {
     Box draftBox;
-    if (Hive.isBoxOpen('rro_form_draft_box')) {
-      draftBox = Hive.box('rro_form_draft_box');
+    if (Hive.isBoxOpen(kRROFormDraftBox)) {
+      draftBox = Hive.box(kRROFormDraftBox);
     } else {
-      draftBox = await Hive.openBox('rro_form_draft_box');
+      draftBox = await Hive.openBox(kRROFormDraftBox);
     }
 
-    // Foto Toko Depan
     final storeFrontPath =
         draftBox.get('${transNo}_storeFrontPhoto', defaultValue: '');
     if (storeFrontPath.isNotEmpty) {
-      final fileName = storeFrontPath.split('/').last;
-      localFileMap[fileName] = storeFrontPath;
+      localFileMap[storeFrontPath.split('/').last] = storeFrontPath;
     }
 
-    // 🔥 TAMBAHAN: Foto Validasi PIC
     final picPhotoPath =
         draftBox.get('${transNo}_picPhotoPath', defaultValue: '');
     if (picPhotoPath.isNotEmpty) {
-      final fileName = picPhotoPath.split('/').last;
-      localFileMap[fileName] = picPhotoPath;
+      localFileMap[picPhotoPath.split('/').last] = picPhotoPath;
     }
-  } catch (e) {
-    print("Error baca foto toko/pic: $e");
-  }
+  } catch (_) {}
 
-  print("📦 ISI LOCAL FILE MAP: ${localFileMap.keys}");
-
-  // C. Build Tasks dari Presigned URL
   List<Map<String, String>> uploadQueue = [];
   try {
     final details = apiResult['result']['detail'] as List;
-
-    // 🔥 PERBAIKAN LOOPING: Harus masuk dulu ke array 'uploads'
     for (var d in details) {
       if (d['uploads'] != null) {
         final uploads = d['uploads'] as List;
         for (var u in uploads) {
           final fname = u['filename'].toString();
           final url = u['url'].toString();
-
           if (localFileMap.containsKey(fname)) {
             uploadQueue.add(
                 {'filename': fname, 'url': url, 'path': localFileMap[fname]!});
-          } else {
-            print("⚠️ Local file not found for: $fname");
           }
         }
       }
     }
-  } catch (e) {
-    print("Error parsing uploads JSON: $e");
-  }
+  } catch (_) {}
 
-  // D. Eksekusi Loop dengan Cubit Progress
   int totalFiles = uploadQueue.length;
   progressCubit.setTotal(totalFiles);
-
-  print("🚀 TOTAL FILE YANG AKAN DIUPLOAD KE S3: $totalFiles");
 
   if (totalFiles == 0) {
     progressCubit.updateProgress(0, 0, 'Selesai');
@@ -631,7 +555,6 @@ Future<UploadResult> uploadRROCutOffFiles({
       if (!await file.exists()) throw Exception("File not found");
 
       final bytes = await file.readAsBytes();
-      // Kalau ngga ketemu mimetype-nya, kita tembak default 'image/jpeg' biar S3 ga nolak
       final mimeType = lookupMimeType(path) ?? 'image/jpeg';
 
       final response = await http
@@ -645,7 +568,6 @@ Future<UploadResult> uploadRROCutOffFiles({
       if (response.statusCode == 200) {
         successCount++;
         successfulUrls.add(url);
-        print("✅ Upload success: $fileName");
       } else {
         throw Exception("HTTP ${response.statusCode}");
       }
@@ -655,13 +577,11 @@ Future<UploadResult> uploadRROCutOffFiles({
         errorMsg = "Timeout";
       else if (e is SocketException) errorMsg = "Network Error";
 
-      print("❌ Upload Failed: $fileName -> $errorMsg");
       failureCount++;
       failedFiles.add("$fileName ($errorMsg)");
     }
   }
 
-  // Notifikasi backend kalau ada yang sukses
   if (successfulUrls.isNotEmpty) {
     await notifyBackendBatch(successfulUrls);
   }

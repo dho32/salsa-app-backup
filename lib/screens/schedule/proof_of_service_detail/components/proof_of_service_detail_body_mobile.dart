@@ -99,6 +99,7 @@ class _ProofOfServiceDetailBodyMobileState
   Widget build(BuildContext context) {
     return BlocConsumer<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
       listener: (context, state) {
+        if (!mounted) return;
         if (state is ProofOfServiceDetailLoaded) {
           // Isi controller dengan data dari state
           _noteCtrl.text = state.inputData.note;

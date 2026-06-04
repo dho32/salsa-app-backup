@@ -160,20 +160,15 @@ class OtpBloc extends Bloc<OtpEvent, OtpState> {
   void _onTimerTicked(OtpTimerTicked event, Emitter<OtpState> emit) {
     if (_cooldown > 0) {
       _cooldown--;
-      emit(OtpSent(
-          cooldown: _cooldown,
-          retryLeft: _maxRetries - _retryCount,
-          canReset: false
-      ));
-    } else {
-      _timer?.cancel();
-      // Timer habis (3 menit)
-      emit(OtpSent(
-          cooldown: 0,
-          retryLeft: _maxRetries - _retryCount,
-          canReset: false
-      ));
     }
+    if (_cooldown == 0) {
+      _timer?.cancel();
+    }
+    emit(OtpSent(
+      cooldown: _cooldown,
+      retryLeft: _maxRetries - _retryCount,
+      canReset: false,
+    ));
   }
 
   Future<void> _onVerifyOtp(VerifyOtp event, Emitter<OtpState> emit) async {

@@ -44,7 +44,7 @@ class RROCutOffSubmitBloc
         try {
           await serviceRepo.confirmUploadSuccess(event.transNo);
 
-          final draftBox = await Hive.openBox('rro_form_draft_box');
+          final draftBox = await Hive.openBox(kRROFormDraftBox);
           draftBox.deleteAll([
             '${event.transNo}_picName',
             '${event.transNo}_picPhone',

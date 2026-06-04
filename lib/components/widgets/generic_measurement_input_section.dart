@@ -122,7 +122,9 @@ class _GenericMeasurementInputSectionState
         },
         onImageChanged: (newImage) {
           final latest = _getLatestEntry(mEntry);
-          _safeUpdate(latest.copyWith(capturedImage: newImage));
+          _safeUpdate(newImage == null
+              ? latest.copyWith(clearCapturedImage: true)
+              : latest.copyWith(capturedImage: newImage));
         },
         isSkipEnabled: true,
         isSkipped: _getLatestEntry(mEntry).isSkipped ?? false,
@@ -134,7 +136,7 @@ class _GenericMeasurementInputSectionState
               latest.copyWith(
                 isSkipped: true,
                 value: 0.0,
-                capturedImage: null,
+                clearCapturedImage: true,
               ),
             );
           } else {
