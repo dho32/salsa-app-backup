@@ -23,6 +23,7 @@ class _MainProfileBodyMobileState extends State<MainProfileBodyMobile> {
 
   Future<void> _loadUserInfo() async {
     final user = await AuthStorage.getUser();
+    if (!mounted) return;
     setState(() {
       userName = user['name'] ?? '';
       userEmail = user['email'] ?? '';

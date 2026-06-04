@@ -33,6 +33,7 @@ class MeasurementEntry extends HiveObject {
     double? value,
     String? unit,
     CapturedImageDetail? capturedImage,
+    bool clearCapturedImage = false,
     bool? isSkipped,
     String? remark,
   }) {
@@ -40,7 +41,7 @@ class MeasurementEntry extends HiveObject {
       measurementId: measurementId ?? this.measurementId,
       value: value ?? this.value,
       unit: unit ?? this.unit,
-      capturedImage: capturedImage ?? this.capturedImage,
+      capturedImage: clearCapturedImage ? null : (capturedImage ?? this.capturedImage),
       isSkipped: isSkipped ?? this.isSkipped,
       remark: remark ?? this.remark,
     );

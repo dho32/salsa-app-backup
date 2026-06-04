@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:hive/hive.dart';
@@ -12,7 +11,7 @@ import 'auth_storage.dart';
 
 class AuthRepository {
   Future<String> login(String email, String password, String appVersion) async {
-    Uri uri = getUrl(pathUrl: 'login');
+    Uri uri = getUrl(pathUrl: 'login/v2');
     var map = <String, dynamic>{};
     map['user'] = email;
     map['password'] = password;
@@ -27,12 +26,6 @@ class AuthRepository {
     final data = jsonDecode(response.body);
     final result = data['result'];
 
-    JsonEncoder encoder = const JsonEncoder.withIndent('  ');
-    String prettyJson = encoder.convert(result);
-    log("====== BODY REQUEST LENGKAP ======");
-    log(prettyJson);
-    log("================================");
-
     if (response.statusCode == 200 && data['status'] == 'OK') {
       final token = result['user_token'];
       if (token == null || token.isEmpty) {
@@ -40,6 +33,21 @@ class AuthRepository {
       }
       if (result['app_config'] != null) {
         await _saveAppConfigToHive(result['app_config']);
+      }
+      try {
+        if (result['technician_list'] is List) {
+          final configBox = await Hive.openBox(kAppConfigBox);
+          final rawList = result['technician_list'] as List;
+          await configBox.put('technician_list', rawList
+              .whereType<Map>()
+              .map((t) => {
+                    'technician_id': t['technician_id']?.toString() ?? '',
+                    'technician_name': t['technician_name']?.toString() ?? '',
+                  })
+              .toList());
+        }
+      } catch (_) {
+        // technician_list opsional — jangan sampai gagal parsing memblokir login
       }
       return token;
     } else {
@@ -76,10 +84,6 @@ class AuthRepository {
       await configBox.put('limits_sc_after', limitsScAfter);
       await configBox.put('limits_pos_after', limitsPosAfter);
 
-      log("Data limits_temp_header: ${limitsTempHeader.length} item");
-      log("Data limits_sc_before: ${limitsScBefore.length} item");
-      log("Data limits_sc_after: ${limitsScAfter.length} item");
-      log("Data limits_pos_after: ${limitsPosAfter.length} item");
     } catch (e) {
       // print("🔴 GAGAL menyimpan AppConfig ke Hive: $e");
     }
@@ -163,12 +167,6 @@ class AuthRepository {
         'app_version': appVersion,
       };
 
-      JsonEncoder encoder = const JsonEncoder.withIndent('  ');
-      String prettyJson = encoder.convert(requestBody);
-      log("====== BODY REQUEST LENGKAP ======");
-      log(prettyJson);
-      log("================================");
-
       Uri uri = getUrl(pathUrl: '/login/log');
       http.post(
         uri,
@@ -196,12 +194,6 @@ class AuthRepository {
         'device': deviceModel,
         'logout_time': DateTime.now().toIso8601String(),
       };
-
-      JsonEncoder encoder = const JsonEncoder.withIndent('  ');
-      String prettyJson = encoder.convert(requestBody);
-      log("====== BODY REQUEST LENGKAP ======");
-      log(prettyJson);
-      log("================================");
 
       Uri uri = getUrl(pathUrl: '/logout/log');
       await http.post(

@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:hive/hive.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -22,6 +24,7 @@ import 'package:salsa/screens/installation/installation_detail_list/material_evi
 import 'package:salsa/screens/installation/installation_summary/installation_summary_screen.dart';
 
 import '../../../../blocs/auth/auth_storage.dart';
+import '../../../../components/constants.dart';
 import '../../../../components/services/watermark_service.dart';
 import '../../../../components/shared_function.dart';
 import '../../../../components/widgets/full_screen_image_viewer.dart';
@@ -39,7 +42,11 @@ class _InstallationDetailBodyMobileState
     extends State<InstallationDetailBodyMobile> {
   // --- STATE LOKAL ---
   bool _showTechnician3 = false;
+  bool _isWH = false;
+  List<Map<String, String>> _technicianList = [];
   final TextEditingController _dateController = TextEditingController();
+  final TextEditingController _tech2SearchController = TextEditingController();
+  final TextEditingController _tech3SearchController = TextEditingController();
   DateTime? _selectedDate;
 
   // State Foto Toko
@@ -50,6 +57,7 @@ class _InstallationDetailBodyMobileState
   void initState() {
     super.initState();
     // [FIX 1] Tarik foto dari draft lokal saat halaman pertama kali dibuka
+    _loadUserAndTechnicianList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final draft = context.read<InstallationBloc>().state.draftEntry;
       if (draft?.storeFrontPhoto != null) {
@@ -70,9 +78,29 @@ class _InstallationDetailBodyMobileState
     });
   }
 
+  Future<void> _loadUserAndTechnicianList() async {
+    final userData = await AuthStorage.getUser();
+    final userType = userData['maintenance_type'] ?? 'WH';
+    final configBox = Hive.box(kAppConfigBox);
+    final rawList = configBox.get('technician_list');
+    if (mounted) {
+      setState(() {
+        _isWH = userType == 'WH';
+        if (rawList is List) {
+          _technicianList = rawList.whereType<Map>().map((t) => {
+            'technician_id': (t['technician_id'] ?? '') as String,
+            'technician_name': (t['technician_name'] ?? '') as String,
+          }).toList();
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
     _dateController.dispose();
+    _tech2SearchController.dispose();
+    _tech3SearchController.dispose();
     super.dispose();
   }
 
@@ -293,12 +321,12 @@ class _InstallationDetailBodyMobileState
         if (draft != null) {
           for (var u in draft.units) {
             for (var p in u.materials.pipes) {
-              if (p.brandId.isNotEmpty) {
+              if (p.brandId.isNotEmpty && p.usageType != 'PIPA_DRAIN') {
                 uniqueMaterialKeys.add("${p.articleId}_${p.brandId}");
               }
             }
             for (var c in u.materials.cables) {
-              if (c.brandId.isNotEmpty) {
+              if (c.brandId.isNotEmpty && c.usageType != 'KABEL_DUCT') {
                 uniqueMaterialKeys.add("${c.articleId}_${c.brandId}");
               }
             }
@@ -395,13 +423,11 @@ class _InstallationDetailBodyMobileState
                           // 2. OUTDOOR
                           _buildTaskCard(
                             title: "2. Unit Outdoor",
-                            subtitle: isIndoorComplete
-                                ? "$doneOutdoor / $totalOutdoor Unit Selesai"
-                                : "Selesaikan Unit Indoor dahulu",
+                            subtitle: "$doneOutdoor / $totalOutdoor Unit Selesai",
                             icon: FontAwesomeIcons.fan,
                             progress: progressOutdoor,
                             color: Colors.orange[800]!,
-                            isLocked: !isIndoorComplete,
+                            isLocked: false,
                             onTap: () => _navigateToSubPage(
                                 context,
                                 OutdoorListScreen(
@@ -699,6 +725,9 @@ class _InstallationDetailBodyMobileState
   Widget _buildTechnicianPanel(BuildContext context, InstallationState state) {
     final draft = state.draftEntry;
     if (draft == null) return const SizedBox();
+
+    final bool useDropdown = _isWH && _technicianList.isNotEmpty;
+
     return Column(children: [
       _buildCustomTextField(
           initialValue: draft.technician1Name,
@@ -706,30 +735,66 @@ class _InstallationDetailBodyMobileState
           icon: Icons.engineering,
           readOnly: true),
       const SizedBox(height: 12),
-      _buildCustomTextField(
-          initialValue: draft.technician2Name,
-          hintText: 'Teknisi 2',
-          icon: Icons.engineering,
+      if (useDropdown)
+        _buildTechnicianDropdown(
+          context: context,
+          label: 'Teknisi 2',
+          value: draft.technician2Name ?? '',
+          excludedName: draft.technician3Name ?? '',
+          searchController: _tech2SearchController,
           onChanged: (val) => context
               .read<InstallationBloc>()
-              .add(UpdateTeamInfo(technician2: val))),
-      const SizedBox(height: 8),
-      if (_showTechnician3)
+              .add(UpdateTeamInfo(technician2: val ?? '')),
+          onClear: (draft.technician2Name ?? '').isNotEmpty ? () => context
+              .read<InstallationBloc>()
+              .add(const UpdateTeamInfo(technician2: '')) : null,
+        )
+      else
         _buildCustomTextField(
-            initialValue: draft.technician3Name,
-            hintText: 'Teknisi 3',
+            initialValue: draft.technician2Name,
+            hintText: 'Teknisi 2',
             icon: Icons.engineering,
             onChanged: (val) => context
                 .read<InstallationBloc>()
-                .add(UpdateTeamInfo(technician3: val)),
-            suffixIcon: IconButton(
-                onPressed: () {
-                  context
-                      .read<InstallationBloc>()
-                      .add(const UpdateTeamInfo(technician3: ''));
-                  setState(() => _showTechnician3 = false);
-                },
-                icon: const Icon(Icons.cancel, color: Colors.red)))
+                .add(UpdateTeamInfo(technician2: val))),
+      const SizedBox(height: 8),
+      if (_showTechnician3)
+        if (useDropdown)
+          Row(children: [
+            Expanded(
+              child: _buildTechnicianDropdown(
+                context: context,
+                label: 'Teknisi 3',
+                value: draft.technician3Name ?? '',
+                excludedName: draft.technician2Name ?? '',
+                searchController: _tech3SearchController,
+                onChanged: (val) => context
+                    .read<InstallationBloc>()
+                    .add(UpdateTeamInfo(technician3: val ?? '')),
+              ),
+            ),
+            IconButton(
+              onPressed: () {
+                context.read<InstallationBloc>().add(const UpdateTeamInfo(technician3: ''));
+                setState(() => _showTechnician3 = false);
+              },
+              icon: const Icon(Icons.cancel, color: Colors.red),
+            ),
+          ])
+        else
+          _buildCustomTextField(
+              initialValue: draft.technician3Name,
+              hintText: 'Teknisi 3',
+              icon: Icons.engineering,
+              onChanged: (val) => context
+                  .read<InstallationBloc>()
+                  .add(UpdateTeamInfo(technician3: val)),
+              suffixIcon: IconButton(
+                  onPressed: () {
+                    context.read<InstallationBloc>().add(const UpdateTeamInfo(technician3: ''));
+                    setState(() => _showTechnician3 = false);
+                  },
+                  icon: const Icon(Icons.cancel, color: Colors.red)))
       else
         Align(
             alignment: Alignment.centerRight,
@@ -738,6 +803,89 @@ class _InstallationDetailBodyMobileState
                 label: const Text('Tambah Teknisi 3'),
                 onPressed: () => setState(() => _showTechnician3 = true)))
     ]);
+  }
+
+  Widget _buildTechnicianDropdown({
+    required BuildContext context,
+    required String label,
+    required String value,
+    required String excludedName,
+    required TextEditingController searchController,
+    required ValueChanged<String?> onChanged,
+    VoidCallback? onClear,
+  }) {
+    final filtered = _technicianList
+        .where((t) => excludedName.isEmpty || t['technician_name'] != excludedName)
+        .toList();
+    final currentValue = filtered.any((t) => t['technician_name'] == value) ? value : null;
+
+    final dropdown = DropdownButtonFormField2<String>(
+      value: currentValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(Icons.engineering, color: Colors.grey.shade600, size: 20),
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      ),
+      hint: Text(label, style: const TextStyle(fontSize: 14)),
+      onChanged: onChanged,
+      items: filtered
+          .map((t) => DropdownMenuItem<String>(
+                value: t['technician_name'],
+                child: Text(
+                  t['technician_name'] ?? '',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ))
+          .toList(),
+      dropdownStyleData: DropdownStyleData(
+        maxHeight: MediaQuery.of(context).size.height * 0.4,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+      ),
+      dropdownSearchData: DropdownSearchData(
+        searchController: searchController,
+        searchInnerWidgetHeight: 50,
+        searchInnerWidget: Padding(
+          padding: const EdgeInsets.all(8),
+          child: TextFormField(
+            controller: searchController,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              hintText: 'Cari teknisi...',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
+        searchMatchFn: (item, searchValue) =>
+            item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+      ),
+      onMenuStateChange: (isOpen) {
+        if (!isOpen) searchController.clear();
+      },
+    );
+
+    if (onClear != null) {
+      return Row(
+        children: [
+          Expanded(child: dropdown),
+          IconButton(
+            onPressed: onClear,
+            icon: const Icon(Icons.cancel, color: Colors.red),
+          ),
+        ],
+      );
+    }
+    return dropdown;
   }
 
   Widget _buildCustomTextField(

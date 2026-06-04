@@ -79,6 +79,8 @@ class _ServiceCallDetailBodyMobileState
   late final TextEditingController _finalTempController;
   final TextEditingController _finalTempNoteSearchController =
   TextEditingController();
+  final TextEditingController _tech2SearchController = TextEditingController();
+  final TextEditingController _tech3SearchController = TextEditingController();
 
   bool _showTechnician3 = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
@@ -178,6 +180,8 @@ class _ServiceCallDetailBodyMobileState
     _technician3Controller.dispose();
     _finalTempController.dispose();
     _finalTempNoteSearchController.dispose();
+    _tech2SearchController.dispose();
+    _tech3SearchController.dispose();
     super.dispose();
   }
 
@@ -603,7 +607,11 @@ class _ServiceCallDetailBodyMobileState
                                             prev.isFinalTempSkipped !=
                                                 current.isFinalTempSkipped ||
                                             prev.finalTempNote !=
-                                                current.finalTempNote;
+                                                current.finalTempNote ||
+                                            prev.finalTempInImage !=
+                                                current.finalTempInImage ||
+                                            prev.minFinalTempInLimit !=
+                                                current.minFinalTempInLimit;
                                       },
                                       builder: (context, formStateForTemp) {
                                         final bool isEnabled =
@@ -788,6 +796,10 @@ class _ServiceCallDetailBodyMobileState
 
   Widget _buildTechnicianPanel(BuildContext context, ScFormState formState) {
     final formCubit = context.read<ScFormCubit>();
+    final bool isWH = formCubit.userType == 'WH';
+    final technicianList = formCubit.technicianList;
+    final bool useDropdown = isWH && technicianList.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -796,7 +808,7 @@ class _ServiceCallDetailBodyMobileState
             controller: _technician1Controller,
             hintText: 'Teknisi 1',
             icon: Icons.engineering,
-            readOnly: false,
+            readOnly: isWH,
             onTap: () {},
             onChanged: (value) {
               formCubit.technician1Changed(value);
@@ -804,7 +816,25 @@ class _ServiceCallDetailBodyMobileState
             },
           ),
           const SizedBox(height: 12),
-          _buildCustomTextField(
+          if (useDropdown)
+            _buildTechnicianDropdown(
+              context: context,
+              label: 'Teknisi 2',
+              value: formState.technician2,
+              technicianList: technicianList,
+              excludedName: formState.technician3,
+              searchController: _tech2SearchController,
+              onChanged: (value) {
+                formCubit.technician2Changed(value ?? '');
+                formCubit.onFieldChanged();
+              },
+              onClear: formState.technician2.isNotEmpty ? () {
+                formCubit.technician2Changed('');
+                formCubit.onFieldChanged();
+              } : null,
+            )
+          else
+            _buildCustomTextField(
               controller: _technician2Controller,
               hintText: 'Teknisi 2',
               icon: Icons.engineering,
@@ -812,26 +842,56 @@ class _ServiceCallDetailBodyMobileState
               onChanged: (value) {
                 formCubit.technician2Changed(value);
                 formCubit.onFieldChanged();
-              }),
+              },
+            ),
           const SizedBox(height: 8),
           if (formState.showTechnician3)
-            _buildCustomTextField(
-              controller: _technician3Controller,
-              hintText: 'Teknisi 3',
-              icon: Icons.engineering,
-              onTap: () {},
-              onChanged: (value) {
-                formCubit.technician3Changed(value);
-                formCubit.onFieldChanged();
-              },
-              iconBtn: IconButton(
+            if (useDropdown)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTechnicianDropdown(
+                      context: context,
+                      label: 'Teknisi 3',
+                      value: formState.technician3,
+                      technicianList: technicianList,
+                      excludedName: formState.technician2,
+                      searchController: _tech3SearchController,
+                      onChanged: (value) {
+                        formCubit.technician3Changed(value ?? '');
+                        formCubit.onFieldChanged();
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      formCubit.technician3Changed('');
+                      formCubit.toggleTechnician3(false);
+                      formCubit.onFieldChanged();
+                    },
+                    icon: const Icon(Icons.cancel, color: Colors.red),
+                  ),
+                ],
+              )
+            else
+              _buildCustomTextField(
+                controller: _technician3Controller,
+                hintText: 'Teknisi 3',
+                icon: Icons.engineering,
+                onTap: () {},
+                onChanged: (value) {
+                  formCubit.technician3Changed(value);
+                  formCubit.onFieldChanged();
+                },
+                iconBtn: IconButton(
                   onPressed: () {
                     formCubit.technician3Changed('');
                     formCubit.toggleTechnician3(false);
                     formCubit.onFieldChanged();
                   },
-                  icon: const Icon(Icons.cancel, color: Colors.red)),
-            )
+                  icon: const Icon(Icons.cancel, color: Colors.red),
+                ),
+              )
           else
             Align(
               alignment: Alignment.centerRight,
@@ -844,6 +904,96 @@ class _ServiceCallDetailBodyMobileState
         ],
       ),
     );
+  }
+
+  Widget _buildTechnicianDropdown({
+    required BuildContext context,
+    required String label,
+    required String value,
+    required List<Map<String, String>> technicianList,
+    required String excludedName,
+    required TextEditingController searchController,
+    required ValueChanged<String?> onChanged,
+    VoidCallback? onClear,
+  }) {
+    final filtered = technicianList
+        .where((t) => excludedName.isEmpty || t['technician_name'] != excludedName)
+        .toList();
+
+    // Jika nilai tersimpan tidak ada di daftar (mis. draft lama atau roster teknisi
+    // berubah), sisipkan sebagai item agar tetap tampil & ikut ter-submit — bukan
+    // hilang diam-diam dari tampilan sementara datanya masih dikirim.
+    if (value.isNotEmpty && !filtered.any((t) => t['technician_name'] == value)) {
+      filtered.insert(0, {'technician_id': '', 'technician_name': value});
+    }
+    final currentValue = filtered.any((t) => t['technician_name'] == value) ? value : null;
+
+    final dropdown = DropdownButtonFormField2<String>(
+      value: currentValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(Icons.engineering, color: Colors.grey.shade600, size: 20),
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      hint: Text(label, style: const TextStyle(fontSize: 14)),
+      onChanged: onChanged,
+      items: filtered
+          .map((t) => DropdownMenuItem<String>(
+                value: t['technician_name'],
+                child: Text(
+                  t['technician_name'] ?? '',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ))
+          .toList(),
+      dropdownStyleData: DropdownStyleData(
+        maxHeight: MediaQuery.of(context).size.height * 0.4,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
+      ),
+      dropdownSearchData: DropdownSearchData(
+        searchController: searchController,
+        searchInnerWidgetHeight: 50,
+        searchInnerWidget: Padding(
+          padding: const EdgeInsets.all(8),
+          child: TextFormField(
+            controller: searchController,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              hintText: 'Cari teknisi...',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
+        searchMatchFn: (item, searchValue) =>
+            item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+      ),
+      onMenuStateChange: (isOpen) {
+        if (!isOpen) searchController.clear();
+      },
+    );
+
+    if (onClear != null) {
+      return Row(
+        children: [
+          Expanded(child: dropdown),
+          IconButton(
+            onPressed: onClear,
+            icon: const Icon(Icons.cancel, color: Colors.red),
+          ),
+        ],
+      );
+    }
+    return dropdown;
   }
 
   Widget _buildScanQRButton(

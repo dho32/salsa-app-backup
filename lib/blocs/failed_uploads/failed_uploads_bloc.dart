@@ -246,7 +246,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
             }
             // 🔥 TAMBAHAN 2: CLEANUP DRAFT RRO 🔥
             else if (moduleType == 'RRO_CUT_OFF') {
-              final draftBox = await Hive.openBox('rro_form_draft_box');
+              final draftBox = await Hive.openBox(kRROFormDraftBox);
               await draftBox.deleteAll([
                 '${event.transNo}_picName',
                 '${event.transNo}_picPhone',
@@ -350,9 +350,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           }
         });
         _hiveSubscriptions.add(subscription);
-      } catch (e) {
-        print("Error hive listener: $e");
-      }
+      } catch (_) {}
     }
   }
 
@@ -386,9 +384,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         'storeName': store,
         'module': moduleType,
       });
-    } catch (e) {
-      print("Error update cache: $e");
-    }
+    } catch (_) {}
   }
 
   // 🔥 TAMBAHAN 3: KASIH TAHU BLOC LOKASI KOTAK RRO 🔥
@@ -421,9 +417,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
           await queueBox.put(key, ConfirmationTaskModel(transNo: key));
           await ConfirmationService().processQueue();
         }
-      } catch (e) {
-        print("Error queue: $e");
-      }
+      } catch (_) {}
     }
   }
 }

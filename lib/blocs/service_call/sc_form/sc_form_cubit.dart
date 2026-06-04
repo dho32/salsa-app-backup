@@ -14,8 +14,12 @@ import '../../auth/auth_storage.dart';
 class ScFormCubit extends Cubit<ScFormState> {
   final String transNo;
   late final Box<TransactionInfoModel> _transactionInfoBox;
-  late final String _userType;
-  late final String _userName;
+  String _userType = '';
+  String _userName = '';
+  List<Map<String, String>> _technicianList = [];
+
+  String get userType => _userType;
+  List<Map<String, String>> get technicianList => _technicianList;
 
   String _normalizeHiveKey(String key) =>
       key.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
@@ -29,6 +33,15 @@ class ScFormCubit extends Cubit<ScFormState> {
     final userData = await AuthStorage.getUser();
     _userType = userData['maintenance_type'] ?? 'WH'; // (Default 'WH')
     _userName = userData['name'] ?? '';
+
+    final configBox = Hive.box(kAppConfigBox);
+    final rawList = configBox.get('technician_list');
+    if (rawList is List) {
+      _technicianList = rawList.whereType<Map>().map((t) => {
+        'technician_id': (t['technician_id'] ?? '') as String,
+        'technician_name': (t['technician_name'] ?? '') as String,
+      }).toList();
+    }
 
     _transactionInfoBox =
         await Hive.openBox<TransactionInfoModel>(kTransactionInfoHiveBox);
@@ -111,8 +124,13 @@ class ScFormCubit extends Cubit<ScFormState> {
   void finalTempInChanged(String value) =>
       emit(state.copyWith(finalTempIn: value));
 
-  void finalTempInImageChanged(CapturedImageDetail? image) =>
+  void finalTempInImageChanged(CapturedImageDetail? image) {
+    if (image == null) {
+      emit(state.copyWith(clearFinalTempInImage: true));
+    } else {
       emit(state.copyWith(finalTempInImage: image));
+    }
+  }
 
   // Panggil ini dari listener di ServiceCallDetailScreen saat status unit berubah
   void updateAllUnitsValidated(bool allUnitsAreValid) {
@@ -133,14 +151,16 @@ class ScFormCubit extends Cubit<ScFormState> {
   }
 
   void finalTempSkippedChanged(bool isSkipped) {
-    emit(state.copyWith(
-      isFinalTempSkipped: isSkipped,
-      // Reset nilai/foto/note jika status skip berubah
-      finalTempIn: '',
-      finalTempInImage: null,
-      finalTempNote: null,
-    ));
-    // Validasi ulang
+    if (isSkipped) {
+      emit(state.copyWith(
+        isFinalTempSkipped: true,
+        finalTempIn: '',
+        clearFinalTempInImage: true,
+        finalTempNote: null,
+      ));
+    } else {
+      emit(state.copyWith(isFinalTempSkipped: false));
+    }
     onFieldChanged();
   }
 
@@ -237,7 +257,7 @@ class ScFormCubit extends Cubit<ScFormState> {
 
         // Berdasarkan kode Anda sebelumnya, 'temperature' adalah ID untuk suhu indoor
         bool isSkip = measurement.isSkipped ?? false;
-        if (id.contains('temperature') && isSkip && measurement.value > 0.0) {
+        if (id.contains('temperature') && !isSkip && measurement.value > 0.0) {
           if (maxIndoorTemp == null || measurement.value > maxIndoorTemp) {
             maxIndoorTemp = measurement.value; // Temukan nilai tertinggi
           }

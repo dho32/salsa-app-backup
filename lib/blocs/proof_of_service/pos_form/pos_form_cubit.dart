@@ -17,8 +17,12 @@ import '../../auth/auth_storage.dart';
 class PosFormCubit extends Cubit<PosFormState> {
   final String transNo;
   final Box<PosTransactionInfoModel> _transactionInfoBox;
-  late final String _userType;
-  late final String _userName;
+  String _userType = '';
+  String _userName = '';
+  List<Map<String, String>> _technicianList = [];
+
+  String get userType => _userType;
+  List<Map<String, String>> get technicianList => _technicianList;
 
   // Helper Key Konsisten
   String _getHiveKey(String transNo) =>
@@ -35,6 +39,15 @@ class PosFormCubit extends Cubit<PosFormState> {
     final userData = await AuthStorage.getUser();
     _userType = userData['maintenance_type'] ?? 'WH';
     _userName = userData['name'] ?? '';
+
+    final configBox = Hive.box(kAppConfigBox);
+    final rawList = configBox.get('technician_list');
+    if (rawList is List) {
+      _technicianList = rawList.whereType<Map>().map((t) => {
+        'technician_id': (t['technician_id'] ?? '') as String,
+        'technician_name': (t['technician_name'] ?? '') as String,
+      }).toList();
+    }
 
     _loadInitialData();
   }
@@ -93,7 +106,7 @@ class PosFormCubit extends Cubit<PosFormState> {
     emit(state.copyWith(
       isTempInSkipped: isSkipped,
       tempIn: isSkipped ? '' : state.tempIn,
-      temperatureInImage: isSkipped ? null : state.temperatureInImage,
+      clearTemperatureInImage: isSkipped,
       tempInNote: !isSkipped ? '' : state.tempInNote,
     ));
     onFieldChanged();
@@ -103,7 +116,7 @@ class PosFormCubit extends Cubit<PosFormState> {
     emit(state.copyWith(
       isTempOutSkipped: isSkipped,
       tempOut: isSkipped ? '' : state.tempOut,
-      temperatureOutImage: isSkipped ? null : state.temperatureOutImage,
+      clearTemperatureOutImage: isSkipped,
       tempOutNote: !isSkipped ? '' : state.tempOutNote,
     ));
     onFieldChanged();
@@ -128,7 +141,7 @@ class PosFormCubit extends Cubit<PosFormState> {
     emit(state.copyWith(
       isFinalTempInSkipped: isSkipped,
       finalTempIn: isSkipped ? '' : state.finalTempIn,
-      finalTempInImage: isSkipped ? null : state.finalTempInImage,
+      clearFinalTempInImage: isSkipped,
       finalTempInNote: !isSkipped ? '' : state.finalTempInNote,
     ));
     onFieldChanged();
@@ -137,8 +150,13 @@ class PosFormCubit extends Cubit<PosFormState> {
   void finalTempInChanged(String value) =>
       emit(state.copyWith(finalTempIn: value));
 
-  void finalTempInImageChanged(CapturedImageDetail? image) =>
+  void finalTempInImageChanged(CapturedImageDetail? image) {
+    if (image == null) {
+      emit(state.copyWith(clearFinalTempInImage: true));
+    } else {
       emit(state.copyWith(finalTempInImage: image));
+    }
+  }
 
   void recalculateFinalTempLimit() {
     final validationBox =
@@ -156,7 +174,7 @@ class PosFormCubit extends Cubit<PosFormState> {
     for (final entry in indoorEntries) {
       final tempMeasurement = entry.measurementsAfter.firstWhereOrNull((m) {
         bool isSkip = m.isSkipped ?? false;
-        return m.measurementId == 'temperature' && isSkip;
+        return m.measurementId == 'temperature' && !isSkip;
       });
       if (tempMeasurement != null) {
         minTemp = min(minTemp, tempMeasurement.value);
@@ -180,8 +198,21 @@ class PosFormCubit extends Cubit<PosFormState> {
   void technician2Changed(String value) => emit(state.copyWith(technician2: value));
   void technician3Changed(String value) => emit(state.copyWith(technician3: value));
   void toggleTechnician3(bool show) => emit(state.copyWith(showTechnician3: show));
-  void tempInImageChanged(CapturedImageDetail? image) => emit(state.copyWith(temperatureInImage: image));
-  void tempOutImageChanged(CapturedImageDetail? image) => emit(state.copyWith(temperatureOutImage: image));
+  void tempInImageChanged(CapturedImageDetail? image) {
+    if (image == null) {
+      emit(state.copyWith(clearTemperatureInImage: true));
+    } else {
+      emit(state.copyWith(temperatureInImage: image));
+    }
+  }
+
+  void tempOutImageChanged(CapturedImageDetail? image) {
+    if (image == null) {
+      emit(state.copyWith(clearTemperatureOutImage: true));
+    } else {
+      emit(state.copyWith(temperatureOutImage: image));
+    }
+  }
 
   void onFieldChanged() {
     _validateForm();
@@ -224,11 +255,11 @@ class PosFormCubit extends Cubit<PosFormState> {
         technicianValid &&
         serviceInfoValid &&
         state.allUnitsValidated &&
-        (!state.allUnitsValidated || finalTempValid);
+        finalTempValid;
 
     emit(state.copyWith(
       isPicStoreValid: picStoreValid,
-      isServiceInfoValid: serviceInfoValid && tempOutValid,
+      isServiceInfoValid: serviceInfoValid,
       isFormReadyToSubmit: isReady,
     ));
   }

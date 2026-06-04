@@ -88,7 +88,7 @@ class _RROCutOffSummaryBodyMobileState
 
   Future<void> _loadSummaryData() async {
     try {
-      final draftBox = await Hive.openBox('rro_form_draft_box');
+      final draftBox = await Hive.openBox(kRROFormDraftBox);
       _formData = {
         'picName': draftBox.get('${widget.transNo}_picName', defaultValue: '-'),
         'picPhone': draftBox.get('${widget.transNo}_picPhone', defaultValue: '-'),
@@ -124,7 +124,7 @@ class _RROCutOffSummaryBodyMobileState
     final String createdBy = user['user_id']?.toString() ?? '';
     final String deviceModel = user['device_model']?.toString() ?? 'Mobile App';
 
-    final draftBox = await Hive.openBox('rro_form_draft_box');
+    final draftBox = await Hive.openBox(kRROFormDraftBox);
     final storeFrontPath = draftBox.get('${widget.transNo}_storeFrontPhoto', defaultValue: '');
     final storeFrontLat = draftBox.get('${widget.transNo}_storeFrontLat', defaultValue: 0.0);
     final storeFrontLng = draftBox.get('${widget.transNo}_storeFrontLng', defaultValue: 0.0);
@@ -286,7 +286,7 @@ class _RROCutOffSummaryBodyMobileState
                             });
                           } else {
                             if (_picPhotoPath != null) {
-                              final draftBox = await Hive.openBox('rro_form_draft_box');
+                              final draftBox = await Hive.openBox(kRROFormDraftBox);
                               await draftBox.put('${widget.transNo}_picPhotoPath', _picPhotoPath);
                               await draftBox.put('${widget.transNo}_picLat', _picLat);
                               await draftBox.put('${widget.transNo}_picLng', _picLng);

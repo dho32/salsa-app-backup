@@ -3,6 +3,7 @@ import 'package:hive/hive.dart';
 import 'package:salsa/blocs/service_call/service_call_detail/service_call_detail_event.dart';
 import 'package:salsa/blocs/service_call/service_call_detail/service_call_detail_state.dart';
 import 'package:salsa/blocs/service_call/service_call_detail/service_call_detail_repository.dart';
+import 'package:salsa/components/constants.dart';
 import 'package:salsa/models/common/measurement_limits.dart';
 
 class ServiceCallDetailBloc
@@ -19,7 +20,7 @@ class ServiceCallDetailBloc
 
         // 2. Buka kotak Global Master dari Hive dengan AMAN
         // ⚠️ PASTIKAN NAMA BOX-NYA SESUAI DENGAN PUNYA AKANG (Misal: kAppConfigBox)
-        const String configBoxName = 'app_config_box';
+        const String configBoxName = kAppConfigBox;
 
         Box configBox;
         if (Hive.isBoxOpen(configBoxName)) {

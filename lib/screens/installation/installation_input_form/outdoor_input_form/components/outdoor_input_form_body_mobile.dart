@@ -522,7 +522,6 @@ class _OutdoorInputFormBodyMobileState
     final autoPairedSN = indoorUnit?.serialNo ?? '';
 
     if (isFinal && finalSn.isEmpty) return null;
-    if (isFinal && autoPairedSN.isEmpty) return null;
 
     // Validasi Sthira
     if (isFinal && _vendorCode == 'V000062') {
@@ -683,11 +682,7 @@ class _OutdoorInputFormBodyMobileState
         _showErrorSnack("Serial Number wajib diisi!");
         return;
       }
-      if (autoPairedSN.isEmpty) {
-        _showErrorSnack(
-            "Unit Indoor pasangan belum diinput! Input Indoor dulu.");
-        return;
-      }
+
 
       final draft = state.draftEntry;
       if (draft != null && draft.units.isNotEmpty) {
@@ -727,6 +722,8 @@ class _OutdoorInputFormBodyMobileState
         }
       }
 
+      // PSI validation hidden
+      if (false) {
       bool isPsiSkipped = _psiEntries.first.isSkipped ?? false;
       if (isPsiSkipped) {
         if (_selectedPsiNote == null) {
@@ -752,6 +749,7 @@ class _OutdoorInputFormBodyMobileState
           return;
         }
       }
+      } // end PSI validation
 
       if (_installPhotos.length < 4) {
         _showErrorSnack("Wajib ambil minimal 4 Foto Dokumentasi Pemasangan!");
@@ -932,6 +930,8 @@ class _OutdoorInputFormBodyMobileState
                                       .removeWhere((p) => p.imagePath == path));
                                   _onFormChanged();
                                 }))),
+                  // PSI section hidden
+                  if (false) ...[
                   const SizedBox(height: 16),
                   Padding(
                       padding: const EdgeInsets.only(left: 16, bottom: 8),
@@ -973,6 +973,7 @@ class _OutdoorInputFormBodyMobileState
                                       .removeWhere((p) => p.imagePath == path));
                                   _onFormChanged();
                                 }))),
+                  ], // end PSI section
                 ],
               ),
             ),

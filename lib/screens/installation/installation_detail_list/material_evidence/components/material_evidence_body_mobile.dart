@@ -62,9 +62,9 @@ class _MaterialEvidenceBodyMobileState
         final Map<String, _EvidenceItem> uniqueItems = {};
 
         for (var unit in draft.units) {
-          // A. PIPA
+          // A. PIPA (kecuali Pipa Drain)
           for (var p in unit.materials.pipes) {
-            if (p.brandId.isNotEmpty) {
+            if (p.brandId.isNotEmpty && p.usageType != 'PIPA_DRAIN') {
               final key = "${p.articleId}_${p.brandId}";
               if (!uniqueItems.containsKey(key)) {
                 uniqueItems[key] = _EvidenceItem(
@@ -76,9 +76,9 @@ class _MaterialEvidenceBodyMobileState
               }
             }
           }
-          // B. KABEL
+          // B. KABEL (kecuali Kabel Duct)
           for (var c in unit.materials.cables) {
-            if (c.brandId.isNotEmpty) {
+            if (c.brandId.isNotEmpty && c.usageType != 'KABEL_DUCT') {
               final key = "${c.articleId}_${c.brandId}";
               if (!uniqueItems.containsKey(key)) {
                 uniqueItems[key] = _EvidenceItem(
