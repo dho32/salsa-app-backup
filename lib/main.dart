@@ -32,6 +32,9 @@ import 'models/proof_of_service/pos_validation_entry_model.dart';
 import 'models/proof_of_service/proof_of_service_detail_model.dart';
 import 'models/rro_cut_off/rro_cut_off_detail_model.dart';
 import 'models/rro_cut_off/rro_cut_off_entry_model.dart';
+import 'models/proof_of_service_freezer/proof_of_service_freezer_detail_model.dart';
+import 'models/proof_of_service_freezer/proof_of_service_freezer_info_model.dart';
+import 'models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
 import 'models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import 'models/service_call/service_call_validation_entry_model.dart';
 import 'models/task_maintenance/confirmation_task_queue.dart';
@@ -96,50 +99,67 @@ class _AppInitializerState extends State<AppInitializer> {
   }
 
   void _registerHiveAdapters() {
-    Hive.registerAdapter(ValidationProblemAdapter());
-    Hive.registerAdapter(ServiceCallValidationEntryModelAdapter());
-    Hive.registerAdapter(ProofOfServiceDetailDataAdapter());
-    Hive.registerAdapter(CapturedImageDetailAdapter());
-    Hive.registerAdapter(MeasurementEntryAdapter());
-    Hive.registerAdapter(TransactionInfoModelAdapter());
-    Hive.registerAdapter(ConfirmationTaskModelAdapter());
-    Hive.registerAdapter(PosTransactionInfoModelAdapter());
-    Hive.registerAdapter(PosValidationEntryModelAdapter());
-    Hive.registerAdapter(ProofOfServiceDetailModelAdapter());
-    Hive.registerAdapter(ProofOfServiceHeaderAdapter());
-    Hive.registerAdapter(ProofOfServiceItemDetailAdapter());
-    Hive.registerAdapter(PosUnserviceableModelAdapter());
-    Hive.registerAdapter(SCUnserviceableModelAdapter());
-    Hive.registerAdapter(MeasurementLimitsAdapter());
-    Hive.registerAdapter(NoteOptionAdapter());
-    Hive.registerAdapter(OtpTrackingModelAdapter());
+    // Registrasi idempoten PER-ADAPTER: hanya daftarkan yang belum terdaftar.
+    // Mencegah "already a TypeAdapter" saat hot restart, sekaligus tetap
+    // mendaftarkan adapter baru yang belum ada di registry (mis. setelah
+    // menambah model baru).
+    void reg<T>(TypeAdapter<T> adapter) {
+      if (!Hive.isAdapterRegistered(adapter.typeId)) {
+        Hive.registerAdapter<T>(adapter);
+      }
+    }
+
+    reg(ValidationProblemAdapter());
+    reg(ServiceCallValidationEntryModelAdapter());
+    reg(ProofOfServiceDetailDataAdapter());
+    reg(CapturedImageDetailAdapter());
+    reg(MeasurementEntryAdapter());
+    reg(TransactionInfoModelAdapter());
+    reg(ConfirmationTaskModelAdapter());
+    reg(PosTransactionInfoModelAdapter());
+    reg(PosValidationEntryModelAdapter());
+    reg(ProofOfServiceDetailModelAdapter());
+    reg(ProofOfServiceHeaderAdapter());
+    reg(ProofOfServiceItemDetailAdapter());
+    reg(PosUnserviceableModelAdapter());
+    reg(SCUnserviceableModelAdapter());
+    reg(MeasurementLimitsAdapter());
+    reg(NoteOptionAdapter());
+    reg(OtpTrackingModelAdapter());
 
     // Register Adapters Pasang AC (Draft)
-    Hive.registerAdapter(InstallationPhotoModelAdapter());
-    Hive.registerAdapter(InstallationMeasurementModelAdapter());
-    Hive.registerAdapter(InstallationMaterialItemModelAdapter());
-    Hive.registerAdapter(InstallationMaterialsModelAdapter());
-    Hive.registerAdapter(InstallationUnitModelAdapter());
-    Hive.registerAdapter(InstallationEntryModelAdapter());
+    reg(InstallationPhotoModelAdapter());
+    reg(InstallationMeasurementModelAdapter());
+    reg(InstallationMaterialItemModelAdapter());
+    reg(InstallationMaterialsModelAdapter());
+    reg(InstallationUnitModelAdapter());
+    reg(InstallationEntryModelAdapter());
 
     // Register Adapters Pasang AC (Detail/Task)
-    Hive.registerAdapter(InstallationHeaderDetailModelAdapter());
-    Hive.registerAdapter(InstallationTargetUnitModelAdapter());
-    Hive.registerAdapter(InstallationMasterOptionModelAdapter());
-    Hive.registerAdapter(InstallationMasterDataModelAdapter());
-    Hive.registerAdapter(InstallationOptionItemModelAdapter());
-    Hive.registerAdapter(InstallationDetailModelAdapter());
-    Hive.registerAdapter(InstallationBrandModelAdapter());
-    Hive.registerAdapter(MaterialEvidenceModelAdapter());
+    reg(InstallationHeaderDetailModelAdapter());
+    reg(InstallationTargetUnitModelAdapter());
+    reg(InstallationMasterOptionModelAdapter());
+    reg(InstallationMasterDataModelAdapter());
+    reg(InstallationOptionItemModelAdapter());
+    reg(InstallationDetailModelAdapter());
+    reg(InstallationBrandModelAdapter());
+    reg(MaterialEvidenceModelAdapter());
 
     // Register Adapters RRO Cut Off
-    Hive.registerAdapter(RROCutOffResultAdapter());
-    Hive.registerAdapter(RROCutOffHeaderAdapter());
-    Hive.registerAdapter(RROCutOffDetailItemAdapter());
-    Hive.registerAdapter(RROCutOffSerialNumberAdapter());
-    Hive.registerAdapter(RROCutOffFormModelAdapter());
-    Hive.registerAdapter(RROCutOffEntryModelAdapter());
-    Hive.registerAdapter(RROCutOffPhotoModelAdapter());
+    reg(RROCutOffResultAdapter());
+    reg(RROCutOffHeaderAdapter());
+    reg(RROCutOffDetailItemAdapter());
+    reg(RROCutOffSerialNumberAdapter());
+    reg(RROCutOffFormModelAdapter());
+    reg(RROCutOffEntryModelAdapter());
+    reg(RROCutOffPhotoModelAdapter());
+
+    // Register Adapters Cuci Freezer
+    reg(ProofOfServiceFreezerDetailModelAdapter());
+    reg(ProofOfServiceFreezerHeaderAdapter());
+    reg(ProofOfServiceFreezerItemAdapter());
+    reg(ProofOfServiceFreezerInfoModelAdapter());
+    reg(ProofOfServiceFreezerEntryModelAdapter());
   }
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
@@ -159,6 +179,9 @@ class _AppInitializerState extends State<AppInitializer> {
       await _openBoxSafely<RROCutOffResult>(kRROCutOffDetailBox);
       await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffEntryBox);
       await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffFormBox);
+      await _openBoxSafely<ProofOfServiceFreezerDetailModel>(kProofOfServiceFreezerDetailBox);
+      await _openBoxSafely<ProofOfServiceFreezerInfoModel>(kProofOfServiceFreezerInfoBox);
+      await _openBoxSafely<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox);
     } catch (e) {
       // Jika error sangat fatal (Disk Penuh Total / Permission Error)
       print("💀 Fatal Init Error: $e");

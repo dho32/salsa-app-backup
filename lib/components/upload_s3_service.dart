@@ -14,6 +14,8 @@ import '../models/common/captured_image_detail.dart';
 import '../models/installation/installation_model.dart';
 import '../models/proof_of_service/pos_transaction_info_model.dart';
 import '../models/proof_of_service/pos_unserviceable_model.dart';
+import '../models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
+import '../models/proof_of_service_freezer/proof_of_service_freezer_info_model.dart';
 import '../models/proof_of_service/pos_validation_entry_model.dart';
 import '../models/rro_cut_off/rro_cut_off_entry_model.dart';
 import '../models/service_call/sc_unserviceable_model.dart';
@@ -590,4 +592,64 @@ Future<UploadResult> uploadRROCutOffFiles({
       successCount: successCount,
       failureCount: failureCount,
       failedFiles: failedFiles);
+}
+
+// --- CUCI FREEZER ---
+// Pola identik uploadPosImagesToS3: kumpulkan foto lokal (foto PIC/lokasi +
+// foto per-freezer: kondisi awal, sesudah, foto pengukuran), cocokkan dengan
+// presigned URL dari server, lalu eksekusi upload.
+Future<UploadResult> uploadProofOfServiceFreezerImagesToS3(
+  String transNo,
+  List<dynamic> presignedDetail, {
+  UploadProgressCubit? progressCubit,
+  List<String>? filter,
+}) async {
+  final entryBox =
+      await Hive.openBox<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox);
+  final infoBox =
+      await Hive.openBox<ProofOfServiceFreezerInfoModel>(kProofOfServiceFreezerInfoBox);
+  final Map<String, String> localFileMap = {};
+
+  // Foto level-transaksi (foto PIC / lokasi saat OTP)
+  final info = infoBox.get(getHiveKeyForTransaction(transNo));
+  if (info?.picImageDetail != null) {
+    localFileMap[info!.picImageDetail!.imagePath.split('/').last] =
+        info.picImageDetail!.imagePath;
+  }
+
+  // Foto per-freezer
+  final entries = entryBox.values.where((e) => e.transNo == transNo);
+  for (final entry in entries) {
+    final List<CapturedImageDetail> imgs = [
+      if (entry.arrivalTempImage != null) entry.arrivalTempImage!,
+      ...entry.initialPhotos.values,
+      ...entry.afterPhotos.values,
+      ...entry.measurements
+          .map((m) => m.capturedImage)
+          .whereType<CapturedImageDetail>(),
+    ];
+    for (final img in imgs) {
+      localFileMap[img.imagePath.split('/').last] = img.imagePath;
+    }
+  }
+
+  final List<_UploadTask> allPossibleTasks = [];
+  for (var serialData in presignedDetail) {
+    final serialNo = serialData['serial_no']?.toString() ?? 'HEADER';
+    final uploads = serialData['uploads'] as List<dynamic>? ?? [];
+    for (var uploadInfo in uploads) {
+      final filename = uploadInfo['filename']?.toString();
+      if (filename != null &&
+          filename.isNotEmpty &&
+          localFileMap.containsKey(filename)) {
+        final filePath = localFileMap[filename]!;
+        final fileKey = '$serialNo - $filename';
+        allPossibleTasks.add(_UploadTask(
+            url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
+      }
+    }
+  }
+
+  final tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
 }

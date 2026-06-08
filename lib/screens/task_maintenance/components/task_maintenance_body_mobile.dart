@@ -18,6 +18,7 @@ import '../../../models/task_maintenance/task_maintenance_model.dart';
 import '../../common/failed_uploads/failed_uploads_screen.dart';
 import '../../installation/installation_detail/installation_detail_screen.dart';
 import '../../proof_of_service/proof_of_service_detail/proof_of_service_detail_screen.dart';
+import '../../proof_of_service_freezer/proof_of_service_freezer_detail/proof_of_service_freezer_detail_screen.dart';
 import '../../service_call/service_call_detail/service_call_detail_screen.dart';
 
 class TaskMaintenanceBodyMobile extends StatefulWidget {
@@ -515,6 +516,9 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
         transNo: suggestion.transNo,
         vendorId: widget.userData['maintenance_by']!,
       );
+    } else if (suggestion.type == 'CUCI_FREEZER') {
+      destinationScreen =
+          ProofOfServiceFreezerDetailScreen(transNo: suggestion.transNo);
     } else {
       _showSnackBar(
           "Tipe transaksi tidak dikenali: ${suggestion.type}", Colors.red);
