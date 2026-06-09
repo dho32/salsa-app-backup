@@ -18,6 +18,9 @@ class PosFormState extends Equatable {
   final String technician1;
   final String technician2;
   final String technician3;
+  final String technician1Nik;
+  final String technician2Nik;
+  final String technician3Nik;
   final bool showTechnician3;
   final String finalTempIn;
   final double? minFinalTempInLimit;
@@ -57,6 +60,9 @@ class PosFormState extends Equatable {
     this.technician1 = '',
     this.technician2 = '',
     this.technician3 = '',
+    this.technician1Nik = '',
+    this.technician2Nik = '',
+    this.technician3Nik = '',
     this.showTechnician3 = false,
     this.picImageDetail,
     this.temperatureInImage,
@@ -89,6 +95,9 @@ class PosFormState extends Equatable {
     String? technician1,
     String? technician2,
     String? technician3,
+    String? technician1Nik,
+    String? technician2Nik,
+    String? technician3Nik,
     bool? showTechnician3,
     CapturedImageDetail? picImageDetail,
     CapturedImageDetail? temperatureInImage,
@@ -121,6 +130,9 @@ class PosFormState extends Equatable {
       technician1: technician1 ?? this.technician1,
       technician2: technician2 ?? this.technician2,
       technician3: technician3 ?? this.technician3,
+      technician1Nik: technician1Nik ?? this.technician1Nik,
+      technician2Nik: technician2Nik ?? this.technician2Nik,
+      technician3Nik: technician3Nik ?? this.technician3Nik,
       showTechnician3: showTechnician3 ?? this.showTechnician3,
       picImageDetail: picImageDetail ?? this.picImageDetail,
       temperatureInImage: clearTemperatureInImage ? null : (temperatureInImage ?? this.temperatureInImage),
@@ -154,6 +166,9 @@ class PosFormState extends Equatable {
         technician1,
         technician2,
         technician3,
+        technician1Nik,
+        technician2Nik,
+        technician3Nik,
         showTechnician3,
         picImageDetail,
         temperatureInImage,

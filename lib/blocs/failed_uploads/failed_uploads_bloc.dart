@@ -15,6 +15,7 @@ import '../../screens/common/services/confirmation_service.dart';
 import '../service/service_repository.dart';
 import 'failed_uploads_repository.dart';
 import '../../../models/rro_cut_off/rro_cut_off_entry_model.dart';
+import 'package:salsa/models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
 
 part 'failed_uploads_event.dart';
 
@@ -86,6 +87,7 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       await loadFromBox(kServiceCallValidationPartialHiveBox, 'SC');
       await loadFromBox(kPosUnserviceablePartialBox, 'POS_UNSERVICEABLE');
       await loadFromBox(kScUnserviceablePartialBox, 'SC_UNSERVICEABLE');
+      await loadFromBox(kProofOfServiceFreezerPartialBox, kProofOfServiceFreezerModuleType);
       await loadFromBox(
           kFailedUploadsBox, 'INSTALLATION'); // RRO otomatis nebeng di sini
 
@@ -210,6 +212,10 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
             apiResult: apiResultMock,
             progressCubit: progressCubit,
             transNo: event.transNo);
+      } else if (moduleType == kProofOfServiceFreezerModuleType) {
+        result = await uploadProofOfServiceFreezerImagesToS3(
+            event.transNo, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
       } else {
         throw Exception('Modul tidak dikenal.');
       }
@@ -269,6 +275,15 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
                   .where((k) => entryBox.get(k)?.transNo == event.transNo)
                   .toList();
               await entryBox.deleteAll(keysToDelete);
+            }
+            // CLEANUP DRAFT CUCI FREEZER
+            else if (moduleType == kProofOfServiceFreezerModuleType) {
+              final cfEntryBox = await Hive.openBox<ProofOfServiceFreezerEntryModel>(
+                  kProofOfServiceFreezerEntryBox);
+              final cfKeys = cfEntryBox.keys
+                  .where((k) => cfEntryBox.get(k)?.transNo == event.transNo)
+                  .toList();
+              await cfEntryBox.deleteAll(cfKeys);
             }
 
             await clearTransactionData(event.transNo);
@@ -401,6 +416,8 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       case 'INSTALLATION':
       case 'RRO_CUT_OFF': // Sama dengan instalasi, disimpen di failed uploads global
         return kFailedUploadsBox;
+      case kProofOfServiceFreezerModuleType:
+        return kProofOfServiceFreezerPartialBox;
       default:
         return null;
     }

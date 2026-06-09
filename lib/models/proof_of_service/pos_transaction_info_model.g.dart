@@ -26,6 +26,9 @@ class PosTransactionInfoModelAdapter
       technician1: fields[5] as String?,
       technician2: fields[6] as String?,
       technician3: fields[21] as String?,
+      technician1Nik: fields[22] as String?,
+      technician2Nik: fields[23] as String?,
+      technician3Nik: fields[24] as String?,
       temperatureIn: fields[7] as String?,
       temperatureOut: fields[8] as String?,
       serviceTime: fields[9] as String?,
@@ -46,7 +49,7 @@ class PosTransactionInfoModelAdapter
   @override
   void write(BinaryWriter writer, PosTransactionInfoModel obj) {
     writer
-      ..writeByte(22)
+      ..writeByte(25)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -90,7 +93,13 @@ class PosTransactionInfoModelAdapter
       ..writeByte(20)
       ..write(obj.finalTempInNote)
       ..writeByte(21)
-      ..write(obj.technician3);
+      ..write(obj.technician3)
+      ..writeByte(22)
+      ..write(obj.technician1Nik)
+      ..writeByte(23)
+      ..write(obj.technician2Nik)
+      ..writeByte(24)
+      ..write(obj.technician3Nik);
   }
 
   @override

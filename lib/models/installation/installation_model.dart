@@ -392,6 +392,10 @@ class InstallationEntryModel {
   final bool hasTidyingService;
   @HiveField(17, defaultValue: 0)
   final int tidyingQty;
+  @HiveField(18, defaultValue: '')
+  final String technician2Id;
+  @HiveField(19, defaultValue: '')
+  final String technician3Id;
 
   InstallationEntryModel({
     required this.transNo,
@@ -401,6 +405,8 @@ class InstallationEntryModel {
     required this.technician1Name,
     this.technician2Name = '',
     this.technician3Name = '',
+    this.technician2Id = '',
+    this.technician3Id = '',
     this.startDate,
     this.finalNote,
     this.finalPhotos = const [],
@@ -422,6 +428,8 @@ class InstallationEntryModel {
     String? technician1Name,
     String? technician2Name,
     String? technician3Name,
+    String? technician2Id,
+    String? technician3Id,
     DateTime? startDate,
     String? finalNote,
     List<InstallationPhotoModel>? finalPhotos,
@@ -444,6 +452,8 @@ class InstallationEntryModel {
       technician1Name: technician1Name ?? this.technician1Name,
       technician2Name: technician2Name ?? this.technician2Name,
       technician3Name: technician3Name ?? this.technician3Name,
+      technician2Id: technician2Id ?? this.technician2Id,
+      technician3Id: technician3Id ?? this.technician3Id,
       startDate: startDate ?? this.startDate,
       finalNote: finalNote ?? this.finalNote,
       finalPhotos: finalPhotos ?? this.finalPhotos,

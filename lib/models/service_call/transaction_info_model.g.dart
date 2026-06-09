@@ -25,6 +25,9 @@ class TransactionInfoModelAdapter extends TypeAdapter<TransactionInfoModel> {
       technician1: fields[5] as String?,
       technician2: fields[6] as String?,
       technician3: fields[12] as String?,
+      technician1Nik: fields[13] as String?,
+      technician2Nik: fields[14] as String?,
+      technician3Nik: fields[15] as String?,
       picImageDetail: fields[7] as CapturedImageDetail?,
       finalTemperatureIn: fields[8] as String?,
       finalTemperatureInImage: fields[9] as CapturedImageDetail?,
@@ -36,7 +39,7 @@ class TransactionInfoModelAdapter extends TypeAdapter<TransactionInfoModel> {
   @override
   void write(BinaryWriter writer, TransactionInfoModel obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -62,7 +65,13 @@ class TransactionInfoModelAdapter extends TypeAdapter<TransactionInfoModel> {
       ..writeByte(11)
       ..write(obj.finalTempNote)
       ..writeByte(12)
-      ..write(obj.technician3);
+      ..write(obj.technician3)
+      ..writeByte(13)
+      ..write(obj.technician1Nik)
+      ..writeByte(14)
+      ..write(obj.technician2Nik)
+      ..writeByte(15)
+      ..write(obj.technician3Nik);
   }
 
   @override

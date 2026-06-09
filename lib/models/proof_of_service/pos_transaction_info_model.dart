@@ -75,6 +75,15 @@ class PosTransactionInfoModel extends HiveObject implements IPicPhotoStorable {
   @HiveField(21)
   String? technician3;
 
+  @HiveField(22)
+  String? technician1Nik;
+
+  @HiveField(23)
+  String? technician2Nik;
+
+  @HiveField(24)
+  String? technician3Nik;
+
   PosTransactionInfoModel({
     required this.transNo,
     this.picNik,
@@ -84,6 +93,9 @@ class PosTransactionInfoModel extends HiveObject implements IPicPhotoStorable {
     this.technician1,
     this.technician2,
     this.technician3,
+    this.technician1Nik,
+    this.technician2Nik,
+    this.technician3Nik,
     this.temperatureIn,
     this.temperatureOut,
     this.serviceTime,

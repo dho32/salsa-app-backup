@@ -305,6 +305,8 @@ class InstallationEntryModelAdapter
       technician1Name: fields[4] as String,
       technician2Name: fields[5] as String,
       technician3Name: fields[6] as String,
+      technician2Id: fields[18] == null ? '' : fields[18] as String,
+      technician3Id: fields[19] == null ? '' : fields[19] as String,
       startDate: fields[7] as DateTime?,
       finalNote: fields[8] as String?,
       finalPhotos: (fields[9] as List).cast<InstallationPhotoModel>(),
@@ -322,7 +324,7 @@ class InstallationEntryModelAdapter
   @override
   void write(BinaryWriter writer, InstallationEntryModel obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -358,7 +360,11 @@ class InstallationEntryModelAdapter
       ..writeByte(16)
       ..write(obj.hasTidyingService)
       ..writeByte(17)
-      ..write(obj.tidyingQty);
+      ..write(obj.tidyingQty)
+      ..writeByte(18)
+      ..write(obj.technician2Id)
+      ..writeByte(19)
+      ..write(obj.technician3Id);
   }
 
   @override

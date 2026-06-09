@@ -97,6 +97,9 @@ class _RROCutOffSummaryBodyMobileState
         'tech1': draftBox.get('${widget.transNo}_tech1', defaultValue: '-'),
         'tech2': draftBox.get('${widget.transNo}_tech2', defaultValue: '-'),
         'tech3': draftBox.get('${widget.transNo}_tech3', defaultValue: '-'),
+        'tech1Nik': draftBox.get('${widget.transNo}_tech1Nik', defaultValue: ''),
+        'tech2Nik': draftBox.get('${widget.transNo}_tech2Nik', defaultValue: ''),
+        'tech3Nik': draftBox.get('${widget.transNo}_tech3Nik', defaultValue: ''),
       };
 
       _storeFrontPhotoPath = draftBox.get('${widget.transNo}_storeFrontPhoto', defaultValue: '');
@@ -185,6 +188,9 @@ class _RROCutOffSummaryBodyMobileState
       "technician_1": _formData['tech1'],
       "technician_2": _formData['tech2'],
       "technician_3": _formData['tech3'],
+      "technician_1_nik": _formData['tech1Nik'] ?? '',
+      "technician_2_nik": _formData['tech2Nik'] ?? '',
+      "technician_3_nik": _formData['tech3Nik'] ?? '',
       "start_date": DateTime.now().toIso8601String(),
       "finish_date": DateTime.now().toIso8601String(),
       "created_by": createdBy,

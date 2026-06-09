@@ -44,6 +44,12 @@ const String kRROCutOffDetailBox = 'rro_cut_off_detail_box';
 const String kRROCutOffEntryBox = 'rro_cut_off_entry_box';
 const String kRROCutOffFormBox = 'rro_cut_off_form_box';
 const String kRROFormDraftBox = 'rro_form_draft_box';
+// Cuci Freezer
+const String kProofOfServiceFreezerDetailBox = 'proof_of_service_freezer_detail_box'; // data tugas dari server (read-only)
+const String kProofOfServiceFreezerInfoBox = 'proof_of_service_freezer_info_box'; // info transaksi: PIC + teknisi
+const String kProofOfServiceFreezerEntryBox = 'proof_of_service_freezer_entry_box'; // data wizard per-freezer
+const String kProofOfServiceFreezerPartialBox = 'proof_of_service_freezer_partial_cache'; // retry upload offline
+const String kProofOfServiceFreezerModuleType = 'CUCI_FREEZER'; // identitas modul untuk routing Schedule
 
 ///string
 const kStringDialogUnitProblem = """
