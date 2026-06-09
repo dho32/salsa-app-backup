@@ -44,7 +44,18 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
 
   bool _isWH = false;
   bool _isLoadingUser = true;
+  String _userId = '';
   List<Map<String, String>> _technicianList = [];
+
+  /// Cari NIK (technician_id) teknisi berdasarkan nama di technicianList.
+  /// Kembalikan '' bila tidak ketemu (mis. nama diketik manual / di luar list).
+  String _nikForName(String name) {
+    if (name.isEmpty) return '';
+    for (final t in _technicianList) {
+      if (t['technician_name'] == name) return t['technician_id'] ?? '';
+    }
+    return '';
+  }
   final TextEditingController _tech2SearchController = TextEditingController();
   final TextEditingController _tech3SearchController = TextEditingController();
 
@@ -79,6 +90,14 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
       box.put('${widget.transNo}_tech1', _technician1Controller.text);
       box.put('${widget.transNo}_tech2', _technician2Controller.text);
       box.put('${widget.transNo}_tech3', _technician3Controller.text);
+      // NIK teknisi: teknisi 1 = user yang login (user_id); teknisi 2/3 di-resolve
+      // dari nama lewat roster teknisi (kosong bila diketik manual / di luar list).
+      box.put('${widget.transNo}_tech1Nik',
+          _technician1Controller.text.isEmpty ? '' : _userId);
+      box.put('${widget.transNo}_tech2Nik',
+          _nikForName(_technician2Controller.text));
+      box.put('${widget.transNo}_tech3Nik',
+          _nikForName(_technician3Controller.text));
       box.put('${widget.transNo}_storeFrontPhoto', _storeFrontPhotoPath ?? '');
       box.put('${widget.transNo}_storeFrontLat', _storeFrontLat);
       box.put('${widget.transNo}_storeFrontLng', _storeFrontLng);
@@ -92,6 +111,7 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
       final user = await AuthStorage.getUser();
       final vendorCode = user['maintenance_by']?.toString() ?? '';
       final userName = user['name']?.toString() ?? '';
+      _userId = user['user_id']?.toString() ?? '';
       _isWH = vendorCode.isEmpty || vendorCode.toUpperCase() == 'WH';
 
       final configBox = Hive.box(kAppConfigBox);

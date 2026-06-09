@@ -34,6 +34,9 @@ class ServiceCallSubmittedRepository {
         'technician_1_name': transactionInfo?.technician1 ?? '',
         'technician_2_name': transactionInfo?.technician2 ?? '',
         'technician_3_name': transactionInfo?.technician3 ?? '',
+        'technician_1_nik': transactionInfo?.technician1Nik ?? '',
+        'technician_2_nik': transactionInfo?.technician2Nik ?? '',
+        'technician_3_nik': transactionInfo?.technician3Nik ?? '',
         'pic_image_detail': transactionInfo?.picImageDetail?.toJson(),
         'temp_in_image_detail_after':
             transactionInfo?.finalTemperatureInImage?.toJson(),

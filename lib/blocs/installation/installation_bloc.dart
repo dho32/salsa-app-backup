@@ -23,6 +23,17 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
 
   Box<InstallationEntryModel>? _draftBox;
   Box<InstallationDetailModel>? _taskBox;
+  List<Map<String, String>> _technicianList = [];
+
+  /// Cari NIK (technician_id) teknisi berdasarkan nama di technicianList.
+  /// Kembalikan '' bila tidak ketemu (mis. nama diketik manual / di luar list).
+  String _nikForName(String name) {
+    if (name.isEmpty) return '';
+    for (final t in _technicianList) {
+      if (t['technician_name'] == name) return t['technician_id'] ?? '';
+    }
+    return '';
+  }
 
   InstallationBloc({required this.repository})
       : serviceRepo = ServiceTaskRepository(),
@@ -80,6 +91,16 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
 
       // C. [LOGIKA BARU] GABUNGKAN LIMIT GLOBAL & LIMIT API
       final configBox = Hive.box(kAppConfigBox);
+
+      // Roster teknisi (untuk resolve NIK teknisi 2/3 dari nama saat dropdown WH).
+      final rawTechList = configBox.get('technician_list');
+      if (rawTechList is List) {
+        _technicianList = rawTechList.whereType<Map>().map((t) => {
+              'technician_id': (t['technician_id'] ?? '').toString(),
+              'technician_name': (t['technician_name'] ?? '').toString(),
+            }).toList();
+      }
+
       final rawLimits = configBox.get('limits_sc_after');
       final Map<String, MeasurementLimits> finalLimits = {};
 
@@ -159,6 +180,12 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
     final newDraft = draft.copyWith(
       technician2Name: event.technician2 ?? draft.technician2Name,
       technician3Name: event.technician3 ?? draft.technician3Name,
+      technician2Id: event.technician2 != null
+          ? _nikForName(event.technician2!)
+          : draft.technician2Id,
+      technician3Id: event.technician3 != null
+          ? _nikForName(event.technician3!)
+          : draft.technician3Id,
       startDate: event.startDate ?? draft.startDate,
     );
     await _draftBox?.put(draft.transNo, newDraft);

@@ -19,10 +19,20 @@ class PosFormCubit extends Cubit<PosFormState> {
   final Box<PosTransactionInfoModel> _transactionInfoBox;
   String _userType = '';
   String _userName = '';
+  String _userId = '';
   List<Map<String, String>> _technicianList = [];
 
   String get userType => _userType;
   List<Map<String, String>> get technicianList => _technicianList;
+
+  /// Cari NIK (technician_id) teknisi berdasarkan nama di technicianList.
+  /// Kembalikan '' bila tidak ketemu (mis. nama diketik manual / di luar list).
+  String _nikForName(String name) {
+    if (name.isEmpty) return '';
+    final match = _technicianList
+        .firstWhereOrNull((t) => t['technician_name'] == name);
+    return match?['technician_id'] ?? '';
+  }
 
   // Helper Key Konsisten
   String _getHiveKey(String transNo) =>
@@ -39,6 +49,7 @@ class PosFormCubit extends Cubit<PosFormState> {
     final userData = await AuthStorage.getUser();
     _userType = userData['maintenance_type'] ?? 'WH';
     _userName = userData['name'] ?? '';
+    _userId = userData['user_id'] ?? '';
 
     final configBox = Hive.box(kAppConfigBox);
     final rawList = configBox.get('technician_list');
@@ -65,6 +76,16 @@ class PosFormCubit extends Cubit<PosFormState> {
         technician1: info.technician1 ?? '',
         technician2: info.technician2 ?? '',
         technician3: info.technician3 ?? '',
+        // Teknisi 1 = user yang login → NIK selalu user_id.
+        // Teknisi 2/3 pakai NIK tersimpan, fallback resolve dari nama (draft lama).
+        technician1Nik:
+            (info.technician1 ?? '').isEmpty ? '' : _userId,
+        technician2Nik: (info.technician2Nik?.isNotEmpty ?? false)
+            ? info.technician2Nik!
+            : _nikForName(info.technician2 ?? ''),
+        technician3Nik: (info.technician3Nik?.isNotEmpty ?? false)
+            ? info.technician3Nik!
+            : _nikForName(info.technician3 ?? ''),
         showTechnician3: (info.technician3 ?? '').isNotEmpty,
         tempIn: info.temperatureIn ?? '',
         tempOut: info.temperatureOut ?? '',
@@ -87,12 +108,19 @@ class PosFormCubit extends Cubit<PosFormState> {
         initialTechnician1 = _userName;
       }
 
+      final String initialTechnician1Nik =
+          initialTechnician1.isEmpty ? '' : _userId;
+
       final newDraft = PosTransactionInfoModel(
         transNo: transNo,
         technician1: initialTechnician1,
+        technician1Nik: initialTechnician1Nik,
       );
       _transactionInfoBox.put(hiveKey, newDraft);
-      emit(state.copyWith(technician1: initialTechnician1));
+      emit(state.copyWith(
+        technician1: initialTechnician1,
+        technician1Nik: initialTechnician1Nik,
+      ));
     }
     _validateForm();
   }
@@ -194,9 +222,18 @@ class PosFormCubit extends Cubit<PosFormState> {
   void picPhoneChanged(String value) => emit(state.copyWith(picPhone: value));
   void tempInChanged(String value) => emit(state.copyWith(tempIn: value));
   void tempOutChanged(String value) => emit(state.copyWith(tempOut: value));
-  void technician1Changed(String value) => emit(state.copyWith(technician1: value));
-  void technician2Changed(String value) => emit(state.copyWith(technician2: value));
-  void technician3Changed(String value) => emit(state.copyWith(technician3: value));
+  void technician1Changed(String value) => emit(state.copyWith(
+        technician1: value,
+        technician1Nik: value.isEmpty ? '' : _userId,
+      ));
+  void technician2Changed(String value) => emit(state.copyWith(
+        technician2: value,
+        technician2Nik: _nikForName(value),
+      ));
+  void technician3Changed(String value) => emit(state.copyWith(
+        technician3: value,
+        technician3Nik: _nikForName(value),
+      ));
   void toggleTechnician3(bool show) => emit(state.copyWith(showTechnician3: show));
   void tempInImageChanged(CapturedImageDetail? image) {
     if (image == null) {
@@ -284,6 +321,9 @@ class PosFormCubit extends Cubit<PosFormState> {
     infoToSave.technician1 = state.technician1;
     infoToSave.technician2 = state.technician2;
     infoToSave.technician3 = state.technician3;
+    infoToSave.technician1Nik = state.technician1Nik;
+    infoToSave.technician2Nik = state.technician2Nik;
+    infoToSave.technician3Nik = state.technician3Nik;
     infoToSave.temperatureIn = state.tempIn;
     infoToSave.temperatureOut = state.tempOut;
     infoToSave.serviceTime = state.serviceTime;

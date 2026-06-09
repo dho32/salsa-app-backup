@@ -53,6 +53,9 @@ class RROCutOffSubmitBloc
             '${event.transNo}_tech1',
             '${event.transNo}_tech2',
             '${event.transNo}_tech3',
+            '${event.transNo}_tech1Nik',
+            '${event.transNo}_tech2Nik',
+            '${event.transNo}_tech3Nik',
             '${event.transNo}_storeFrontPhoto',
             '${event.transNo}_storeFrontLat',
             '${event.transNo}_storeFrontLng'
