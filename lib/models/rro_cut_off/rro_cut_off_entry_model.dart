@@ -68,6 +68,11 @@ class RROCutOffPhotoModel {
   @HiveField(5)
   final String deviceModel;
 
+  // Slot foto (mis. 'before'/'after'/'barcode') — null untuk draft lama
+  // yang fotonya masih bebas tanpa slot.
+  @HiveField(6)
+  final String? slotId;
+
   RROCutOffPhotoModel({
     required this.imagePath,
     required this.imageFileName,
@@ -75,6 +80,7 @@ class RROCutOffPhotoModel {
     required this.latitude,
     required this.longitude,
     required this.deviceModel,
+    this.slotId,
   });
 
   Map<String, dynamic> toJson() => {

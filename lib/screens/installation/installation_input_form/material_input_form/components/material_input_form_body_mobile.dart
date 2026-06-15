@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -338,6 +339,10 @@ class _MaterialInputFormBodyMobileState
         _showError("$label: Panjang tidak valid!");
         return null;
       }
+      if (len < 5 || len > 99) {
+        _showError("$label: Panjang harus antara 5 - 99 meter!");
+        return null;
+      }
 
       return InstallationMaterialItemModel(
           articleId: artId,
@@ -383,6 +388,43 @@ class _MaterialInputFormBodyMobileState
         content: Text(msg),
         backgroundColor: Colors.red[800],
         behavior: SnackBarBehavior.floating));
+  }
+
+  // Info saat ketikan panjang ditolak formatter — di-throttle supaya tidak
+  // spam snackbar ketika teknisi menekan tombol berulang kali.
+  DateTime? _lastRangeInfoAt;
+
+  void _showRangeInfo() {
+    final now = DateTime.now();
+    if (_lastRangeInfoAt != null &&
+        now.difference(_lastRangeInfoAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastRangeInfoAt = now;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Row(children: [
+          Icon(Icons.info_outline, color: Colors.white),
+          SizedBox(width: 8),
+          Expanded(
+              child: Text(
+                  "Panjang maksimal 99 meter (maks 2 digit, desimal boleh)")),
+        ]),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.orange[800],
+        behavior: SnackBarBehavior.floating));
+  }
+
+  // Formatter panjang: maks 2 digit sebelum koma + 2 digit desimal.
+  // Ketikan yang tidak valid DITOLAK (nilai lama dipertahankan, tidak
+  // mengosongkan field) sambil menampilkan info batas ke teknisi.
+  TextInputFormatter _lengthRangeFormatter() {
+    final pattern = RegExp(r'^\d{0,2}([.,]\d{0,2})?$');
+    return TextInputFormatter.withFunction((oldValue, newValue) {
+      if (newValue.text.isEmpty) return newValue;
+      if (pattern.hasMatch(newValue.text)) return newValue;
+      _showRangeInfo();
+      return oldValue;
+    });
   }
 
   Widget _buildFixedRow(
@@ -683,12 +725,16 @@ class _MaterialInputFormBodyMobileState
     return TextFormField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      // Qty material hanya boleh 5 - 99: maks 2 digit sebelum koma
+      inputFormatters: [_lengthRangeFormatter()],
       style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
           isDense: true,
           contentPadding:
           const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
           labelText: label,
+          helperText: "5 - 99",
+          helperStyle: const TextStyle(fontSize: 10, color: Colors.grey),
           border: _inputBorder,
           enabledBorder: _inputBorder,
           focusedBorder: _focusedBorder,

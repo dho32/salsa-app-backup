@@ -137,6 +137,7 @@ class LocationValidationBloc
         technicianName: technicianName,
         deviceModel: deviceModel,
         location: locationString,
+        photoLabel: 'PIC Toko',
       );
 
       final String? finalImagePath =

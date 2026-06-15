@@ -257,8 +257,9 @@ class _MaterialEvidenceBodyMobileState
           transNo: widget.transNo,
           formattedDate: formattedDate,
           technicianName: techName,
-          deviceModel: 'Mobile App',
+          deviceModel: user['device_model'] ?? 'Unknown Device',
           location: '',
+          photoLabel: 'Evidence ${item.label}',
         );
 
         final String? resultPath = await WatermarkService.processImage(req);

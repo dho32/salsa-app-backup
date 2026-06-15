@@ -27,6 +27,9 @@ class MeasurementInputWidget extends StatefulWidget {
   final ValueChanged<bool>? onSkipChanged;
   final ValueChanged<String>? onEditingComplete;
 
+  /// Label jenis foto untuk watermark. Default: [label].
+  final String? photoLabel;
+
   const MeasurementInputWidget({
     super.key,
     required this.controller,
@@ -41,6 +44,7 @@ class MeasurementInputWidget extends StatefulWidget {
     this.isSkipped = false,
     this.onSkipChanged,
     this.onEditingComplete,
+    this.photoLabel,
   });
 
   @override
@@ -168,6 +172,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
+          photoLabel: widget.photoLabel ?? widget.label,
         );
 
         final String? finalImagePath =

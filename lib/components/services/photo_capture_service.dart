@@ -16,7 +16,8 @@ import 'watermark_service.dart';
 /// Pola identik dengan `MeasurementInputWidget._takePhoto` supaya konsisten di
 /// seluruh app. Modul Cuci Freezer reuse ini untuk foto kondisi awal (Step 1)
 /// dan foto setelah cuci (Step 3).
-Future<CapturedImageDetail?> captureWatermarkedPhoto(String transNo) async {
+Future<CapturedImageDetail?> captureWatermarkedPhoto(String transNo,
+    {String? photoLabel}) async {
   final picker = ImagePicker();
   final XFile? image = await picker.pickImage(
     source: ImageSource.camera,
@@ -50,6 +51,7 @@ Future<CapturedImageDetail?> captureWatermarkedPhoto(String transNo) async {
     formattedDate: formattedDate,
     technicianName: technicianName,
     deviceModel: deviceModel,
+    photoLabel: photoLabel,
   );
 
   final String? finalImagePath = await WatermarkService.processImage(request);

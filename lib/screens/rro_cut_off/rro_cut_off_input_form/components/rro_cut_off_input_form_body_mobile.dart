@@ -21,6 +21,29 @@ import '../../../../models/rro_cut_off/rro_cut_off_entry_model.dart';
 // 🔥 JANGAN LUPA IMPORT QR SCAN PAGE AKANG DI SINI
 // import 'path/to/qr_scan_page.dart';
 
+// Slot foto bongkar berlabel (pola sama dengan form Installation), semuanya
+// wajib. Urutan list = urutan penyimpanan foto di Hive/payload.
+class _RROPhotoSlot {
+  final String id;
+  final String label;
+  const _RROPhotoSlot(this.id, this.label);
+}
+
+const List<_RROPhotoSlot> _kIndoorSlots = [
+  // Posisi unit indoor mana yang dibongkar.
+  _RROPhotoSlot('before', 'Indoor Sebelum Dibongkar'),
+  // Cek bekas posisi indoor dirapikan atau tidak.
+  _RROPhotoSlot('after', 'Bekas Posisi Indoor'),
+  // Cek no seri unit yang dibongkar sesuai atau tidak.
+  _RROPhotoSlot('barcode', 'Stiker Barcode'),
+];
+
+const List<_RROPhotoSlot> _kOutdoorSlots = [
+  _RROPhotoSlot('before', 'Outdoor Sebelum Dibongkar'),
+  _RROPhotoSlot('after', 'Bekas Outdoor Setelah Dibongkar'),
+  _RROPhotoSlot('barcode', 'Stiker Barcode'),
+];
+
 class RROCutOffInputFormBodyMobile extends StatefulWidget {
   final String transNo;
   final RROCutOffDetailItem unitData;
@@ -41,10 +64,15 @@ class RROCutOffInputFormBodyMobile extends StatefulWidget {
 class _RROCutOffInputFormBodyMobileState
     extends State<RROCutOffInputFormBodyMobile> {
   String? _selectedSerialNumber;
-  List<RROCutOffPhotoModel> _photos = [];
+  final Map<String, RROCutOffPhotoModel> _photoSlots = {};
 
-  bool _isTakingPhoto = false;
+  String? _capturingSlotId;
   bool _isProcessingWatermark = false;
+
+  List<_RROPhotoSlot> get _slots =>
+      widget.unitData.unitType.toUpperCase() == 'OUT'
+          ? _kOutdoorSlots
+          : _kIndoorSlots;
 
   // 🔥 TAMBAHAN VARIABEL MODE MANUAL UNTUK TRIK PSIKOLOGIS
   bool _isManualMode = false;
@@ -61,6 +89,11 @@ class _RROCutOffInputFormBodyMobileState
       final uniqueKey =
           '${widget.transNo}_${widget.unitData.unitType}_${widget.unitData.unitIndex}';
 
+      final photos = [
+        for (final slot in _slots)
+          if (_photoSlots[slot.id] != null) _photoSlots[slot.id]!,
+      ];
+
       final entry = RROCutOffEntryModel(
         transNo: widget.transNo,
         rroArticleNo: widget.unitData.rroArticleNo,
@@ -68,8 +101,9 @@ class _RROCutOffInputFormBodyMobileState
         unitIndex: widget.unitData.unitIndex,
         lineNo: widget.unitData.lineNo,
         selectedSerialNumber: _selectedSerialNumber,
-        photos: _photos,
-        isCompleted: _selectedSerialNumber != null && _photos.isNotEmpty,
+        photos: photos,
+        isCompleted: _selectedSerialNumber != null &&
+            _slots.every((s) => _photoSlots.containsKey(s.id)),
       );
 
       await box.put(uniqueKey, entry);
@@ -86,9 +120,26 @@ class _RROCutOffInputFormBodyMobileState
 
     final existingData = box.get(uniqueKey);
     if (existingData != null) {
+      final loaded = <String, RROCutOffPhotoModel>{};
+      int fallbackIdx = 0;
+      for (final photo in existingData.photos) {
+        String? sid = photo.slotId;
+        if (sid == null || !_slots.any((s) => s.id == sid)) {
+          // Foto draft lama tanpa slot -> isi slot kosong berikutnya.
+          while (fallbackIdx < _slots.length &&
+              loaded.containsKey(_slots[fallbackIdx].id)) {
+            fallbackIdx++;
+          }
+          if (fallbackIdx >= _slots.length) continue;
+          sid = _slots[fallbackIdx].id;
+        }
+        loaded[sid] = photo;
+      }
       setState(() {
         _selectedSerialNumber = existingData.selectedSerialNumber;
-        _photos = List<RROCutOffPhotoModel>.from(existingData.photos);
+        _photoSlots
+          ..clear()
+          ..addAll(loaded);
       });
     }
   }
@@ -158,13 +209,10 @@ class _RROCutOffInputFormBodyMobileState
     }
   }
 
-  Future<void> _handleTakePhoto() async {
-    if (_photos.length >= 5) {
-      _showErrorSnack("Maksimal 5 foto dokumentasi bongkar.");
-      return;
-    }
+  Future<void> _handleTakeSlotPhoto(_RROPhotoSlot slot) async {
+    if (_capturingSlotId != null) return;
 
-    setState(() => _isTakingPhoto = true);
+    setState(() => _capturingSlotId = slot.id);
 
     try {
       final picker = ImagePicker();
@@ -202,6 +250,7 @@ class _RROCutOffInputFormBodyMobileState
           technicianName: techName,
           deviceModel: deviceModel,
           location: locationString,
+          photoLabel: slot.label,
         );
 
         final String? resultPath = await WatermarkService.processImage(req);
@@ -215,10 +264,11 @@ class _RROCutOffInputFormBodyMobileState
             latitude: tempLat,
             longitude: tempLng,
             deviceModel: deviceModel,
+            slotId: slot.id,
           );
 
           setState(() {
-            _photos.add(newPhotoModel);
+            _photoSlots[slot.id] = newPhotoModel;
           });
           _autoSaveToHive();
         } else {
@@ -230,14 +280,14 @@ class _RROCutOffInputFormBodyMobileState
     } finally {
       setState(() {
         _isProcessingWatermark = false;
-        _isTakingPhoto = false;
+        _capturingSlotId = null;
       });
     }
   }
 
-  void _removePhoto(int index) {
+  void _removeSlotPhoto(String slotId) {
     setState(() {
-      _photos.removeAt(index);
+      _photoSlots.remove(slotId);
     });
     _autoSaveToHive();
   }
@@ -258,9 +308,11 @@ class _RROCutOffInputFormBodyMobileState
       _showErrorSnack('Pilih Serial Number terlebih dahulu');
       return;
     }
-    if (_photos.isEmpty) {
-      _showErrorSnack('Minimal 1 foto unit bongkar wajib diambil');
-      return;
+    for (final slot in _slots) {
+      if (!_photoSlots.containsKey(slot.id)) {
+        _showErrorSnack('Foto ${slot.label} wajib diambil!');
+        return;
+      }
     }
 
     await _autoSaveToHive();
@@ -486,105 +538,31 @@ class _RROCutOffInputFormBodyMobileState
           ),
           const SizedBox(height: 24),
 
-          // --- SISA KODE GRID FOTO DAN TOMBOL SIMPAN SAMA SEPERTI SEBELUMNYA ---
+          // --- FOTO UNIT BONGKAR (SLOT BERLABEL, SEMUA WAJIB) ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Foto Unit Bongkar',
+              const Text('Foto Unit Bongkar (Wajib)',
                   style: TextStyle(
                       fontWeight: FontWeight.bold, color: Colors.black87)),
-              Text("${_photos.length}/5 Foto",
-                  style: TextStyle(
+              Text("${_photoSlots.length}/${_slots.length} Foto",
+                  style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: _photos.length == 5
-                          ? Colors.red.shade200
-                          : Colors.black87)),
+                      color: Colors.black87)),
             ],
           ),
           const SizedBox(height: 8),
-          Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10),
-              itemCount: _photos.length + 1,
-              itemBuilder: (context, index) {
-                if (index == _photos.length) {
-                  if (_photos.length >= 5) return const SizedBox.shrink();
-                  return InkWell(
-                    onTap: _isProcessingWatermark ? null : _handleTakePhoto,
-                    child: Container(
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.grey.shade300, width: 2)),
-                      child: _isTakingPhoto || _isProcessingWatermark
-                          ? const Center(child: CircularProgressIndicator())
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                  Icon(Icons.add_a_photo,
-                                      size: 30, color: Colors.grey.shade400),
-                                  const SizedBox(height: 4),
-                                  const Text("Tambah",
-                                      style: TextStyle(
-                                          color: Colors.grey, fontSize: 11))
-                                ]),
-                    ),
-                  );
-                }
-
-                final photoModel = _photos[index];
-                final imgPath = photoModel.imagePath;
-
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        final imgDetail = CapturedImageDetail(
-                            imagePath: imgPath,
-                            timestamp:
-                                DateTime.tryParse(photoModel.timestamp) ??
-                                    DateTime.now(),
-                            latitude: photoModel.latitude,
-                            longitude: photoModel.longitude,
-                            address: '',
-                            technicianName: '',
-                            deviceModel: photoModel.deviceModel,
-                            transNo: widget.transNo);
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => FullScreenImageViewer(
-                                    imageDetail: imgDetail,
-                                    isNetworkImage: false)));
-                      },
-                      child: Hero(
-                          tag: imgPath,
-                          child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.file(File(imgPath),
-                                  fit: BoxFit.cover))),
-                    ),
-                    Positioned(
-                        top: 4,
-                        right: 4,
-                        child: InkWell(
-                            onTap: () => _removePhoto(index),
-                            child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle),
-                                child: const Icon(Icons.close,
-                                    size: 14, color: Colors.white)))),
-                  ],
-                );
-              },
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < _slots.length; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(child: _buildPhotoSlotTile(_slots[i])),
+              ],
+            ],
           ),
+          const Spacer(),
           if (_isProcessingWatermark)
             const Padding(
                 padding: EdgeInsets.only(top: 8),
@@ -605,6 +583,121 @@ class _RROCutOffInputFormBodyMobileState
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           )
         ],
+      ),
+    );
+  }
+
+  // Tile slot foto — pola sama dengan form Installation: kosong -> tap untuk
+  // ambil foto, terisi -> tap untuk preview full-screen, X untuk hapus.
+  Widget _buildPhotoSlotTile(_RROPhotoSlot slot) {
+    final photo = _photoSlots[slot.id];
+    final filled = photo != null;
+    final capturing = _capturingSlotId == slot.id;
+    final primary = Theme.of(context).primaryColor;
+
+    return GestureDetector(
+      onTap: _capturingSlotId != null || _isProcessingWatermark
+          ? null
+          : (filled
+              ? () {
+                  final imgDetail = CapturedImageDetail(
+                      imagePath: photo.imagePath,
+                      timestamp:
+                          DateTime.tryParse(photo.timestamp) ?? DateTime.now(),
+                      latitude: photo.latitude,
+                      longitude: photo.longitude,
+                      address: '',
+                      technicianName: '',
+                      deviceModel: photo.deviceModel,
+                      transNo: widget.transNo);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => FullScreenImageViewer(
+                              imageDetail: imgDetail, isNetworkImage: false)));
+                }
+              : () => _handleTakeSlotPhoto(slot)),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: filled ? primary : Colors.grey.shade300,
+              width: filled ? 1.5 : 1,
+            ),
+            image: filled
+                ? DecorationImage(
+                    image: FileImage(File(photo.imagePath)), fit: BoxFit.cover)
+                : null,
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (!filled)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_a_photo_outlined,
+                        color: Colors.grey.shade600, size: 26),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(slot.label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.grey.shade700)),
+                    ),
+                  ],
+                ),
+              if (filled) ...[
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    color: Colors.black54,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                    child: Text(slot.label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.white)),
+                  ),
+                ),
+                const Positioned(
+                  top: 3,
+                  left: 3,
+                  child:
+                      Icon(Icons.check_circle, color: Colors.white, size: 18),
+                ),
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: GestureDetector(
+                    onTap: () => _removeSlotPhoto(slot.id),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                          color: Colors.black54, shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(3),
+                      child: const Icon(Icons.close,
+                          size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+              if (capturing && !filled)
+                const Center(
+                  child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

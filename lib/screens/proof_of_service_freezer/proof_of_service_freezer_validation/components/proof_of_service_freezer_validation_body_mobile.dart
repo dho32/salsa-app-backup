@@ -506,10 +506,18 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   // ---------------------------------------------------------------------------
   // Photo capture
   // ---------------------------------------------------------------------------
+  String _slotLabel(String slotId) {
+    for (final s in kPosfPhotoSlots) {
+      if (s.id == slotId) return s.label;
+    }
+    return slotId;
+  }
+
   Future<void> _captureInitialSlot(String slotId) async {
     setState(() => _capturingInitial = true);
     try {
-      final img = await captureWatermarkedPhoto(_cubit.transNo);
+      final img = await captureWatermarkedPhoto(_cubit.transNo,
+          photoLabel: '${_slotLabel(slotId)} - Before');
       if (img != null) _cubit.setInitialPhoto(slotId, img);
     } finally {
       if (mounted) setState(() => _capturingInitial = false);
@@ -519,7 +527,8 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   Future<void> _captureAfterSlot(String slotId) async {
     setState(() => _capturingAfter = true);
     try {
-      final img = await captureWatermarkedPhoto(_cubit.transNo);
+      final img = await captureWatermarkedPhoto(_cubit.transNo,
+          photoLabel: '${_slotLabel(slotId)} - After');
       if (img != null) _cubit.setAfterPhoto(slotId, img);
     } finally {
       if (mounted) setState(() => _capturingAfter = false);

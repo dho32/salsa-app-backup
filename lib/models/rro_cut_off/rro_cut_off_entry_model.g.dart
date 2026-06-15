@@ -81,13 +81,14 @@ class RROCutOffPhotoModelAdapter extends TypeAdapter<RROCutOffPhotoModel> {
       latitude: fields[3] as double,
       longitude: fields[4] as double,
       deviceModel: fields[5] as String,
+      slotId: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, RROCutOffPhotoModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.imagePath)
       ..writeByte(1)
@@ -99,7 +100,9 @@ class RROCutOffPhotoModelAdapter extends TypeAdapter<RROCutOffPhotoModel> {
       ..writeByte(4)
       ..write(obj.longitude)
       ..writeByte(5)
-      ..write(obj.deviceModel);
+      ..write(obj.deviceModel)
+      ..writeByte(6)
+      ..write(obj.slotId);
   }
 
   @override

@@ -164,6 +164,18 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
     _controllers.clear();
   }
 
+  // Label watermark foto unit sesuai tipe unit yang sedang divalidasi.
+  String get _unitPhotoLabel {
+    switch (widget.unitType.toUpperCase()) {
+      case 'IN':
+        return 'Unit Indoor';
+      case 'OUT':
+        return 'Unit Outdoor';
+      default:
+        return 'Unit';
+    }
+  }
+
   Future<void> _handlePhoto(BuildContext context,
       {required bool isBefore}) async {
     final currentState = context.read<PosValidationBloc>().state;
@@ -221,6 +233,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
+          photoLabel: '$_unitPhotoLabel - ${isBefore ? "Before" : "After"}',
         );
 
         final String? finalImagePath =
@@ -293,6 +306,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
           formattedDate: formattedDate,
           technicianName: userData['name'] ?? 'Unknown',
           deviceModel: userData['device_model'] ?? 'Unknown Device',
+          photoLabel: 'Bukti Remark',
         );
         final String? finalImagePath =
             await WatermarkService.processImage(request);

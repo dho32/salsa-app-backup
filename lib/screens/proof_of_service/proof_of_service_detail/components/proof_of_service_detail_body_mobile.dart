@@ -431,6 +431,7 @@ class _ProofOfServiceDetailBodyMobileState
             // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
             controller: _tempInController,
             label: 'Suhu Dalam Ruangan (°C)',
+            photoLabel: 'Suhu Dalam Ruangan - Before Cleaning',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             limits: _indoorLimits,
             transNo: widget.transNo,
@@ -466,6 +467,7 @@ class _ProofOfServiceDetailBodyMobileState
             // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
             controller: _tempOutController,
             label: 'Suhu Luar Ruangan (°C)',
+            photoLabel: 'Suhu Luar Ruangan',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             limits: _outdoorLimits,
             transNo: widget.transNo,
@@ -531,6 +533,7 @@ class _ProofOfServiceDetailBodyMobileState
           MeasurementInputWidget(
             controller: _finalTempController,
             label: 'Suhu Dalam Ruangan (°C)',
+            photoLabel: 'Suhu Dalam Ruangan - After Cleaning',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             limits: finalTempLimits,
             transNo: widget.transNo,

@@ -126,6 +126,7 @@ class _InstallationSummaryBodyMobileState
           technicianName: user['name'] ?? 'Teknisi',
           deviceModel: deviceModel,
           location: '${position.latitude}, ${position.longitude}',
+          photoLabel: 'Bukti Transport',
         );
 
         final String? resultPath = await WatermarkService.processImage(req);

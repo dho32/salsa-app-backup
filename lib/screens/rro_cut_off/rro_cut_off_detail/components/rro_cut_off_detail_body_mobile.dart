@@ -219,6 +219,7 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
           technicianName: techName,
           deviceModel: deviceModel,
           location: locationString,
+          photoLabel: 'Toko Tampak Depan',
         );
 
         final String? resultPath = await WatermarkService.processImage(req);
@@ -893,7 +894,9 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
                   future: Hive.openBox<RROCutOffEntryModel>(kRROCutOffEntryBox),
                   builder: (context, snapshot) {
                     bool isCompleted = false;
+                    bool isDraft = false;
                     String? savedSn;
+                    int photoCount = 0;
                     if (snapshot.hasData) {
                       final box = snapshot.data!;
                       final uniqueKey = '${widget.transNo}_${units[i].unitType}_${units[i].unitIndex}';
@@ -901,6 +904,10 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
                       if (entry != null) {
                         isCompleted = entry.isCompleted;
                         savedSn = entry.selectedSerialNumber;
+                        photoCount = entry.photos.length;
+                        // Draft: sudah ada isian (SN/foto) tapi belum lengkap.
+                        isDraft = !isCompleted &&
+                            (savedSn != null || entry.photos.isNotEmpty);
                       }
                     }
                     return ListTile(
@@ -910,25 +917,45 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('UNIT $title: ${units[i].unitIndex}', style: const TextStyle(fontSize: 12)),
-                          if (isCompleted && savedSn != null)
+                          if (savedSn != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Text('SN: $savedSn', style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                            ),
+                          if (isDraft)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_note, size: 16, color: Colors.orange.shade800),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                      'Draft • $photoCount foto tersimpan${savedSn == null ? ' • SN belum dipilih' : ''}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.orange.shade800)),
+                                ],
+                              ),
                             ),
                         ],
                       ),
                       trailing: isCompleted
                           ? const Icon(Icons.check_circle, size: 20, color: Colors.green)
-                          : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                          : isDraft
+                              ? Icon(Icons.pending, size: 20, color: Colors.orange.shade700)
+                              : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                       onTap: () async {
                         final serialNumbers = (context.read<RROCutOffDetailBloc>().state as RROCutOffDetailLoaded).data.serialNumber;
-                        final isUpdated = await Navigator.push(
+                        await Navigator.push(
                           context,
                           MaterialPageRoute(
                               builder: (context) => RROCutOffInputFormScreen(
                                   transNo: widget.transNo, unitData: units[i], availableSerialNumbers: serialNumbers)),
                         );
-                        if (isUpdated == true && mounted) setState(() {});
+                        // Refresh selalu — draft auto-save juga harus terlihat
+                        // di list meski user keluar lewat tombol back.
+                        if (mounted) setState(() {});
                       },
                     );
                   });

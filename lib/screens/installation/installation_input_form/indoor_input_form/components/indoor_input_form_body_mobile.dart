@@ -27,6 +27,24 @@ import '../../../../../models/common/captured_image_detail.dart';
 import '../../../../../models/common/measurement_entry.dart';
 import '../../../../../models/common/measurement_limits.dart';
 
+// Slot foto berlabel (pola sama dengan POS Freezer), semuanya wajib.
+// Urutan list = urutan index measurementId IN_INSTALL_PHOTO_1..3.
+class _InstallPhotoSlot {
+  final String id;
+  final String label;
+  final bool isMandatory;
+  const _InstallPhotoSlot(this.id, this.label, {this.isMandatory = false});
+}
+
+const List<_InstallPhotoSlot> _kInstallPhotoSlots = [
+  // Tampak dekat: cek perapihan sudah sesuai atau belum.
+  _InstallPhotoSlot('close', 'Tampak Dekat Indoor', isMandatory: true),
+  // Tampak jauh: cek posisi indoor ada di atas apa.
+  _InstallPhotoSlot('far', 'Tampak Jauh Indoor', isMandatory: true),
+  // Stiker barcode: cek stiker sudah dipasang oleh MTC/vendor.
+  _InstallPhotoSlot('barcode', 'Stiker Barcode', isMandatory: true),
+];
+
 class IndoorInputFormBodyMobile extends StatefulWidget {
   final InstallationTargetUnitModel target;
   final InstallationUnitModel? existingData;
@@ -71,8 +89,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
   List<CapturedImageDetail> _notePhotos = [];
   bool _isTakingNotePhoto = false;
 
-  final List<CapturedImageDetail> _installPhotos = [];
-  bool _isTakingInstallPhoto = false;
+  final Map<String, CapturedImageDetail> _installPhotoSlots = {};
+  String? _capturingSlotId;
   bool _isProcessingWatermark = false;
 
   bool _isSubmittingFinal = false;
@@ -220,9 +238,21 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       installMetrics.sort((a, b) => a.measurementId.compareTo(b.measurementId));
 
       for (var m in installMetrics) {
-        if (m.photo != null) {
-          _installPhotos.add(_mapPhotoModelToDetail(m.photo!));
+        if (m.photo == null) continue;
+        final detail = _mapPhotoModelToDetail(m.photo!);
+        final idx = int.tryParse(m.measurementId.split('_').last);
+        if (idx != null && idx >= 1 && idx <= _kInstallPhotoSlots.length) {
+          _installPhotoSlots[_kInstallPhotoSlots[idx - 1].id] = detail;
+        } else if (idx == null) {
+          // Draft lama tanpa index valid -> isi slot kosong pertama.
+          for (final slot in _kInstallPhotoSlots) {
+            if (!_installPhotoSlots.containsKey(slot.id)) {
+              _installPhotoSlots[slot.id] = detail;
+              break;
+            }
+          }
         }
+        // idx di luar jumlah slot (foto "Tambahan" dari versi lama) diabaikan.
       }
     }
 
@@ -320,15 +350,16 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       photo: measurementPhoto,
     ));
 
-    for (int i = 0; i < _installPhotos.length; i++) {
-      final img = _installPhotos[i];
-      final id = "${_kInstallPhotoBaseId}_${i + 1}";
+    for (int i = 0; i < _kInstallPhotoSlots.length; i++) {
+      final slot = _kInstallPhotoSlots[i];
+      final img = _installPhotoSlots[slot.id];
+      if (img == null) continue;
       measurements.add(InstallationMeasurementModel(
-        measurementId: id,
+        measurementId: "${_kInstallPhotoBaseId}_${i + 1}",
         unit: '',
         value: 0,
         isSkipped: false,
-        note: 'Dokumentasi Pemasangan ${i + 1}',
+        note: 'Foto ${slot.label}',
         photo: _buildPhotoModel(img),
       ));
     }
@@ -368,27 +399,40 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
     );
   }
 
-  Future<void> _handleTakePhoto({required bool isInstallPhoto}) async {
-    if (isInstallPhoto) {
-      if (_installPhotos.length >= 5) {
-        _showErrorSnack("Maksimal 5 foto dokumentasi pemasangan.");
-        return;
+  Future<void> _handleTakeSlotPhoto(_InstallPhotoSlot slot) async {
+    if (_capturingSlotId != null) return;
+    setState(() => _capturingSlotId = slot.id);
+    try {
+      final imgDetail = await _captureWatermarkedImage(photoLabel: slot.label);
+      if (imgDetail != null) {
+        setState(() => _installPhotoSlots[slot.id] = imgDetail);
+        if (!_isOriginalCompleted) _forceSaveDraft();
       }
-    } else {
-      if (_notePhotos.isNotEmpty) {
-        _showErrorSnack("Maksimal 1 foto bukti kendala.");
-        return;
-      }
+    } finally {
+      if (mounted) setState(() => _capturingSlotId = null);
     }
+  }
 
-    setState(() {
-      if (isInstallPhoto) {
-        _isTakingInstallPhoto = true;
-      } else {
-        _isTakingNotePhoto = true;
+  Future<void> _handleTakeNotePhoto() async {
+    if (_notePhotos.isNotEmpty) {
+      _showErrorSnack("Maksimal 1 foto bukti kendala.");
+      return;
+    }
+    setState(() => _isTakingNotePhoto = true);
+    try {
+      final imgDetail =
+          await _captureWatermarkedImage(photoLabel: 'Bukti Kendala Suhu');
+      if (imgDetail != null) {
+        setState(() => _notePhotos = [imgDetail]);
+        if (!_isOriginalCompleted) _forceSaveDraft();
       }
-    });
+    } finally {
+      if (mounted) setState(() => _isTakingNotePhoto = false);
+    }
+  }
 
+  Future<CapturedImageDetail?> _captureWatermarkedImage(
+      {String? photoLabel}) async {
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -397,75 +441,56 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
         maxHeight: 1280,
         imageQuality: 85,
       );
+      if (image == null) return null;
 
-      if (image != null) {
-        setState(() => _isProcessingWatermark = true);
+      setState(() => _isProcessingWatermark = true);
 
-        final user = await AuthStorage.getUser();
-        final directory = await getApplicationDocumentsDirectory();
-        final String fileName =
-            'WM_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final String targetPath = p.join(directory.path, fileName);
-        final String techName = user['name'] ?? 'Teknisi';
-        final timestamp = DateTime.now();
+      final user = await AuthStorage.getUser();
+      final directory = await getApplicationDocumentsDirectory();
+      final String fileName = 'WM_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String targetPath = p.join(directory.path, fileName);
+      final String techName = user['name'] ?? 'Teknisi';
+      final String deviceModel = user['device_model'] ?? 'Unknown Device';
+      final timestamp = DateTime.now();
 
-        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+      final zone = getIndonesianTimezoneAbbreviation(timestamp);
 
-        final formattedDate =
-            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
+      final formattedDate =
+          '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(timestamp)} $zone';
 
-        final req = WatermarkRequest(
-          originalPath: image.path,
-          targetPath: targetPath,
-          transNo: widget.transNo,
-          formattedDate: formattedDate,
-          technicianName: techName,
-          deviceModel: 'Mobile App',
-          location: '',
-        );
+      final req = WatermarkRequest(
+        originalPath: image.path,
+        targetPath: targetPath,
+        transNo: widget.transNo,
+        formattedDate: formattedDate,
+        technicianName: techName,
+        deviceModel: deviceModel,
+        location: '',
+        photoLabel: photoLabel,
+      );
 
-        final String? resultPath = await WatermarkService.processImage(req);
+      final String? resultPath = await WatermarkService.processImage(req);
 
-        setState(() => _isProcessingWatermark = false);
-
-        if (resultPath != null) {
-          final imgDetail = CapturedImageDetail(
-              imagePath: resultPath,
-              timestamp: timestamp,
-              technicianName: techName,
-              deviceModel: req.deviceModel,
-              transNo: widget.transNo,
-              latitude: 0,
-              longitude: 0,
-              address: '');
-
-          setState(() {
-            if (isInstallPhoto) {
-              _installPhotos.add(imgDetail);
-            } else {
-              _notePhotos = [imgDetail];
-            }
-          });
-
-          if (!_isOriginalCompleted) {
-            _forceSaveDraft();
-          }
-        } else {
-          _showErrorSnack("Gagal memproses watermark foto.");
-        }
+      if (resultPath == null) {
+        _showErrorSnack("Gagal memproses watermark foto.");
+        return null;
       }
+
+      return CapturedImageDetail(
+          imagePath: resultPath,
+          timestamp: timestamp,
+          technicianName: techName,
+          deviceModel: req.deviceModel,
+          transNo: widget.transNo,
+          latitude: 0,
+          longitude: 0,
+          address: '');
     } catch (e) {
       debugPrint("Error photo: $e");
       _showErrorSnack("Gagal mengambil foto.");
+      return null;
     } finally {
-      setState(() {
-        _isProcessingWatermark = false;
-        if (isInstallPhoto) {
-          _isTakingInstallPhoto = false;
-        } else {
-          _isTakingNotePhoto = false;
-        }
-      });
+      if (mounted) setState(() => _isProcessingWatermark = false);
     }
   }
 
@@ -547,9 +572,11 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
         }
       }
 
-      if (_installPhotos.length < 3) {
-        _showErrorSnack("Wajib ambil minimal 3 Foto Dokumentasi Pemasangan!");
-        return;
+      for (final slot in _kInstallPhotoSlots) {
+        if (slot.isMandatory && _installPhotoSlots[slot.id] == null) {
+          _showErrorSnack("Foto ${slot.label} wajib diambil!");
+          return;
+        }
       }
     }
 
@@ -690,8 +717,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                           },
                           photos: _notePhotos,
                           isTakingPhoto: _isTakingNotePhoto,
-                          onAddPhoto: () =>
-                              _handleTakePhoto(isInstallPhoto: false),
+                          onAddPhoto: _handleTakeNotePhoto,
                           onRemovePhoto: (path) {
                             setState(() => _notePhotos
                                 .removeWhere((p) => p.imagePath == path));
@@ -841,6 +867,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
   }
 
   Widget _buildInstallationPhotoSection() {
+    final filledCount = _installPhotoSlots.length;
+
     return _buildSection(
       title: "Dokumentasi Pemasangan",
       child: Column(
@@ -849,93 +877,21 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Foto Unit Terpasang",
+              const Text("Foto Unit Terpasang (Wajib)",
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey)),
-              Text("${_installPhotos.length}/5 Foto",
-                  style: TextStyle(
+              Text("$filledCount/${_kInstallPhotoSlots.length} Foto",
+                  style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: _installPhotos.length == 5
-                          ? Colors.red
-                          : Colors.blue)),
+                      color: Colors.blue)),
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 120,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _installPhotos.length + 1,
-              separatorBuilder: (ctx, i) => const SizedBox(width: 12),
-              itemBuilder: (ctx, index) {
-                if (index == _installPhotos.length) {
-                  if (_installPhotos.length >= 5) {
-                    return const SizedBox.shrink();
-                  }
-                  return InkWell(
-                    onTap: () => _handleTakePhoto(isInstallPhoto: true),
-                    child: Container(
-                      width: 120,
-                      decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.grey.shade300,
-                              style: BorderStyle.solid)),
-                      child: _isTakingInstallPhoto
-                          ? const Center(child: CircularProgressIndicator())
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                  Icon(Icons.add_a_photo,
-                                      size: 30, color: Colors.grey.shade400),
-                                  const SizedBox(height: 4),
-                                  Text("Tambah",
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontSize: 11))
-                                ]),
-                    ),
-                  );
-                }
-
-                final img = _installPhotos[index];
-                return Stack(
-                  children: [
-                    InkWell(
-                      onTap: () => _openImageViewer(img),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(File(img.imagePath),
-                            width: 120, height: 120, fit: BoxFit.cover),
-                      ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: InkWell(
-                        onTap: () {
-                          setState(() => _installPhotos.removeAt(index));
-                          if (!_isOriginalCompleted) _forceSaveDraft();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                              color: Colors.white, shape: BoxShape.circle),
-                          child: const Icon(Icons.close,
-                              size: 14, color: Colors.red),
-                        ),
-                      ),
-                    )
-                  ],
-                );
-              },
-            ),
-          ),
-          if (_isProcessingWatermark && _isTakingInstallPhoto)
+          _buildPhotoSlotRow(_kInstallPhotoSlots),
+          if (_isProcessingWatermark && _capturingSlotId != null)
             const Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text("Sedang memberi watermark...",
@@ -945,6 +901,124 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                       fontStyle: FontStyle.italic)),
             )
         ],
+      ),
+    );
+  }
+
+  // Baris slot foto. [columns] menyamakan lebar tile antar baris (baris
+  // opsional yang isinya 2 slot tetap memakai grid 3 kolom).
+  Widget _buildPhotoSlotRow(List<_InstallPhotoSlot> slots, {int? columns}) {
+    final colCount = columns ?? slots.length;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < colCount; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+              child: i < slots.length
+                  ? _buildPhotoSlotTile(slots[i])
+                  : const SizedBox.shrink()),
+        ],
+      ],
+    );
+  }
+
+  // Tile slot foto — pola sama dengan slot foto POS Freezer: kosong -> tap
+  // untuk ambil foto, terisi -> tap untuk preview full-screen, X untuk hapus.
+  Widget _buildPhotoSlotTile(_InstallPhotoSlot slot) {
+    final photo = _installPhotoSlots[slot.id];
+    final filled = photo != null;
+    final capturing = _capturingSlotId == slot.id;
+    final primary = Theme.of(context).primaryColor;
+
+    return GestureDetector(
+      onTap: _capturingSlotId != null
+          ? null
+          : (filled ? () => _openImageViewer(photo) : () => _handleTakeSlotPhoto(slot)),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: filled ? primary : Colors.grey.shade300,
+              width: filled ? 1.5 : 1,
+            ),
+            image: filled
+                ? DecorationImage(
+                    image: FileImage(File(photo.imagePath)), fit: BoxFit.cover)
+                : null,
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (!filled)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_a_photo_outlined,
+                        color: Colors.grey.shade600, size: 26),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(slot.label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.grey.shade700)),
+                    ),
+                  ],
+                ),
+              if (filled) ...[
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    color: Colors.black54,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                    child: Text(slot.label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.white)),
+                  ),
+                ),
+                const Positioned(
+                  top: 3,
+                  left: 3,
+                  child:
+                      Icon(Icons.check_circle, color: Colors.white, size: 18),
+                ),
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _installPhotoSlots.remove(slot.id));
+                      if (!_isOriginalCompleted) _forceSaveDraft();
+                    },
+                    child: Container(
+                      decoration: const BoxDecoration(
+                          color: Colors.black54, shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(3),
+                      child: const Icon(Icons.close,
+                          size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+              if (capturing && !filled)
+                const Center(
+                  child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

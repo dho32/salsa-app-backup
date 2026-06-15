@@ -194,6 +194,7 @@ class PosUnserviceableBloc
         formattedDate: formattedDate,
         technicianName: technicianName,
         deviceModel: deviceModel,
+        photoLabel: 'Bukti Tidak Bisa Service',
       );
 
       final String? finalImagePath = await WatermarkService.processImage(request);

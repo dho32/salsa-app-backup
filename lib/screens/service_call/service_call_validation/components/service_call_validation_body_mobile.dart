@@ -130,6 +130,7 @@ class _ServiceCallValidationBodyMobileState
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
+          photoLabel: 'Unit - ${isBefore ? "Before" : "After"}',
         );
 
         final String? finalImagePath =

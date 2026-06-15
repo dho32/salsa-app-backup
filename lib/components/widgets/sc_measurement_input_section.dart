@@ -177,6 +177,8 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
+          photoLabel:
+              '${_remarkPhotoLabel(noteType)} - ${widget.isBefore ? "Before" : "After"}',
         );
 
         final String? finalImagePath =
@@ -247,6 +249,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         controller: controller,
         transNo: widget.transNo,
         label: limits.label,
+        photoLabel: '${limits.label} - ${widget.isBefore ? "Before" : "After"}',
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         limits: limits,
         initialImage: mEntry.capturedImage,
@@ -296,6 +299,17 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         onChanged: (val) {}, // optional
       ),
     );
+  }
+
+  String _remarkPhotoLabel(NoteType noteType) {
+    switch (noteType) {
+      case NoteType.indoor:
+        return 'Bukti Kendala Indoor';
+      case NoteType.outdoor:
+        return 'Bukti Kendala Volt/Ampere';
+      case NoteType.outdoorPsi:
+        return 'Bukti Kendala Tekanan';
+    }
   }
 
   NoteType _noteType(String measurementId) {

@@ -14,6 +14,10 @@ class WatermarkRequest {
   final String deviceModel;
   final String? location;
 
+  /// Jenis foto (mis. "Tampak Dekat", "Suhu Indoor AC - Before") —
+  /// dirender sebagai baris pertama watermark: `Foto: [photoLabel]`.
+  final String? photoLabel;
+
   WatermarkRequest({
     required this.originalPath,
     required this.targetPath,
@@ -22,6 +26,7 @@ class WatermarkRequest {
     required this.technicianName,
     required this.deviceModel,
     this.location,
+    this.photoLabel,
   });
 }
 
@@ -53,6 +58,7 @@ class WatermarkService {
     // WATERMARK CONTENT
     // ===============================
     final lines = [
+      if (req.photoLabel?.isNotEmpty == true) 'Foto: ${req.photoLabel}',
       req.transNo,
       req.formattedDate,
       'Difoto Oleh: ${req.technicianName}',
