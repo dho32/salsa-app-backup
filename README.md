@@ -17,3 +17,4 @@ samples, guidance on mobile development, and a full API reference.
 
 
 - Fitur CUCI Lawson kegabung di branch installation
+- Fitur Need OTP
