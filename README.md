@@ -17,3 +17,5 @@ samples, guidance on mobile development, and a full API reference.
 
 
 - Fitur CUCI Lawson kegabung di branch installation
+- Fitur Need OTP
+- https://cahayamanunggal.atlassian.net/browse/SLSA-13 || INPUT PROOF OF SERVICE PILIH LOOKUP NYA TEKNISI
