@@ -253,6 +253,11 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         limits: limits,
         initialImage: mEntry.capturedImage,
+        enableConfirmDialog: true,
+        onConfirmedChanged: (confirmed) => context
+            .read<ValidationDropdownBloc>()
+            .add(SetMeasurementConfirmed(mEntry.measurementId, confirmed,
+                isBefore: widget.isBefore)),
         onEditingComplete: (newValue) {
           final updatedValue = double.tryParse(newValue) ?? 0.0;
           final latestEntry = getLatestEntry(); // 🔥 TARIK DATA TERBARU
@@ -291,6 +296,10 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
 
           if (isSkipped) {
             controller.clear();
+            // Di-skip → lepas dari daftar konfirmasi.
+            context.read<ValidationDropdownBloc>().add(SetMeasurementConfirmed(
+                mEntry.measurementId, false,
+                isBefore: widget.isBefore));
             context.read<ValidationDropdownBloc>().add(NoteChanged(null,
                 noteType: _noteType(mEntry.measurementId),
                 isBefore: widget.isBefore));
@@ -609,7 +618,8 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
               if (!isOpen) searchController.clear();
             },
           ),
-          if (requireRemark && !widget.isBefore)
+          // Remark + foto bukti berlaku untuk fase Sebelum & Sesudah
+          if (requireRemark)
             Column(
               children: [
                 Padding(

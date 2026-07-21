@@ -36,6 +36,10 @@ class PosValidationBodyMobile extends StatefulWidget {
   final double? indoorTemp;
   final List<NoteOption> noteOptions;
 
+  /// Dipanggil saat status konfirmasi "sesuai foto" sebuah pengukuran berubah.
+  final void Function(String measurementId, bool confirmed)?
+      onMeasurementConfirmedChanged;
+
   const PosValidationBodyMobile({
     super.key,
     required this.transNo,
@@ -46,6 +50,7 @@ class PosValidationBodyMobile extends StatefulWidget {
     required this.noteController,
     required this.indoorTemp,
     required this.noteOptions,
+    this.onMeasurementConfirmedChanged,
   });
 
   @override
@@ -455,6 +460,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
               transNo: widget.transNo,
               measurements: state.measurementsAfter,
               indoorTemp: widget.indoorTemp,
+              enableConfirmDialog: true,
+              onMeasurementConfirmedChanged:
+                  widget.onMeasurementConfirmedChanged,
               onUpdate: (measurement) {
                 context
                     .read<PosValidationBloc>()
@@ -475,7 +483,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
                   }
                 }
               },
-              limitsMap: _limitsPosAfter, // 🔥 KINI SUDAH DINAMIS DARI API
+              limitsMap: _limitsPosAfter,
             ),
             if (isAnyMeasurementSkipped)
               Padding(
@@ -774,7 +782,6 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   }
 
   Widget _buildValidationHeader(PosValidationLoaded state) {
-    // 🔥 Gunakan State dari BLoC untuk Serial No, agar update realtime saat user ngetik di Generic
     final displaySerial = state.isGeneric && state.serialNo.isEmpty
         ? "Unit #${state.unitIndex}"
         : state.serialNo;

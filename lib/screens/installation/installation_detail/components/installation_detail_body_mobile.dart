@@ -398,6 +398,7 @@ class _InstallationDetailBodyMobileState
                       ),
                     ),
                     const SizedBox(height: 16),
+                    ..._buildPicSection(context, detail.header, draft),
                     _buildSection(
                       title: "Teknisi Bertugas",
                       child: _buildTechnicianPanel(context, state),
@@ -496,6 +497,18 @@ class _InstallationDetailBodyMobileState
                   if (!isStorePhotoFilled) {
                     _showErrorSnack(
                         context, "⚠️ Foto Tampak Depan Toko wajib diambil!");
+                    return;
+                  }
+                  // Validasi PIC: wajib HANYA bila teknisi menyalakan toggle
+                  // "Ada PIC di Lokasi?" (untuk surat tugas yang mengizinkan
+                  // PIC). Default toggle OFF → PIC opsional (kebalikan RRO).
+                  final bool picRequired =
+                      detail.header.isPic && draft.isPicActive;
+                  if (picRequired &&
+                      (draft.picName.trim().isEmpty ||
+                          draft.picPhone.trim().isEmpty)) {
+                    _showErrorSnack(context,
+                        "⚠️ Harap lengkapi Nama dan No HP PIC.");
                     return;
                   }
                   if (!isIndoorComplete) {
@@ -723,6 +736,122 @@ class _InstallationDetailBodyMobileState
     );
   }
 
+  // --- PIC TOKO (kebalikan RRO Cut Off) ---
+  // Toggle "Ada PIC di Lokasi?" hanya muncul bila surat tugas MENGIZINKAN PIC
+  // (header.isPic == true), dengan DEFAULT OFF → PIC bersifat opsional. Panel
+  // field PIC + verifikasi OTP baru aktif bila teknisi menyalakan toggle
+  // (draft.isPicActive). Bila header.isPic == false → tidak ada toggle &
+  // PIC tidak diminta sama sekali (section disembunyikan).
+  List<Widget> _buildPicSection(BuildContext context,
+      InstallationHeaderDetailModel header, InstallationEntryModel draft) {
+    if (!header.isPic) return const <Widget>[];
+    final bool showPanel = draft.isPicActive;
+    return [
+      _buildSection(
+        title: "PIC Toko",
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              title: const Text("Ada PIC di Lokasi?",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              subtitle: const Text(
+                  "Nyalakan bila ada PIC toko yang bisa dimintai verifikasi.",
+                  style: TextStyle(fontSize: 12)),
+              value: draft.isPicActive,
+              activeColor: Colors.green.shade700,
+              contentPadding: EdgeInsets.zero,
+              onChanged: (val) {
+                context
+                    .read<InstallationBloc>()
+                    .add(UpdatePicInfo(isPicActive: val));
+              },
+            ),
+            if (showPanel) ...[
+              const Divider(height: 16),
+              _buildPicPanel(context, draft),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Widget _buildPicPanel(BuildContext context, InstallationEntryModel draft) {
+    final String? currentPosition =
+        draft.picPosition.isEmpty ? null : draft.picPosition;
+    return Column(
+      children: [
+        _buildCustomTextField(
+          initialValue: draft.picName,
+          hintText: 'Nama Lengkap PIC',
+          icon: Icons.person_outline,
+          onChanged: (v) =>
+              context.read<InstallationBloc>().add(UpdatePicInfo(picName: v)),
+        ),
+        const SizedBox(height: 12),
+        _buildCustomTextField(
+          initialValue: draft.picPhone,
+          hintText: 'Nomor Telepon',
+          icon: Icons.phone_outlined,
+          keyboardType: TextInputType.phone,
+          onChanged: (v) =>
+              context.read<InstallationBloc>().add(UpdatePicInfo(picPhone: v)),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildCustomTextField(
+                initialValue: draft.picNik,
+                hintText: 'NIK',
+                icon: Icons.badge_outlined,
+                keyboardType: TextInputType.number,
+                onChanged: (v) => context
+                    .read<InstallationBloc>()
+                    .add(UpdatePicInfo(picNik: v)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: currentPosition,
+                items: kJabatanOptions.map((String jabatan) {
+                  return DropdownMenuItem<String>(
+                      value: jabatan,
+                      child: Text(jabatan,
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis));
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    context
+                        .read<InstallationBloc>()
+                        .add(UpdatePicInfo(picPosition: newValue));
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Jabatan',
+                  hintText: 'Pilih Jabatan',
+                  prefixIcon: Icon(Icons.work_outline,
+                      color: Colors.grey.shade600, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+                isExpanded: true,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildTechnicianPanel(BuildContext context, InstallationState state) {
     final draft = state.draftEntry;
     if (draft == null) return const SizedBox();
@@ -897,13 +1026,15 @@ class _InstallationDetailBodyMobileState
       bool readOnly = false,
       Function(String)? onChanged,
       VoidCallback? onTap,
-      Widget? suffixIcon}) {
+      Widget? suffixIcon,
+      TextInputType? keyboardType}) {
     return TextFormField(
         controller: controller,
         textCapitalization: TextCapitalization.characters,
         initialValue: controller == null ? initialValue : null,
         onChanged: onChanged,
         onTap: onTap,
+        keyboardType: keyboardType,
         readOnly: readOnly,
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(

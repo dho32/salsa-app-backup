@@ -46,6 +46,14 @@ class PosFormState extends Equatable {
   final bool isTempOutSkipped;
   final bool isFinalTempInSkipped;
 
+  // --- Bukti kendala saat skip (alasan ber-flag require_remark) ---
+  final String tempInSkipRemark;
+  final String tempOutSkipRemark;
+  final String finalTempInSkipRemark;
+  final List<CapturedImageDetail> tempInSkipPhotos;
+  final List<CapturedImageDetail> tempOutSkipPhotos;
+  final List<CapturedImageDetail> finalTempInSkipPhotos;
+
   const PosFormState({
     this.picNik = '',
     this.picPosition = '',
@@ -78,6 +86,12 @@ class PosFormState extends Equatable {
     this.isTempInSkipped = false,
     this.isTempOutSkipped = false,
     this.isFinalTempInSkipped = false,
+    this.tempInSkipRemark = '',
+    this.tempOutSkipRemark = '',
+    this.finalTempInSkipRemark = '',
+    this.tempInSkipPhotos = const [],
+    this.tempOutSkipPhotos = const [],
+    this.finalTempInSkipPhotos = const [],
   });
 
   PosFormState copyWith({
@@ -115,6 +129,12 @@ class PosFormState extends Equatable {
     bool? isTempInSkipped,
     bool? isTempOutSkipped,
     bool? isFinalTempInSkipped,
+    String? tempInSkipRemark,
+    String? tempOutSkipRemark,
+    String? finalTempInSkipRemark,
+    List<CapturedImageDetail>? tempInSkipPhotos,
+    List<CapturedImageDetail>? tempOutSkipPhotos,
+    List<CapturedImageDetail>? finalTempInSkipPhotos,
   }) {
     return PosFormState(
       picNik: picNik ?? this.picNik,
@@ -148,6 +168,14 @@ class PosFormState extends Equatable {
       isTempInSkipped: isTempInSkipped ?? this.isTempInSkipped,
       isTempOutSkipped: isTempOutSkipped ?? this.isTempOutSkipped,
       isFinalTempInSkipped: isFinalTempInSkipped ?? this.isFinalTempInSkipped,
+      tempInSkipRemark: tempInSkipRemark ?? this.tempInSkipRemark,
+      tempOutSkipRemark: tempOutSkipRemark ?? this.tempOutSkipRemark,
+      finalTempInSkipRemark:
+          finalTempInSkipRemark ?? this.finalTempInSkipRemark,
+      tempInSkipPhotos: tempInSkipPhotos ?? this.tempInSkipPhotos,
+      tempOutSkipPhotos: tempOutSkipPhotos ?? this.tempOutSkipPhotos,
+      finalTempInSkipPhotos:
+          finalTempInSkipPhotos ?? this.finalTempInSkipPhotos,
     );
   }
 
@@ -184,5 +212,11 @@ class PosFormState extends Equatable {
         isTempInSkipped,
         isTempOutSkipped,
         isFinalTempInSkipped,
+        tempInSkipRemark,
+        tempOutSkipRemark,
+        finalTempInSkipRemark,
+        tempInSkipPhotos,
+        tempOutSkipPhotos,
+        finalTempInSkipPhotos,
       ];
 }

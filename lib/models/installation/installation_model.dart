@@ -397,6 +397,20 @@ class InstallationEntryModel {
   @HiveField(19, defaultValue: '')
   final String technician3Id;
 
+  // --- PIC Toko (mirror RRO Cut Off) ---
+  @HiveField(20, defaultValue: '')
+  final String picName;
+  @HiveField(21, defaultValue: '')
+  final String picPhone;
+  @HiveField(22, defaultValue: '')
+  final String picNik;
+  @HiveField(23, defaultValue: '')
+  final String picPosition;
+  @HiveField(24, defaultValue: false)
+  final bool isPicActive;
+  @HiveField(25)
+  final InstallationPhotoModel? picPhoto;
+
   InstallationEntryModel({
     required this.transNo,
     required this.vendorId,
@@ -418,6 +432,12 @@ class InstallationEntryModel {
     this.transportEvidencePhoto,
     this.hasTidyingService = false,
     this.tidyingQty = 0,
+    this.picName = '',
+    this.picPhone = '',
+    this.picNik = '',
+    this.picPosition = '',
+    this.isPicActive = false,
+    this.picPhoto,
   });
 
   InstallationEntryModel copyWith({
@@ -443,6 +463,13 @@ class InstallationEntryModel {
     bool clearTransportPhoto = false,
     bool? hasTidyingService,
     int? tidyingQty,
+    String? picName,
+    String? picPhone,
+    String? picNik,
+    String? picPosition,
+    bool? isPicActive,
+    InstallationPhotoModel? picPhoto,
+    bool clearPicPhoto = false,
   }) {
     return InstallationEntryModel(
       transNo: transNo ?? this.transNo,
@@ -469,6 +496,12 @@ class InstallationEntryModel {
           : (transportEvidencePhoto ?? this.transportEvidencePhoto),
       hasTidyingService: hasTidyingService ?? this.hasTidyingService,
       tidyingQty: tidyingQty ?? this.tidyingQty,
+      picName: picName ?? this.picName,
+      picPhone: picPhone ?? this.picPhone,
+      picNik: picNik ?? this.picNik,
+      picPosition: picPosition ?? this.picPosition,
+      isPicActive: isPicActive ?? this.isPicActive,
+      picPhoto: clearPicPhoto ? null : (picPhoto ?? this.picPhoto),
     );
   }
 }

@@ -9,10 +9,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hive/hive.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_cubit.dart';
 import 'package:salsa/blocs/proof_of_service/pos_form/pos_form_state.dart';
 import 'package:salsa/models/proof_of_service/proof_of_service_detail_model.dart';
 
+import 'dart:io';
+
+import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_bloc.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_event.dart';
 import '../../../../blocs/proof_of_service/proof_of_service_detail/proof_of_service_detail_state.dart';
@@ -21,10 +28,14 @@ import '../../../../blocs/proof_of_service/proof_of_service_submitted/pos_submit
 import '../../../../blocs/proof_of_service/proof_of_service_submitted/pos_submitted_state.dart';
 import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 import '../../../../components/constants.dart';
+import '../../../../components/services/watermark_service.dart';
+import '../../../../components/shared_function.dart';
 import '../../../../components/shared_widgets.dart';
 import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
+import '../../../../components/widgets/remark_photo_picker.dart';
 import '../../../../components/widgets/scan_qr.dart';
+import '../../../../models/common/captured_image_detail.dart';
 import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/common/note_option.dart';
 import '../../../../models/proof_of_service/pos_validation_entry_model.dart';
@@ -55,6 +66,20 @@ class _ProofOfServiceDetailBodyMobileState
   late final TextEditingController _tempInNoteController;
   late final TextEditingController _tempOutNoteController;
   late final TextEditingController _finalTempInNoteController;
+  late final TextEditingController _tempInSkipRemarkController;
+  late final TextEditingController _tempOutSkipRemarkController;
+  late final TextEditingController _finalTempSkipRemarkController;
+
+  // Grup foto bukti skip yang sedang mengambil foto ('temp_in' / 'temp_out' /
+  // 'final_temp'), null bila tidak ada.
+  String? _takingSkipPhotoGroup;
+
+  // Status konfirmasi "angka sesuai foto" per suhu. Nilai dari draft yang sudah
+  // lengkap dianggap terkonfirmasi (dilaporkan MeasurementInputWidget saat load).
+  bool _tempOutConfirmed = false;
+  bool _tempInConfirmed = false;
+  bool _finalTempConfirmed = false;
+
   final TextEditingController _noteSearchController = TextEditingController();
   final TextEditingController _tech2SearchController = TextEditingController();
   final TextEditingController _tech3SearchController = TextEditingController();
@@ -72,14 +97,16 @@ class _ProofOfServiceDetailBodyMobileState
     super.initState();
     final configBox = Hive.box(kAppConfigBox);
     final Map<String, MeasurementLimits> headerLimits =
-        Map<String, MeasurementLimits>.from(
-            configBox.get('limits_temp_header') ?? {});
+    Map<String, MeasurementLimits>.from(
+        configBox.get('limits_temp_header') ?? {});
 
     _indoorLimits = headerLimits['temp_in'] ?? kIndoorLimits;
     _outdoorLimits = headerLimits['temp_out'] ?? kOutdoorLimits;
     _finalTempBaseLimits = headerLimits['temp_in'] ?? kIndoorLimits;
 
-    final initialFormState = context.read<PosFormCubit>().state;
+    final initialFormState = context
+        .read<PosFormCubit>()
+        .state;
     _tempInController = TextEditingController(text: initialFormState.tempIn);
     _tempOutController = TextEditingController(text: initialFormState.tempOut);
     _finalTempController =
@@ -90,6 +117,12 @@ class _ProofOfServiceDetailBodyMobileState
         TextEditingController(text: initialFormState.tempOutNote);
     _finalTempInNoteController =
         TextEditingController(text: initialFormState.finalTempInNote);
+    _tempInSkipRemarkController =
+        TextEditingController(text: initialFormState.tempInSkipRemark);
+    _tempOutSkipRemarkController =
+        TextEditingController(text: initialFormState.tempOutSkipRemark);
+    _finalTempSkipRemarkController =
+        TextEditingController(text: initialFormState.finalTempInSkipRemark);
     _technician1Controller =
         TextEditingController(text: initialFormState.technician1);
     _technician2Controller =
@@ -111,6 +144,9 @@ class _ProofOfServiceDetailBodyMobileState
     _tempInNoteController.dispose();
     _tempOutNoteController.dispose();
     _finalTempInNoteController.dispose();
+    _tempInSkipRemarkController.dispose();
+    _tempOutSkipRemarkController.dispose();
+    _finalTempSkipRemarkController.dispose();
     _noteSearchController.dispose();
     _tech2SearchController.dispose();
     _tech3SearchController.dispose();
@@ -144,21 +180,28 @@ class _ProofOfServiceDetailBodyMobileState
                 return detailState.validationStatuses[mapKey] ==
                     ValidationStatus.completed;
               });
-              context
-                  .read<PosFormCubit>()
-                  .updateAllUnitsValidated(allUnitsValidated);
+              final formCubit = context.read<PosFormCubit>();
+              // Cubit perlu master catatan untuk cek flag require_remark
+              // pada validasi skip suhu.
+              formCubit
+                  .setNoteOptions(detailState.data.noteIndoorOptions ?? []);
+              formCubit.updateAllUnitsValidated(allUnitsValidated);
             }
           },
         ),
         // LANGKAH 3: SINKRONISASI CONTROLLER DENGAN BLOC STATE
         BlocListener<PosFormCubit, PosFormState>(
           listenWhen: (previous, current) =>
-              previous.tempIn != current.tempIn ||
+          previous.tempIn != current.tempIn ||
               previous.tempOut != current.tempOut ||
               previous.finalTempIn != current.finalTempIn ||
               previous.tempInNote != current.tempInNote ||
               previous.tempOutNote != current.tempOutNote ||
               previous.finalTempInNote != current.finalTempInNote ||
+              previous.tempInSkipRemark != current.tempInSkipRemark ||
+              previous.tempOutSkipRemark != current.tempOutSkipRemark ||
+              previous.finalTempInSkipRemark !=
+                  current.finalTempInSkipRemark ||
               previous.technician1 != current.technician1 ||
               previous.technician2 != current.technician2 ||
               previous.technician3 != current.technician3 ||
@@ -185,6 +228,17 @@ class _ProofOfServiceDetailBodyMobileState
             }
             if (_finalTempInNoteController.text != state.finalTempInNote) {
               _finalTempInNoteController.text = state.finalTempInNote;
+            }
+            if (_tempInSkipRemarkController.text != state.tempInSkipRemark) {
+              _tempInSkipRemarkController.text = state.tempInSkipRemark;
+            }
+            if (_tempOutSkipRemarkController.text != state.tempOutSkipRemark) {
+              _tempOutSkipRemarkController.text = state.tempOutSkipRemark;
+            }
+            if (_finalTempSkipRemarkController.text !=
+                state.finalTempInSkipRemark) {
+              _finalTempSkipRemarkController.text =
+                  state.finalTempInSkipRemark;
             }
             if (_technician1Controller.text != state.technician1) {
               _technician1Controller.text = state.technician1;
@@ -234,7 +288,32 @@ class _ProofOfServiceDetailBodyMobileState
                   return unitType != 'IN' && unitType != 'OUT';
                 }).toList();
 
-                final stateUpload = context.watch<PosSubmittedBloc>().state;
+                // Gating validasi unit: SELURUH suhu ruangan (Luar & Dalam)
+                // harus selesai dulu — terisi (angka + foto + KONFIRMASI sesuai
+                // foto) ATAU di-skip dengan alasan lengkap. Baru setelah itu
+                // semua kartu unit (INDOOR/OUTDOOR/SET) bisa dibuka.
+                final formCubit = context.read<PosFormCubit>();
+                final bool tempOutDone = (formState.tempOut.isNotEmpty &&
+                    formState.temperatureOutImage != null &&
+                    _tempOutConfirmed) ||
+                    (formState.isTempOutSkipped &&
+                        formCubit.isSkipComplete(
+                            formState.tempOutNote,
+                            formState.tempOutSkipRemark,
+                            formState.tempOutSkipPhotos));
+                final bool tempInDone = (formState.tempIn.isNotEmpty &&
+                    formState.temperatureInImage != null &&
+                    _tempInConfirmed) ||
+                    (formState.isTempInSkipped &&
+                        formCubit.isSkipComplete(
+                            formState.tempInNote,
+                            formState.tempInSkipRemark,
+                            formState.tempInSkipPhotos));
+                final bool roomTempsDone = tempOutDone && tempInDone;
+
+                final stateUpload = context
+                    .watch<PosSubmittedBloc>()
+                    .state;
 
                 return Stack(
                   children: [
@@ -275,20 +354,8 @@ class _ProofOfServiceDetailBodyMobileState
                                       color: Colors.blue.shade700,
                                       header: header,
                                       validationStatuses:
-                                          detailState.validationStatuses,
-                                      isEnabled: (
-                                          // Kondisi 1: Diisi dan valid
-                                          (formState.tempIn.isNotEmpty &&
-                                                  ((double.tryParse(formState
-                                                                  .tempIn) ??
-                                                              0) >=
-                                                          _indoorLimits.min &&
-                                                      (double.tryParse(formState
-                                                                  .tempIn) ??
-                                                              0) <=
-                                                          _indoorLimits.max)) ||
-                                              // Kondisi 2: Atau di-skip
-                                              formState.isTempInSkipped),
+                                      detailState.validationStatuses,
+                                      isEnabled: roomTempsDone,
                                     ),
                                   if (outdoorUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -299,21 +366,8 @@ class _ProofOfServiceDetailBodyMobileState
                                       color: Colors.orange.shade800,
                                       header: header,
                                       validationStatuses:
-                                          detailState.validationStatuses,
-                                      isEnabled: (
-                                          // Kondisi 1: Diisi dan valid
-                                          (formState.tempOut.isNotEmpty &&
-                                                  ((double.tryParse(formState
-                                                                  .tempOut) ??
-                                                              0) >=
-                                                          _outdoorLimits.min &&
-                                                      (double.tryParse(formState
-                                                                  .tempOut) ??
-                                                              0) <=
-                                                          _outdoorLimits
-                                                              .max)) ||
-                                              // Kondisi 2: Atau di-skip
-                                              formState.isTempOutSkipped),
+                                      detailState.validationStatuses,
+                                      isEnabled: roomTempsDone,
                                     ),
                                   if (setUnits.isNotEmpty)
                                     _buildUnitGroupCard(
@@ -324,40 +378,32 @@ class _ProofOfServiceDetailBodyMobileState
                                       color: Colors.grey.shade700,
                                       header: header,
                                       validationStatuses:
-                                          detailState.validationStatuses,
-                                      isEnabled: ((formState.tempIn.isNotEmpty &&
-                                                  ((double.tryParse(formState.tempIn) ??
-                                                              0) >=
-                                                          _indoorLimits.min &&
-                                                      (double.tryParse(formState
-                                                                  .tempIn) ??
-                                                              0) <=
-                                                          _indoorLimits.max)) ||
-                                              formState.isTempInSkipped) &&
-                                          ((formState.tempOut.isNotEmpty &&
-                                                  ((double.tryParse(formState.tempOut) ??
-                                                              0) >=
-                                                          _outdoorLimits.min &&
-                                                      (double.tryParse(formState
-                                                                  .tempOut) ??
-                                                              0) <=
-                                                          _outdoorLimits
-                                                              .max)) ||
-                                              formState.isTempOutSkipped),
+                                      detailState.validationStatuses,
+                                      isEnabled: roomTempsDone,
                                     ),
                                 ],
                               ),
                             ),
                             BlocBuilder<PosFormCubit, PosFormState>(
                               buildWhen: (prev, current) =>
-                                  prev.allUnitsValidated !=
-                                      current.allUnitsValidated ||
+                              prev.allUnitsValidated !=
+                                  current.allUnitsValidated ||
                                   prev.isFinalTempInSkipped !=
                                       current.isFinalTempInSkipped ||
                                   prev.minFinalTempInLimit !=
                                       current.minFinalTempInLimit ||
                                   prev.finalTempInImage !=
-                                      current.finalTempInImage,
+                                      current.finalTempInImage ||
+                                  // Tanpa ini, memilih alasan skip ber-flag
+                                  // require_remark tidak memicu rebuild —
+                                  // field keterangan+foto bukti tidak pernah
+                                  // muncul walau datanya sudah tersimpan.
+                                  prev.finalTempInNote !=
+                                      current.finalTempInNote ||
+                                  prev.finalTempInSkipRemark !=
+                                      current.finalTempInSkipRemark ||
+                                  prev.finalTempInSkipPhotos !=
+                                      current.finalTempInSkipPhotos,
                               builder: (context, formState) {
                                 final bool isEnabled =
                                     formState.allUnitsValidated;
@@ -388,7 +434,7 @@ class _ProofOfServiceDetailBodyMobileState
                                             },
                                             // Beri radius agar efek ripple cocok dengan card
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                            BorderRadius.circular(12),
                                             child: Container(
                                                 color: Colors.transparent),
                                           ),
@@ -423,48 +469,22 @@ class _ProofOfServiceDetailBodyMobileState
   Widget _buildServiceInfoPanel(BuildContext context, PosFormState formState,
       List<NoteOption> noteOptions) {
     final formCubit = context.read<PosFormCubit>();
+
+    // Suhu Luar wajib selesai dulu: (angka + foto + KONFIRMASI sesuai foto)
+    // ATAU (skip + alasan lengkap). Baru setelah itu Suhu Dalam terbuka.
+    final bool tempOutDone = (formState.tempOut.isNotEmpty &&
+        formState.temperatureOutImage != null &&
+        _tempOutConfirmed) ||
+        (formState.isTempOutSkipped &&
+            formCubit.isSkipComplete(formState.tempOutNote,
+                formState.tempOutSkipRemark, formState.tempOutSkipPhotos));
+
     return _buildSection(
       title: 'Informasi Servis Sebelum Cleaning',
       child: Column(
         children: [
+          // --- 1) SUHU LUAR RUANGAN (diinput lebih dulu) ---
           MeasurementInputWidget(
-            // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
-            controller: _tempInController,
-            label: 'Suhu Dalam Ruangan (°C)',
-            photoLabel: 'Suhu Dalam Ruangan - Before Cleaning',
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            limits: _indoorLimits,
-            transNo: widget.transNo,
-            initialImage: formState.temperatureInImage,
-            onEditingComplete: (finalValue) {
-              formCubit.tempInChanged(finalValue);
-              formCubit.onFieldChanged();
-            },
-            onImageChanged: (newImage) {
-              formCubit.tempInImageChanged(newImage);
-              formCubit.onFieldChanged();
-            },
-            isSkipEnabled: true,
-            isSkipped: formState.isTempInSkipped,
-            onSkipChanged: (isSkipped) {
-              formCubit.tempInSkipped(isSkipped);
-              if (isSkipped) _tempInController.clear();
-            },
-          ),
-          if (formState.isTempInSkipped)
-            _buildNoteDropdown(
-              context: context,
-              label: 'Catatan Suhu Dalam (Wajib)',
-              controller: _tempInNoteController,
-              noteOptions: noteOptions,
-              onChanged: (value) {
-                _tempInNoteController.text = value ?? '';
-                formCubit.tempInNoteChanged(value ?? '');
-              },
-            ),
-          const SizedBox(height: 12),
-          MeasurementInputWidget(
-            // LANGKAH 4: GUNAKAN CONTROLLER YANG SUDAH DIBUAT
             controller: _tempOutController,
             label: 'Suhu Luar Ruangan (°C)',
             photoLabel: 'Suhu Luar Ruangan',
@@ -472,6 +492,9 @@ class _ProofOfServiceDetailBodyMobileState
             limits: _outdoorLimits,
             transNo: widget.transNo,
             initialImage: formState.temperatureOutImage,
+            enableConfirmDialog: true,
+            onConfirmedChanged: (c) =>
+                setState(() => _tempOutConfirmed = c),
             onEditingComplete: (finalValue) {
               formCubit.tempOutChanged(finalValue);
               formCubit.onFieldChanged();
@@ -488,19 +511,264 @@ class _ProofOfServiceDetailBodyMobileState
             },
           ),
           if (formState.isTempOutSkipped)
-            _buildNoteDropdown(
+            _buildSkipNoteSection(
               context: context,
-              label: 'Catatan Suhu Luar (Wajib)',
-              controller: _tempOutNoteController,
+              dropdownLabel: 'Catatan Suhu Luar (Wajib)',
+              noteController: _tempOutNoteController,
+              remarkController: _tempOutSkipRemarkController,
               noteOptions: noteOptions,
-              onChanged: (value) {
+              selectedNote: formState.tempOutNote,
+              photos: formState.tempOutSkipPhotos,
+              photoGroup: 'temp_out',
+              photoLabel: 'Bukti Kendala Suhu Luar',
+              onNoteChanged: (value) {
                 _tempOutNoteController.text = value ?? '';
+                _tempOutSkipRemarkController.clear();
                 formCubit.tempOutNoteChanged(value ?? '');
               },
+              onRemarkChanged: formCubit.tempOutSkipRemarkChanged,
+              onPhotoCaptured: formCubit.addTempOutSkipPhoto,
+              onPhotoRemoved: formCubit.removeTempOutSkipPhoto,
+            ),
+          const SizedBox(height: 12),
+          // --- 2) SUHU DALAM RUANGAN (terkunci sampai Suhu Luar selesai) ---
+          Stack(
+            children: [
+              Opacity(
+                opacity: tempOutDone ? 1.0 : 0.5,
+                child: AbsorbPointer(
+                  absorbing: !tempOutDone,
+                  child: Column(
+                    children: [
+                      MeasurementInputWidget(
+                        controller: _tempInController,
+                        label: 'Suhu Dalam Ruangan (°C)',
+                        photoLabel: 'Suhu Dalam Ruangan - Before Cleaning',
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        limits: _indoorLimits,
+                        transNo: widget.transNo,
+                        initialImage: formState.temperatureInImage,
+                        enableConfirmDialog: true,
+                        onConfirmedChanged: (c) =>
+                            setState(() => _tempInConfirmed = c),
+                        onEditingComplete: (finalValue) {
+                          formCubit.tempInChanged(finalValue);
+                          formCubit.onFieldChanged();
+                        },
+                        onImageChanged: (newImage) {
+                          formCubit.tempInImageChanged(newImage);
+                          formCubit.onFieldChanged();
+                        },
+                        isSkipEnabled: true,
+                        isSkipped: formState.isTempInSkipped,
+                        onSkipChanged: (isSkipped) {
+                          formCubit.tempInSkipped(isSkipped);
+                          if (isSkipped) _tempInController.clear();
+                        },
+                      ),
+                      if (formState.isTempInSkipped)
+                        _buildSkipNoteSection(
+                          context: context,
+                          dropdownLabel: 'Catatan Suhu Dalam (Wajib)',
+                          noteController: _tempInNoteController,
+                          remarkController: _tempInSkipRemarkController,
+                          noteOptions: noteOptions,
+                          selectedNote: formState.tempInNote,
+                          photos: formState.tempInSkipPhotos,
+                          photoGroup: 'temp_in',
+                          photoLabel: 'Bukti Kendala Suhu Dalam',
+                          onNoteChanged: (value) {
+                            _tempInNoteController.text = value ?? '';
+                            _tempInSkipRemarkController.clear();
+                            formCubit.tempInNoteChanged(value ?? '');
+                          },
+                          onRemarkChanged: formCubit.tempInSkipRemarkChanged,
+                          onPhotoCaptured: formCubit.addTempInSkipPhoto,
+                          onPhotoRemoved: formCubit.removeTempInSkipPhoto,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!tempOutDone)
+                Positioned.fill(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        _showValidationSnackbar(context,
+                            'Selesaikan Suhu Luar Ruangan terlebih dahulu (angka + foto, atau alasan skip lengkap).');
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (!tempOutDone)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                'Suhu Dalam Ruangan terbuka setelah Suhu Luar Ruangan selesai diisi.',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w500),
+              ),
             ),
         ],
       ),
     );
+  }
+
+  /// Dropdown alasan skip + (bila alasan ber-flag require_remark) keterangan
+  /// tambahan min. 20 huruf + foto bukti kendala — pola sama dengan SC.
+  Widget _buildSkipNoteSection({
+    required BuildContext context,
+    required String dropdownLabel,
+    required TextEditingController noteController,
+    required TextEditingController remarkController,
+    required List<NoteOption> noteOptions,
+    required String selectedNote,
+    required List<CapturedImageDetail> photos,
+    required String photoGroup,
+    required String photoLabel,
+    required ValueChanged<String?> onNoteChanged,
+    required ValueChanged<String> onRemarkChanged,
+    required ValueChanged<CapturedImageDetail> onPhotoCaptured,
+    required ValueChanged<String> onPhotoRemoved,
+  }) {
+    final bool requireRemark =
+    context.read<PosFormCubit>().noteRequiresRemark(selectedNote);
+
+    return Column(
+      children: [
+        _buildNoteDropdown(
+          context: context,
+          label: dropdownLabel,
+          controller: noteController,
+          noteOptions: noteOptions,
+          onChanged: onNoteChanged,
+        ),
+        if (requireRemark) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: TextFormField(
+              controller: remarkController,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: InputDecoration(
+                labelText: 'Keterangan Tambahan (*Wajib)',
+                hintText: 'Jelaskan detail kendala (Min. 20 huruf)...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                isDense: true,
+                contentPadding:
+                const EdgeInsets.only(top: 10, bottom: 10, right: 12),
+                prefixIcon: const Icon(Icons.edit_note, size: 25),
+              ),
+              maxLines: 2,
+              onChanged: onRemarkChanged,
+              validator: (value) {
+                final text = value ?? '';
+                if (text
+                    .trim()
+                    .isEmpty) return 'Wajib diisi';
+                final int charCount = text
+                    .replaceAll(' ', '')
+                    .length;
+                if (charCount < 20) {
+                  return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
+                }
+                return null;
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          RemarkPhotoPicker(
+            photos: photos,
+            isLoading: _takingSkipPhotoGroup == photoGroup,
+            isReadOnly: false,
+            onAddTap: () =>
+                _handleSkipEvidencePhoto(
+                  group: photoGroup,
+                  photoLabel: photoLabel,
+                  currentCount: photos.length,
+                  onCaptured: onPhotoCaptured,
+                ),
+            onRemoveTap: onPhotoRemoved,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Ambil foto bukti kendala skip (watermark pola sama dengan foto remark
+  /// di validasi unit POS).
+  Future<void> _handleSkipEvidencePhoto({
+    required String group,
+    required String photoLabel,
+    required int currentCount,
+    required ValueChanged<CapturedImageDetail> onCaptured,
+  }) async {
+    if (currentCount >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Maksimal hanya bisa upload 5 foto bukti.')));
+      return;
+    }
+    setState(() => _takingSkipPhotoGroup = group);
+    try {
+      PaintingBinding.instance.imageCache.clear();
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1080,
+          maxHeight: 1920,
+          imageQuality: 80);
+      if (image != null) {
+        final userData = await AuthStorage.getUser();
+        final timestamp = DateTime.now();
+        final zone = getIndonesianTimezoneAbbreviation(timestamp);
+        final formattedDate =
+            '${DateFormat('dd MMM yyyy, HH:mm:ss', 'id_ID').format(
+            timestamp)} $zone';
+        final appDir = await getApplicationDocumentsDirectory();
+        final imagesDir = Directory(p.join(appDir.path, 'draft_images'));
+        if (!await imagesDir.exists()) await imagesDir.create();
+        final targetPath = p.join(imagesDir.path,
+            'WM_SKIP_${timestamp.millisecondsSinceEpoch}.jpg');
+
+        final request = WatermarkRequest(
+          originalPath: image.path,
+          targetPath: targetPath,
+          transNo: widget.transNo,
+          formattedDate: formattedDate,
+          technicianName: userData['name'] ?? 'Unknown',
+          deviceModel: userData['device_model'] ?? 'Unknown Device',
+          photoLabel: photoLabel,
+        );
+        final String? finalImagePath =
+        await WatermarkService.processImage(request);
+        if (finalImagePath == null) throw Exception('Gagal watermark');
+
+        final capturedImageDetail = CapturedImageDetail(
+          imagePath: finalImagePath,
+          timestamp: timestamp,
+          latitude: 0.0,
+          longitude: 0.0,
+          address: "",
+          technicianName: userData['name'] ?? 'Unknown',
+          deviceModel: userData['device_model'] ?? 'Unknown',
+          transNo: widget.transNo,
+        );
+        onCaptured(capturedImageDetail);
+      }
+    } catch (e) {
+      debugPrint('Error foto bukti skip: $e');
+    } finally {
+      if (mounted) setState(() => _takingSkipPhotoGroup = null);
+    }
   }
 
   Widget _buildServiceInfoAfterPanel(BuildContext context,
@@ -512,7 +780,8 @@ class _ProofOfServiceDetailBodyMobileState
 
     // Max tidak boleh melebihi suhu luar ruangan (jika diisi & tidak di-skip)
     final tempOutValue = double.tryParse(formState.tempOut);
-    final double effectiveMax = (!formState.isTempOutSkipped && tempOutValue != null)
+    final double effectiveMax = (!formState.isTempOutSkipped &&
+        tempOutValue != null)
         ? min(_finalTempBaseLimits.max, tempOutValue - 0.1)
         : _finalTempBaseLimits.max;
 
@@ -538,6 +807,9 @@ class _ProofOfServiceDetailBodyMobileState
             limits: finalTempLimits,
             transNo: widget.transNo,
             initialImage: formState.finalTempInImage,
+            enableConfirmDialog: true,
+            onConfirmedChanged: (c) =>
+                setState(() => _finalTempConfirmed = c),
             onEditingComplete: (finalValue) {
               formCubit.finalTempInChanged(finalValue);
               formCubit.onFieldChanged();
@@ -554,15 +826,24 @@ class _ProofOfServiceDetailBodyMobileState
             },
           ),
           if (formState.isFinalTempInSkipped)
-            _buildNoteDropdown(
+            _buildSkipNoteSection(
               context: context,
-              label: 'Catatan Suhu Dalam (Wajib)',
-              controller: _finalTempInNoteController,
+              dropdownLabel: 'Catatan Suhu Dalam (Wajib)',
+              noteController: _finalTempInNoteController,
+              remarkController: _finalTempSkipRemarkController,
               noteOptions: noteOptions,
-              onChanged: (value) {
+              selectedNote: formState.finalTempInNote,
+              photos: formState.finalTempInSkipPhotos,
+              photoGroup: 'final_temp',
+              photoLabel: 'Bukti Kendala Suhu Dalam - After Cleaning',
+              onNoteChanged: (value) {
                 _finalTempInNoteController.text = value ?? '';
+                _finalTempSkipRemarkController.clear();
                 formCubit.finalTempInNoteChanged(value ?? '');
               },
+              onRemarkChanged: formCubit.finalTempInSkipRemarkChanged,
+              onPhotoCaptured: formCubit.addFinalTempInSkipPhoto,
+              onPhotoRemoved: formCubit.removeFinalTempInSkipPhoto,
             ),
         ],
       ),
@@ -580,11 +861,14 @@ class _ProofOfServiceDetailBodyMobileState
     const double itemHeight = 40.0;
     const double searchBarHeight = 50.0;
     const double verticalPadding = 20.0;
-    final double maxAllowedHeight = MediaQuery.of(context).size.height * 0.8;
+    final double maxAllowedHeight = MediaQuery
+        .of(context)
+        .size
+        .height * 0.8;
     final double calculatedContentHeight =
         (noteOptions.length * itemHeight) + searchBarHeight + verticalPadding;
     final double dynamicMaxHeight =
-        min(calculatedContentHeight, maxAllowedHeight);
+    min(calculatedContentHeight, maxAllowedHeight);
 
     final filteredOptions = noteOptions.where((opt) {
       return !opt.isSystemOnly || opt.label == controller.text;
@@ -612,7 +896,7 @@ class _ProofOfServiceDetailBodyMobileState
           filled: true,
           fillColor: Colors.white,
           contentPadding:
-              const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         ),
         hint: const Text(
           'Pilih Catatan',
@@ -621,19 +905,20 @@ class _ProofOfServiceDetailBodyMobileState
         onChanged: isReadOnlySystemValue
             ? null
             : (value) {
-                onChanged(value);
-                FocusScope.of(context).unfocus();
-              },
+          onChanged(value);
+          FocusScope.of(context).unfocus();
+        },
         items: filteredOptions
-            .map((opt) => DropdownMenuItem<String>(
-                  value: opt.label,
-                  child: Text(
-                    opt.label,
-                    style: const TextStyle(fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
-                ))
+            .map((opt) =>
+            DropdownMenuItem<String>(
+              value: opt.label,
+              child: Text(
+                opt.label,
+                style: const TextStyle(fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+            ))
             .toList(),
         dropdownStyleData: DropdownStyleData(
           maxHeight: dynamicMaxHeight,
@@ -658,10 +943,10 @@ class _ProofOfServiceDetailBodyMobileState
               decoration: InputDecoration(
                 isDense: true,
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 hintText: 'Cari catatan...',
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
@@ -797,30 +1082,30 @@ class _ProofOfServiceDetailBodyMobileState
       label: const Text('Scan QR'),
       onPressed: formState.isServiceInfoValid
           ? () async {
-              final String? scannedSerialNo = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => QrScanPage()),
-              );
+        final String? scannedSerialNo = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => QrScanPage()),
+        );
 
-              if (scannedSerialNo != null && context.mounted) {
-                try {
-                  final tappedDetail = detailList.firstWhere((d) =>
-                      d.serialNo.trim().toUpperCase() ==
-                      scannedSerialNo.trim().toUpperCase());
-                  _navigateToValidation(
-                      context, header, tappedDetail, formState.tempIn);
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'QR Code tidak sesuai dengan daftar unit pada tiket ini.'),
-                      backgroundColor: Colors.red,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              }
-            }
+        if (scannedSerialNo != null && context.mounted) {
+          try {
+            final tappedDetail = detailList.firstWhere((d) =>
+            d.serialNo.trim().toUpperCase() ==
+                scannedSerialNo.trim().toUpperCase());
+            _navigateToValidation(
+                context, header, tappedDetail, formState.tempIn);
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'QR Code tidak sesuai dengan daftar unit pada tiket ini.'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
           : null,
     );
   }
@@ -996,23 +1281,28 @@ class _ProofOfServiceDetailBodyMobileState
     VoidCallback? onClear,
   }) {
     final filtered = technicianList
-        .where((t) => excludedName.isEmpty || t['technician_name'] != excludedName)
+        .where((t) =>
+    excludedName.isEmpty || t['technician_name'] != excludedName)
         .toList();
 
     // Jika nilai tersimpan tidak ada di daftar (mis. draft lama atau roster teknisi
     // berubah), sisipkan sebagai item agar tetap tampil & ikut ter-submit — bukan
     // hilang diam-diam dari tampilan sementara datanya masih dikirim.
-    if (value.isNotEmpty && !filtered.any((t) => t['technician_name'] == value)) {
+    if (value.isNotEmpty &&
+        !filtered.any((t) => t['technician_name'] == value)) {
       filtered.insert(0, {'technician_id': '', 'technician_name': value});
     }
-    final currentValue = filtered.any((t) => t['technician_name'] == value) ? value : null;
+    final currentValue = filtered.any((t) => t['technician_name'] == value)
+        ? value
+        : null;
 
     final dropdown = DropdownButtonFormField2<String>(
       value: currentValue,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(Icons.engineering, color: Colors.grey.shade600, size: 20),
+        prefixIcon: Icon(
+            Icons.engineering, color: Colors.grey.shade600, size: 20),
         isDense: true,
         filled: true,
         fillColor: Colors.white,
@@ -1024,17 +1314,21 @@ class _ProofOfServiceDetailBodyMobileState
       hint: Text(label, style: const TextStyle(fontSize: 14)),
       onChanged: onChanged,
       items: filtered
-          .map((t) => DropdownMenuItem<String>(
-                value: t['technician_name'],
-                child: Text(
-                  t['technician_name'] ?? '',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ))
+          .map((t) =>
+          DropdownMenuItem<String>(
+            value: t['technician_name'],
+            child: Text(
+              t['technician_name'] ?? '',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ))
           .toList(),
       dropdownStyleData: DropdownStyleData(
-        maxHeight: MediaQuery.of(context).size.height * 0.4,
+        maxHeight: MediaQuery
+            .of(context)
+            .size
+            .height * 0.4,
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
       ),
       dropdownSearchData: DropdownSearchData(
@@ -1046,15 +1340,18 @@ class _ProofOfServiceDetailBodyMobileState
             controller: searchController,
             decoration: InputDecoration(
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
               hintText: 'Cari teknisi...',
               prefixIcon: const Icon(Icons.search, size: 18),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ),
         searchMatchFn: (item, searchValue) =>
-            item.value.toString().toLowerCase().contains(searchValue.toLowerCase()),
+            item.value.toString().toLowerCase().contains(
+                searchValue.toLowerCase()),
       ),
       onMenuStateChange: (isOpen) {
         if (!isOpen) searchController.clear();
@@ -1085,9 +1382,10 @@ class _ProofOfServiceDetailBodyMobileState
     required Map<String, ValidationStatus> validationStatuses,
     required bool isEnabled,
   }) {
-    final String snackBarMessage = title == 'INDOOR'
-        ? 'Suhu Dalam Ruangan harus di antara ${_indoorLimits.min}°C dan ${_indoorLimits.max}°C.'
-        : 'Suhu Luar Ruangan harus di antara ${_outdoorLimits.min}°C dan ${_outdoorLimits.max}°C.';
+    // Semua kartu unit kini dibuka oleh syarat yang sama: seluruh suhu ruangan
+    // (Luar & Dalam) sudah selesai diisi/di-skip.
+    const String snackBarMessage =
+        'Lengkapi Suhu Luar & Suhu Dalam Ruangan terlebih dahulu (isi angka + foto, atau skip dengan alasan lengkap).';
 
     return Stack(
       children: [
@@ -1114,16 +1412,14 @@ class _ProofOfServiceDetailBodyMobileState
               ),
               subtitle: isEnabled
                   ? const Text('Ketuk untuk lihat detail')
-                  : Text(
-                      title == 'INDOOR'
-                          ? 'Isi Suhu Dalam antara ${_indoorLimits.min}°C dan ${_indoorLimits.max}°C & foto hasil pengukuran'
-                          : 'Isi Suhu Luar antara ${_outdoorLimits.min}°C dan ${_outdoorLimits.max}°C & foto hasil pengukuran',
-                      style: const TextStyle(
-                          color: Colors.orange, fontWeight: FontWeight.w500),
-                    ),
+                  : const Text(
+                'Lengkapi Suhu Luar & Suhu Dalam Ruangan dulu sebelum validasi unit',
+                style: TextStyle(
+                    color: Colors.orange, fontWeight: FontWeight.w500),
+              ),
               initiallyExpanded: true,
               childrenPadding:
-                  const EdgeInsets.symmetric(horizontal: 8).copyWith(bottom: 8),
+              const EdgeInsets.symmetric(horizontal: 8).copyWith(bottom: 8),
               shape: const Border(),
               children: [
                 for (int i = 0; i < units.length; i++) ...[
@@ -1158,20 +1454,22 @@ class _ProofOfServiceDetailBodyMobileState
     );
   }
 
-  Widget _buildDetailCard(
-    BuildContext context,
-    ProofOfServiceHeader header,
-    ProofOfServiceItemDetail detail,
-    Map<String, ValidationStatus> validationStatuses,
-  ) {
+  Widget _buildDetailCard(BuildContext context,
+      ProofOfServiceHeader header,
+      ProofOfServiceItemDetail detail,
+      Map<String, ValidationStatus> validationStatuses,) {
     final mapKey = detail.isGeneric
         ? '${detail.unitType}_${detail.unitIndex}'
         : detail.serialNo.trim().toUpperCase();
     final status = validationStatuses[mapKey] ?? ValidationStatus.notStarted;
-    final formState = context.read<PosFormCubit>().state;
+    final formState = context
+        .read<PosFormCubit>()
+        .state;
 
     // 🔥 Ganti tulisan "AC - 1" dengan SN Asli dari Hive (jika ada)
-    final detailState = context.read<ProofOfServiceDetailBloc>().state;
+    final detailState = context
+        .read<ProofOfServiceDetailBloc>()
+        .state;
     String displaySerial = detail.serialNo;
     if (detailState is ProofOfServiceDetailLoaded &&
         detailState.savedSerials.containsKey(mapKey)) {
@@ -1234,7 +1532,7 @@ class _ProofOfServiceDetailBodyMobileState
             style: ElevatedButton.styleFrom(
                 shape: const StadiumBorder(),
                 textStyle:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () {
               // 1. Tutup keyboard
               FocusScope.of(context).unfocus();
@@ -1265,6 +1563,21 @@ class _ProofOfServiceDetailBodyMobileState
                 formCubit
                     .finalTempInNoteChanged(_finalTempInNoteController.text);
               }
+              if (formCubit.state.tempInSkipRemark !=
+                  _tempInSkipRemarkController.text) {
+                formCubit
+                    .tempInSkipRemarkChanged(_tempInSkipRemarkController.text);
+              }
+              if (formCubit.state.tempOutSkipRemark !=
+                  _tempOutSkipRemarkController.text) {
+                formCubit.tempOutSkipRemarkChanged(
+                    _tempOutSkipRemarkController.text);
+              }
+              if (formCubit.state.finalTempInSkipRemark !=
+                  _finalTempSkipRemarkController.text) {
+                formCubit.finalTempInSkipRemarkChanged(
+                    _finalTempSkipRemarkController.text);
+              }
               if (formCubit.state.technician1 != _technician1Controller.text) {
                 formCubit.technician1Changed(_technician1Controller.text);
               }
@@ -1280,6 +1593,25 @@ class _ProofOfServiceDetailBodyMobileState
               final latestFormState = formCubit.state;
 
               if (latestFormState.isFormReadyToSubmit) {
+                // Blokir bila ada suhu (non-skip) yang belum dikonfirmasi
+                // "sesuai foto" — mis. diubah setelah unit tervalidasi.
+                if (!latestFormState.isTempOutSkipped && !_tempOutConfirmed) {
+                  _showValidationSnackbar(context,
+                      'Konfirmasi Suhu Luar Ruangan sesuai foto terlebih dahulu.');
+                  return;
+                }
+                if (!latestFormState.isTempInSkipped && !_tempInConfirmed) {
+                  _showValidationSnackbar(context,
+                      'Konfirmasi Suhu Dalam Ruangan sesuai foto terlebih dahulu.');
+                  return;
+                }
+                if (!latestFormState.isFinalTempInSkipped &&
+                    !_finalTempConfirmed) {
+                  _showValidationSnackbar(context,
+                      'Konfirmasi Suhu Dalam Ruangan (Sesudah) sesuai foto terlebih dahulu.');
+                  return;
+                }
+
                 final tempInValue = double.tryParse(latestFormState.tempIn);
                 final tempOutValue = double.tryParse(latestFormState.tempOut);
                 final finalTempInValue =
@@ -1291,7 +1623,8 @@ class _ProofOfServiceDetailBodyMobileState
                   if (tempInValue < kIndoorLimits.min ||
                       tempInValue > kIndoorLimits.max) {
                     _showValidationSnackbar(context,
-                        'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${_indoorLimits.min}°C dan ${_indoorLimits.max}°C.');
+                        'Suhu Dalam Ruangan ($tempInValue°C) harus di antara ${_indoorLimits
+                            .min}°C dan ${_indoorLimits.max}°C.');
                     return; // Hentikan proses jika tidak valid
                   }
                 }
@@ -1300,7 +1633,8 @@ class _ProofOfServiceDetailBodyMobileState
                   if (tempOutValue < kOutdoorLimits.min ||
                       tempOutValue > kOutdoorLimits.max) {
                     _showValidationSnackbar(context,
-                        'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${_outdoorLimits.min}°C dan ${_outdoorLimits.max}°C.');
+                        'Suhu Luar Ruangan ($tempOutValue°C) harus di antara ${_outdoorLimits
+                            .min}°C dan ${_outdoorLimits.max}°C.');
                     return; // Hentikan proses jika tidak valid
                   }
                 }
@@ -1314,7 +1648,9 @@ class _ProofOfServiceDetailBodyMobileState
                   if (finalTempInValue < baseMin ||
                       finalTempInValue > baseMax) {
                     _showValidationSnackbar(context,
-                        'Suhu Final ($finalTempInValue°C) harus di antara ${baseMin.toStringAsFixed(1)}°C dan ${baseMax.toStringAsFixed(0)}°C.');
+                        'Suhu Final ($finalTempInValue°C) harus di antara ${baseMin
+                            .toStringAsFixed(1)}°C dan ${baseMax
+                            .toStringAsFixed(0)}°C.');
                     return;
                   }
 
@@ -1353,11 +1689,33 @@ class _ProofOfServiceDetailBodyMobileState
                     latestFormState.tempOutNote.isEmpty) {
                   _showValidationSnackbar(
                       context, 'Catatan Suhu Luar Ruangan wajib diisi.');
+                } else if (latestFormState.isTempOutSkipped &&
+                    !formCubit.isSkipComplete(
+                        latestFormState.tempOutNote,
+                        latestFormState.tempOutSkipRemark,
+                        latestFormState.tempOutSkipPhotos)) {
+                  _showValidationSnackbar(context,
+                      'Lengkapi keterangan tambahan (min. 20 huruf) & foto bukti kendala Suhu Luar Ruangan.');
+                } else if (latestFormState.isTempInSkipped &&
+                    !formCubit.isSkipComplete(
+                        latestFormState.tempInNote,
+                        latestFormState.tempInSkipRemark,
+                        latestFormState.tempInSkipPhotos)) {
+                  _showValidationSnackbar(context,
+                      'Lengkapi keterangan tambahan (min. 20 huruf) & foto bukti kendala Suhu Dalam Ruangan.');
                 } else if (latestFormState.allUnitsValidated &&
                     latestFormState.isFinalTempInSkipped &&
                     latestFormState.finalTempInNote.isEmpty) {
                   _showValidationSnackbar(
                       context, 'Catatan Suhu Final wajib diisi.');
+                } else if (latestFormState.allUnitsValidated &&
+                    latestFormState.isFinalTempInSkipped &&
+                    !formCubit.isSkipComplete(
+                        latestFormState.finalTempInNote,
+                        latestFormState.finalTempInSkipRemark,
+                        latestFormState.finalTempInSkipPhotos)) {
+                  _showValidationSnackbar(context,
+                      'Lengkapi keterangan tambahan (min. 20 huruf) & foto bukti kendala Suhu Final.');
                 } else {
                   _showValidationSnackbar(context,
                       'Pastikan semua data sudah terisi dengan benar.');
@@ -1370,8 +1728,8 @@ class _ProofOfServiceDetailBodyMobileState
     );
   }
 
-  Widget _buildRetryButton(
-      BuildContext context, PosValidationUploadPartial partial) {
+  Widget _buildRetryButton(BuildContext context,
+      PosValidationUploadPartial partial) {
     return Align(
       alignment: Alignment.bottomCenter,
       child: SafeArea(
@@ -1386,24 +1744,25 @@ class _ProofOfServiceDetailBodyMobileState
                 foregroundColor: Colors.white,
                 shape: const StadiumBorder(),
                 textStyle:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () {
               final uploadCubit = context.read<UploadProgressCubit>();
               showDialog(
                   context: context,
                   barrierDismissible: false,
-                  builder: (_) => BlocProvider.value(
+                  builder: (_) =>
+                      BlocProvider.value(
                         value: uploadCubit,
                         child: const UploadProgressDialog(),
                       ));
               context.read<PosSubmittedBloc>().add(
-                    RetryPosUpload(
-                      transNo: partial.transNo,
-                      failedFiles: partial.failedFiles,
-                      presignedDetail: partial.presignedDetail,
-                      progressCubit: uploadCubit,
-                    ),
-                  );
+                RetryPosUpload(
+                  transNo: partial.transNo,
+                  failedFiles: partial.failedFiles,
+                  presignedDetail: partial.presignedDetail,
+                  progressCubit: uploadCubit,
+                ),
+              );
             },
           ),
         ),
@@ -1440,7 +1799,7 @@ class _ProofOfServiceDetailBodyMobileState
       ),
       inputFormatters: [
         TextInputFormatter.withFunction(
-          (oldValue, newValue) =>
+              (oldValue, newValue) =>
               newValue.copyWith(text: newValue.text.toUpperCase()),
         ),
       ],
@@ -1449,13 +1808,12 @@ class _ProofOfServiceDetailBodyMobileState
 
   // --- HELPER METHODS ---
 
-  Future<void> _navigateToValidation(
-      BuildContext context,
+  Future<void> _navigateToValidation(BuildContext context,
       ProofOfServiceHeader header,
       ProofOfServiceItemDetail detail,
       String tempIn) async {
-
-    final box = await Hive.openBox<PosValidationEntryModel>(kPosValidationHiveBox);
+    final box = await Hive.openBox<PosValidationEntryModel>(
+        kPosValidationHiveBox);
     PosValidationEntryModel? existingData;
 
     if (detail.isGeneric) {
@@ -1468,21 +1826,24 @@ class _ProofOfServiceDetailBodyMobileState
     }
 
     final double? indoorTemp = double.tryParse(tempIn);
-    final detailState = context.read<ProofOfServiceDetailBloc>().state;
+    final detailState = context
+        .read<ProofOfServiceDetailBloc>()
+        .state;
     List<String> allIndoorSerials = [];
     List<NoteOption> noteOptionsToSend = [];
 
     if (detailState is ProofOfServiceDetailLoaded) {
-
       // 🔥 SMART DROPDOWN LOGIC 🔥
-      final indoorUnits = detailState.data.detail.where((d) => d.unitType.toUpperCase() == 'IN');
+      final indoorUnits = detailState.data.detail.where((d) =>
+      d.unitType.toUpperCase() == 'IN');
       for (var indoor in indoorUnits) {
         if (indoor.isGeneric) {
           final mapKey = '${indoor.unitType}_${indoor.unitIndex}';
           final realSn = detailState.savedSerials[mapKey];
 
           // HANYA MASUKKAN KE DROPDOWN JIKA TEKNISI SUDAH INPUT SN (Dan bukan "AC")
-          if (realSn != null && realSn.isNotEmpty && !realSn.toUpperCase().startsWith('AC')) {
+          if (realSn != null && realSn.isNotEmpty &&
+              !realSn.toUpperCase().startsWith('AC')) {
             allIndoorSerials.add(realSn);
           }
         } else {
@@ -1503,27 +1864,30 @@ class _ProofOfServiceDetailBodyMobileState
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PosValidationScreen(
-          transNo: header.transNo,
-          serialNo: detail.serialNo,
-          unitType: detail.unitType,
-          initialData: existingData,
-          articleNo: detail.articleNo,
-          articleDesc: detail.articleDesc,
-          articleUnitDesc: detail.unitDesc,
-          capacity: 0,
-          indoorTemp: indoorTemp,
-          allIndoorSerials: allIndoorSerials, // Dropdown udah bersih
-          noteOptions: noteOptionsToSend,
-          isGeneric: detail.isGeneric,
-          unitIndex: detail.unitIndex,
-          reffLineNo: detail.reffLineNo,
-        ),
+        builder: (_) =>
+            PosValidationScreen(
+              transNo: header.transNo,
+              serialNo: detail.serialNo,
+              unitType: detail.unitType,
+              initialData: existingData,
+              articleNo: detail.articleNo,
+              articleDesc: detail.articleDesc,
+              articleUnitDesc: detail.unitDesc,
+              capacity: 0,
+              indoorTemp: indoorTemp,
+              allIndoorSerials: allIndoorSerials,
+              // Dropdown udah bersih
+              noteOptions: noteOptionsToSend,
+              isGeneric: detail.isGeneric,
+              unitIndex: detail.unitIndex,
+              reffLineNo: detail.reffLineNo,
+            ),
       ),
     );
 
     if (context.mounted) {
-      context.read<ProofOfServiceDetailBloc>().add(FetchProofOfServiceDetail(header.transNo.trim().toUpperCase()));
+      context.read<ProofOfServiceDetailBloc>().add(
+          FetchProofOfServiceDetail(header.transNo.trim().toUpperCase()));
     }
   }
 

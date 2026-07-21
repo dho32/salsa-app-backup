@@ -83,6 +83,11 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
   final Map<NoteType, List<CapturedImageDetail>> remarkPhotosBefore;
   final Map<NoteType, List<CapturedImageDetail>> remarkPhotosAfter;
 
+  // Pengukuran yang sudah dikonfirmasi "sesuai foto" per fase (id pengukuran).
+  // Transient (tidak disimpan ke Hive) — untuk mengunci tombol Lanjut/Simpan.
+  final Set<String> confirmedBefore;
+  final Set<String> confirmedAfter;
+
   final Map<String, MeasurementLimits> limitsScBefore;
   final Map<String, MeasurementLimits> limitsScAfter;
 
@@ -125,6 +130,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     this.selectedOutdoorPSINoteAfter,
     this.remarkPhotosBefore = const {},
     this.remarkPhotosAfter = const {},
+    this.confirmedBefore = const {},
+    this.confirmedAfter = const {},
     this.saveStatus = ValidationSaveStatus.initial,
     this.saveMessage,
     this.correctSerialNo,
@@ -158,6 +165,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
     Object? selectedOutdoorPSINoteAfter = const Object(),
     Map<NoteType, List<CapturedImageDetail>>? remarkPhotosBefore,
     Map<NoteType, List<CapturedImageDetail>>? remarkPhotosAfter,
+    Set<String>? confirmedBefore,
+    Set<String>? confirmedAfter,
     ValidationSaveStatus? saveStatus,
     Object? saveMessage = const Object(),
     Map<String, MeasurementLimits>? limitsScBefore,
@@ -219,6 +228,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
           selectedOutdoorPSINoteAfter, this.selectedOutdoorPSINoteAfter),
       remarkPhotosBefore: remarkPhotosBefore ?? this.remarkPhotosBefore,
       remarkPhotosAfter: remarkPhotosAfter ?? this.remarkPhotosAfter,
+      confirmedBefore: confirmedBefore ?? this.confirmedBefore,
+      confirmedAfter: confirmedAfter ?? this.confirmedAfter,
       saveStatus: saveStatus ?? this.saveStatus,
       saveMessage: handleNullable(saveMessage, this.saveMessage),
       correctSerialNo: handleNullable(correctSerialNo, this.correctSerialNo),
@@ -254,6 +265,8 @@ class ValidationDropdownLoaded extends ValidationDropdownState {
         selectedOutdoorPSINoteAfter,
         remarkPhotosBefore,
         remarkPhotosAfter,
+        confirmedBefore,
+        confirmedAfter,
         limitsScBefore,
         limitsScAfter,
         saveStatus,

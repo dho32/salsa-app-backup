@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'; // dipakai kDebugMode tombol debug Cuci Freezer
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -227,6 +228,36 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                           style: TextStyle(fontSize: 16)),
                     ),
                     const SizedBox(height: 24),
+
+                    // [DEBUG] Entry-point sementara untuk Cuci Freezer.
+                    // Schedule belum mengirim task bertipe CUCI_FREEZER dari
+                    // backend, jadi tombol ini dipakai untuk testing modul.
+                    // Hanya tampil di debug build (kDebugMode).
+                    // HAPUS sebelum rilis produksi.
+                    // if (kDebugMode) ...[
+                    //   OutlinedButton.icon(
+                    //     onPressed: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (_) =>
+                    //               const ProofOfServiceFreezerDetailScreen(
+                    //                   transNo: 'CF-DEBUG-001'),
+                    //         ),
+                    //       );
+                    //     },
+                    //     icon: const Icon(Icons.bug_report),
+                    //     label: const Text('[DEBUG] Buka Cuci Freezer'),
+                    //     style: OutlinedButton.styleFrom(
+                    //       foregroundColor: Colors.deepOrange,
+                    //       side: const BorderSide(color: Colors.deepOrange),
+                    //       shape: const StadiumBorder(),
+                    //       padding: const EdgeInsets.symmetric(
+                    //           horizontal: 24, vertical: 12),
+                    //     ),
+                    //   ),
+                    //   const SizedBox(height: 24),
+                    // ],
 
                     // ... (Widget BlocBuilder Zombie & Shimmer tetap sama) ...
                     BlocBuilder<TaskMaintenanceBloc, TaskMaintenanceState>(

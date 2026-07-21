@@ -54,6 +54,11 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   final _noteController = TextEditingController();
   bool _isSaving = false;
 
+  // ID pengukuran yang sudah dikonfirmasi "angka sesuai foto". Tombol Simpan
+  // baru aktif setelah semua pengukuran non-skip terkonfirmasi. Mengedit ulang
+  // nilai membatalkan konfirmasi (lihat MeasurementInputWidget).
+  final Set<String> _confirmedIds = {};
+
   /// Fungsi debug yang mencetak status setiap elemen
   bool checkMeasurementDetails(List<MeasurementEntry> measurements) {
     bool allItemsPassed = true;
@@ -76,6 +81,15 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
   void initState() {
     super.initState();
     _noteController.text = widget.initialData?.note ?? '';
+    // Pengukuran dari draft yang sudah punya nilai + foto dianggap sudah
+    // terkonfirmasi saat unit dibuka kembali (edit).
+    for (final m in widget.initialData?.measurementsAfter ?? const []) {
+      if (!(m.isSkipped ?? false) &&
+          m.value != 0 &&
+          m.capturedImage != null) {
+        _confirmedIds.add(m.measurementId);
+      }
+    }
   }
 
   @override
@@ -148,6 +162,15 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
                 noteController: _noteController,
                 indoorTemp: widget.indoorTemp,
                 noteOptions: widget.noteOptions,
+                onMeasurementConfirmedChanged: (id, confirmed) {
+                  setState(() {
+                    if (confirmed) {
+                      _confirmedIds.add(id);
+                    } else {
+                      _confirmedIds.remove(id);
+                    }
+                  });
+                },
               ), // Body ambil data dari Bloc langsung
               bottomNavigationBar: (uiState != null)
                   ? _buildFloatingButtons(context, uiState)
@@ -159,10 +182,27 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
     );
   }
 
+  /// Syarat tombol Simpan aktif (step Sesudah): foto sesudah ada, dan setiap
+  /// pengukuran non-skip sudah punya nilai (!= 0) + foto DAN sudah dikonfirmasi
+  /// "sesuai foto". Detail lain (limit, remark skip) tetap divalidasi saat
+  /// tombol ditekan.
+  bool _isStep1Complete(PosValidationLoaded s) {
+    if (s.photosAfter.isEmpty) return false;
+    for (final m in s.measurementsAfter) {
+      final skipped = m.isSkipped ?? false;
+      if (!skipped) {
+        if (m.capturedImage == null || m.value == 0) return false;
+        if (!_confirmedIds.contains(m.measurementId)) return false;
+      }
+    }
+    return true;
+  }
+
   Widget _buildFloatingButtons(
       BuildContext context, PosValidationLoaded state) {
     final bloc = context.read<PosValidationBloc>();
     final Color primary = Theme.of(context).primaryColor;
+    final bool step1Complete = _isStep1Complete(state);
 
     return Container(
       padding: const EdgeInsets.all(16.0)
@@ -170,7 +210,23 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
       decoration: const BoxDecoration(
         color: Colors.transparent,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Petunjuk kenapa tombol Simpan belum bisa ditekan.
+          if (state.currentStep == 1 && !step1Complete)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Lengkapi & konfirmasi (Sesuai Foto) semua hasil pengukuran untuk menyimpan.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w500),
+              ),
+            ),
+          Row(
         children: [
           if (state.currentStep == 1) ...[
             Expanded(
@@ -185,8 +241,13 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: _isSaving ? null : () async {
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                ),
+                // Tombol baru aktif setelah semua nilai + foto pengukuran
+                // lengkap (tidak bisa Simpan di tengah input).
+                onPressed: (_isSaving || !step1Complete) ? null : () async {
                   setState(() { _isSaving = true; });
                   FocusScope.of(context).unfocus();
                   await Future.delayed(const Duration(milliseconds: 200));
@@ -370,6 +431,8 @@ class _PosValidationScreenState extends State<PosValidationScreen> {
           ],
         ],
       ),
+          ],
+        ),
     );
   }
 }

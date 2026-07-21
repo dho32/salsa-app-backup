@@ -318,13 +318,19 @@ class InstallationEntryModelAdapter
       transportEvidencePhoto: fields[15] as InstallationPhotoModel?,
       hasTidyingService: fields[16] == null ? false : fields[16] as bool,
       tidyingQty: fields[17] == null ? 0 : fields[17] as int,
+      picName: fields[20] == null ? '' : fields[20] as String,
+      picPhone: fields[21] == null ? '' : fields[21] as String,
+      picNik: fields[22] == null ? '' : fields[22] as String,
+      picPosition: fields[23] == null ? '' : fields[23] as String,
+      isPicActive: fields[24] == null ? false : fields[24] as bool,
+      picPhoto: fields[25] as InstallationPhotoModel?,
     );
   }
 
   @override
   void write(BinaryWriter writer, InstallationEntryModel obj) {
     writer
-      ..writeByte(20)
+      ..writeByte(26)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -364,7 +370,19 @@ class InstallationEntryModelAdapter
       ..writeByte(18)
       ..write(obj.technician2Id)
       ..writeByte(19)
-      ..write(obj.technician3Id);
+      ..write(obj.technician3Id)
+      ..writeByte(20)
+      ..write(obj.picName)
+      ..writeByte(21)
+      ..write(obj.picPhone)
+      ..writeByte(22)
+      ..write(obj.picNik)
+      ..writeByte(23)
+      ..write(obj.picPosition)
+      ..writeByte(24)
+      ..write(obj.isPicActive)
+      ..writeByte(25)
+      ..write(obj.picPhoto);
   }
 
   @override

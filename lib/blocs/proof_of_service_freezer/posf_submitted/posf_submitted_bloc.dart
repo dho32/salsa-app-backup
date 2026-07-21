@@ -49,18 +49,41 @@ class PosfSubmittedBloc extends Bloc<PosfSubmittedEvent, PosfSubmittedState> {
                 'arrival_temp': e.arrivalTemp,
                 'arrival_temp_image':
                     e.arrivalTempImage?.imagePath.split('/').last,
+                'arrival_temp_skipped': e.arrivalTempSkipped,
+                'arrival_temp_reason': e.arrivalTempReason,
+                // Bukti kendala skip (alasan ber-flag require_remark):
+                // keterangan tambahan + foto bukti (filename-only).
+                'arrival_temp_skip_remark': e.arrivalTempSkipRemark ?? '',
+                'arrival_temp_skip_photos': (e.arrivalTempSkipPhotos ?? [])
+                    .map((p) => p.imagePath.split('/').last)
+                    .toList(),
+                'temp_skip_remark': e.tempSkipRemark ?? '',
+                'temp_skip_photos': (e.tempSkipPhotos ?? [])
+                    .map((p) => p.imagePath.split('/').last)
+                    .toList(),
+                'elec_skip_remark': e.elecSkipRemark ?? '',
+                'elec_skip_photos': (e.elecSkipPhotos ?? [])
+                    .map((p) => p.imagePath.split('/').last)
+                    .toList(),
                 'general_condition': e.generalCondition,
+                'complaint': e.complaint,
+                // Detail kondisi "Ada Keluhan"/"Tidak terpakai": keterangan
+                // tambahan + foto bukti (filename-only).
+                // NOTE(backend): field baru — backend perlu menerima ini dan
+                // mengembalikan presigned URL foto di uploads[].
+                'condition_note': e.conditionNote ?? '',
+                'condition_photos': (e.conditionPhotos ?? [])
+                    .map((p) => p.imagePath.split('/').last)
+                    .toList(),
                 'frost_thickness': e.frostThickness,
                 'initial_note': e.initialNote,
-                'cleaning_checklist': e.cleaningChecklist,
-                'cleaning_product': e.cleaningProduct,
-                'status_flags': e.statusFlags,
                 'measurements': e.measurements
                     .map((m) => {
                           'measurement_id': m.measurementId,
                           'value': m.value,
                           'unit': m.unit,
                           'is_skipped': m.isSkipped ?? false,
+                          'skip_reason': m.remark,
                           if (m.capturedImage != null)
                             'image_file_name':
                                 m.capturedImage!.imagePath.split('/').last,

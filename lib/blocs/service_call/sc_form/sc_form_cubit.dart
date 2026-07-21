@@ -7,6 +7,7 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/service_call/transaction_info_model.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 
+import '../../../models/common/note_option.dart';
 import '../../../models/service_call/service_call_detail_model.dart';
 import '../../../models/service_call/service_call_validation_entry_model.dart';
 import '../../auth/auth_storage.dart';
@@ -18,6 +19,9 @@ class ScFormCubit extends Cubit<ScFormState> {
   String _userName = '';
   String _userId = '';
   List<Map<String, String>> _technicianList = [];
+
+  // Master catatan skip suhu akhir (untuk cek flag require_remark).
+  List<NoteOption> _noteOptions = [];
 
   String get userType => _userType;
   List<Map<String, String>> get technicianList => _technicianList;
@@ -92,6 +96,8 @@ class ScFormCubit extends Cubit<ScFormState> {
           finalTempInImage: info.finalTemperatureInImage,
           isFinalTempSkipped: info.isFinalTempSkipped ?? false,
           finalTempNote: info.finalTempNote,
+          finalTempSkipRemark: info.finalTempSkipRemark ?? '',
+          finalTempSkipPhotos: info.finalTempSkipPhotos ?? const [],
         ));
       } else {
         String initialTechnician1 = '';
@@ -189,15 +195,68 @@ class ScFormCubit extends Cubit<ScFormState> {
         finalTempIn: '',
         clearFinalTempInImage: true,
         finalTempNote: null,
+        finalTempSkipRemark: '',
+        finalTempSkipPhotos: const [],
       ));
     } else {
-      emit(state.copyWith(isFinalTempSkipped: false));
+      emit(state.copyWith(
+        isFinalTempSkipped: false,
+        finalTempSkipRemark: '',
+        finalTempSkipPhotos: const [],
+      ));
     }
     onFieldChanged();
   }
 
-  void finalTempNoteChanged(String? note) =>
-      emit(state.copyWith(finalTempNote: note));
+  // Ganti alasan skip = reset remark + foto bukti (bukti mengikuti alasan).
+  void finalTempNoteChanged(String? note) => emit(state.copyWith(
+        finalTempNote: note,
+        finalTempSkipRemark: '',
+        finalTempSkipPhotos: const [],
+      ));
+
+  void finalTempSkipRemarkChanged(String value) {
+    emit(state.copyWith(finalTempSkipRemark: value));
+    onFieldChanged();
+  }
+
+  void addFinalTempSkipPhoto(CapturedImageDetail photo) {
+    emit(state.copyWith(
+        finalTempSkipPhotos: [...state.finalTempSkipPhotos, photo]));
+    onFieldChanged();
+  }
+
+  void removeFinalTempSkipPhoto(String path) {
+    emit(state.copyWith(
+        finalTempSkipPhotos: state.finalTempSkipPhotos
+            .where((p) => p.imagePath != path)
+            .toList()));
+    onFieldChanged();
+  }
+
+  /// Dipanggil layar detail saat master catatan tersedia, agar validasi tahu
+  /// alasan mana yang ber-flag require_remark.
+  void setNoteOptions(List<NoteOption> options) {
+    if (identical(_noteOptions, options)) return; // guard anti rebuild-loop
+    _noteOptions = options;
+    _validateForm();
+  }
+
+  bool noteRequiresRemark(String? noteLabel) {
+    if (noteLabel == null || noteLabel.isEmpty) return false;
+    final opt = _noteOptions.firstWhereOrNull((o) => o.label == noteLabel);
+    return opt?.requireRemark ?? false;
+  }
+
+  /// Skip lengkap: alasan terpilih; alasan ber-flag require_remark juga wajib
+  /// remark ≥ 20 huruf (tanpa spasi) + minimal 1 foto bukti.
+  bool isSkipComplete(
+      String? note, String remark, List<CapturedImageDetail> photos) {
+    if (note == null || note.isEmpty) return false;
+    if (!noteRequiresRemark(note)) return true;
+    final int charCount = remark.replaceAll(' ', '').length;
+    return charCount >= 20 && photos.isNotEmpty;
+  }
 
   void _validateForm() {
     final picStoreValid = state.picName.isNotEmpty &&
@@ -210,11 +269,11 @@ class ScFormCubit extends Cubit<ScFormState> {
     final bool isSkipped = state.isFinalTempSkipped;
     final bool isFilled =
         state.finalTempIn.isNotEmpty && state.finalTempInImage != null;
-    final bool noteFilled =
-        state.finalTempNote != null && state.finalTempNote!.isNotEmpty;
 
-    final finalTempValid =
-        (isFilled && !isSkipped) || (isSkipped && noteFilled);
+    final finalTempValid = (isFilled && !isSkipped) ||
+        (isSkipped &&
+            isSkipComplete(state.finalTempNote, state.finalTempSkipRemark,
+                state.finalTempSkipPhotos));
 
     final isReady = picStoreValid &&
         technicianValid &&
@@ -258,6 +317,8 @@ class ScFormCubit extends Cubit<ScFormState> {
     infoToSave.finalTemperatureInImage = state.finalTempInImage;
     infoToSave.isFinalTempSkipped = state.isFinalTempSkipped;
     infoToSave.finalTempNote = state.finalTempNote;
+    infoToSave.finalTempSkipRemark = state.finalTempSkipRemark;
+    infoToSave.finalTempSkipPhotos = state.finalTempSkipPhotos;
 
     await infoToSave.save();
   }

@@ -12,6 +12,13 @@ class GenericMeasurementInputSection extends StatefulWidget {
   final double? indoorTemp;
   final VoidCallback? onMaybeResetNote;
 
+  /// Aktifkan dialog konfirmasi "angka sesuai foto" per pengukuran saat blur.
+  final bool enableConfirmDialog;
+
+  /// Dipanggil saat status konfirmasi sebuah pengukuran berubah (id, sudah?).
+  final void Function(String measurementId, bool confirmed)?
+      onMeasurementConfirmedChanged;
+
   const GenericMeasurementInputSection({
     super.key,
     required this.transNo,
@@ -21,6 +28,8 @@ class GenericMeasurementInputSection extends StatefulWidget {
     required this.onUpdate,
     required this.indoorTemp,
     this.onMaybeResetNote,
+    this.enableConfirmDialog = false,
+    this.onMeasurementConfirmedChanged,
   });
 
   @override
@@ -50,6 +59,16 @@ class _GenericMeasurementInputSectionState
   // Fungsi helper buat dapetin data paling baru saat ini
   MeasurementEntry _getLatestEntry(MeasurementEntry mEntry) {
     return _localCache[mEntry.measurementId] ?? mEntry;
+  }
+
+  // Commit nilai pengukuran ke parent. String kosong = nilai di-reset (mis.
+  // foto dihapus) → nol-kan, jangan pertahankan nilai lama.
+  void _commitValue(MeasurementEntry mEntry, String value) {
+    final parsedValue = double.tryParse(value);
+    final latest = _getLatestEntry(mEntry);
+    final newValue = value.isEmpty ? 0.0 : (parsedValue ?? latest.value);
+    if (latest.value == newValue) return; // hindari update/emit berulang
+    _safeUpdate(latest.copyWith(value: newValue));
   }
 
   @override
@@ -111,15 +130,12 @@ class _GenericMeasurementInputSectionState
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         limits: limitsToUse,
         initialImage: _getLatestEntry(mEntry).capturedImage,
-        onEditingComplete: (finalValue) {
-          final parsedValue = double.tryParse(finalValue);
-          final latest = _getLatestEntry(mEntry);
-          _safeUpdate(
-            latest.copyWith(
-              value: parsedValue ?? latest.value,
-            ),
-          );
-        },
+        enableConfirmDialog: widget.enableConfirmDialog,
+        onConfirmedChanged: (confirmed) => widget
+            .onMeasurementConfirmedChanged
+            ?.call(mEntry.measurementId, confirmed),
+        // Nilai di-commit saat konfirmasi (via onEditingComplete di widget).
+        onEditingComplete: (finalValue) => _commitValue(mEntry, finalValue),
         onImageChanged: (newImage) {
           final latest = _getLatestEntry(mEntry);
           _safeUpdate(newImage == null

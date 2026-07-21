@@ -27,22 +27,30 @@ class ProofOfServiceFreezerEntryModelAdapter
       isCompleted: fields[6] as bool,
       arrivalTemp: fields[7] as double?,
       arrivalTempImage: fields[8] as CapturedImageDetail?,
+      arrivalTempSkipped: fields[19] as bool,
+      arrivalTempReason: fields[20] as String?,
       generalCondition: fields[9] as String?,
       frostThickness: fields[10] as String?,
       initialPhotos: (fields[11] as Map?)?.cast<String, CapturedImageDetail>(),
       initialNote: fields[12] as String?,
-      cleaningChecklist: (fields[13] as List?)?.cast<bool>(),
-      cleaningProduct: fields[14] as String?,
-      statusFlags: (fields[15] as Map?)?.cast<String, String>(),
+      complaint: fields[18] as String?,
+      conditionNote: fields[27] as String?,
+      conditionPhotos: (fields[28] as List?)?.cast<CapturedImageDetail>(),
       measurements: (fields[16] as List?)?.cast<MeasurementEntry>(),
       afterPhotos: (fields[17] as Map?)?.cast<String, CapturedImageDetail>(),
+      arrivalTempSkipRemark: fields[21] as String?,
+      arrivalTempSkipPhotos: (fields[22] as List?)?.cast<CapturedImageDetail>(),
+      tempSkipRemark: fields[23] as String?,
+      tempSkipPhotos: (fields[24] as List?)?.cast<CapturedImageDetail>(),
+      elecSkipRemark: fields[25] as String?,
+      elecSkipPhotos: (fields[26] as List?)?.cast<CapturedImageDetail>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceFreezerEntryModel obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(26)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -61,6 +69,10 @@ class ProofOfServiceFreezerEntryModelAdapter
       ..write(obj.arrivalTemp)
       ..writeByte(8)
       ..write(obj.arrivalTempImage)
+      ..writeByte(19)
+      ..write(obj.arrivalTempSkipped)
+      ..writeByte(20)
+      ..write(obj.arrivalTempReason)
       ..writeByte(9)
       ..write(obj.generalCondition)
       ..writeByte(10)
@@ -69,16 +81,28 @@ class ProofOfServiceFreezerEntryModelAdapter
       ..write(obj.initialPhotos)
       ..writeByte(12)
       ..write(obj.initialNote)
-      ..writeByte(13)
-      ..write(obj.cleaningChecklist)
-      ..writeByte(14)
-      ..write(obj.cleaningProduct)
-      ..writeByte(15)
-      ..write(obj.statusFlags)
+      ..writeByte(18)
+      ..write(obj.complaint)
+      ..writeByte(27)
+      ..write(obj.conditionNote)
+      ..writeByte(28)
+      ..write(obj.conditionPhotos)
       ..writeByte(16)
       ..write(obj.measurements)
       ..writeByte(17)
-      ..write(obj.afterPhotos);
+      ..write(obj.afterPhotos)
+      ..writeByte(21)
+      ..write(obj.arrivalTempSkipRemark)
+      ..writeByte(22)
+      ..write(obj.arrivalTempSkipPhotos)
+      ..writeByte(23)
+      ..write(obj.tempSkipRemark)
+      ..writeByte(24)
+      ..write(obj.tempSkipPhotos)
+      ..writeByte(25)
+      ..write(obj.elecSkipRemark)
+      ..writeByte(26)
+      ..write(obj.elecSkipPhotos);
   }
 
   @override

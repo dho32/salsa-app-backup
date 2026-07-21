@@ -55,7 +55,30 @@ extension ServiceCallValidationEntryModelJson
       'remark_photos_indoor': remarkPhotosIndoorAfter?.map((img) => img.toJson()).toList() ?? [],
       'remark_photos_outdoor': remarkPhotosOutdoorAfter?.map((img) => img.toJson()).toList() ?? [],
       'remark_photos_psi': remarkPhotosOutdoorPsiAfter?.map((img) => img.toJson()).toList() ?? [],
+      // Remark + foto bukti skip fase SEBELUM (teks remark diambil dari
+      // measurementsBefore, pola getRemarkFromList di bloc).
+      // NOTE(backend): field baru — backend perlu menerima & mengembalikan
+      // presigned URL untuk file remark_photos_*_before di uploads[].
+      'note_remark_indoor_before': _remarkBefore({'temperature'}) ?? '',
+      'note_remark_outdoor_before': _remarkBefore({'volt', 'ampere'}) ?? '',
+      'note_remark_psi_before': _remarkBefore({'psi'}) ?? '',
+      'remark_photos_indoor_before':
+          remarkPhotosIndoorBefore?.map((img) => img.toJson()).toList() ?? [],
+      'remark_photos_outdoor_before':
+          remarkPhotosOutdoorBefore?.map((img) => img.toJson()).toList() ?? [],
+      'remark_photos_psi_before':
+          remarkPhotosOutdoorPsiBefore?.map((img) => img.toJson()).toList() ??
+              [],
     };
+  }
+
+  String? _remarkBefore(Set<String> ids) {
+    for (final m in measurementsBefore) {
+      if (ids.contains(m.measurementId) && (m.isSkipped ?? false)) {
+        return m.remark;
+      }
+    }
+    return null;
   }
 }
 

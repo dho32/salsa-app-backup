@@ -25,6 +25,13 @@ Future<void> notifyBackendSuccess(String presignedUrl) async {
 Future<void> notifyBackendBatch(List<String> successfulUrls) async {
   if (successfulUrls.isEmpty) return;
 
+  // ⛔ DINONAKTIFKAN SEMENTARA: endpoint `upload/callback_batch` (update status
+  // foto sudah terupload) sering balas 504 "Endpoint request timed out" saat
+  // foto banyak, karena sudah di handle di worker. Hapus baris return di bawah untuk mengaktifkan kembali.
+  log("⏸️ notifyBackendBatch dinonaktifkan sementara (${successfulUrls.length} files dilewati).");
+  return;
+
+  // ignore: dead_code
   try {
     Uri uri = getUrl(pathUrl: 'upload/callback_batch');
 

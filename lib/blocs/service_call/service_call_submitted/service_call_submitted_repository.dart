@@ -23,6 +23,19 @@ class ServiceCallSubmittedRepository {
         'temperature_in_after':
             double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
         'temperature_in_note': transactionInfo?.isFinalTempSkipped ?? false ? transactionInfo?.finalTempNote ?? '' : '',
+        // Bukti kendala skip Suhu Akhir (alasan ber-flag require_remark).
+        // NOTE(backend): field baru — backend perlu menerima field ini dan
+        // mengembalikan presigned URL untuk file foto bukti di uploads[].
+        'temperature_in_note_remark':
+            transactionInfo?.isFinalTempSkipped ?? false
+                ? transactionInfo?.finalTempSkipRemark ?? ''
+                : '',
+        'temperature_in_remark_photos':
+            transactionInfo?.isFinalTempSkipped ?? false
+                ? (transactionInfo?.finalTempSkipPhotos ?? [])
+                    .map((e) => e.toJson())
+                    .toList()
+                : [],
         'created_by': createdBy,
         'created_by_name': createdByName,
         'created_by_ip': createdByIp,
@@ -49,7 +62,7 @@ class ServiceCallSubmittedRepository {
       log(prettyJson);
       log("================================");
 
-      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted/v2');
+      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted/v3');
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},

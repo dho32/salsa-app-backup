@@ -57,6 +57,14 @@ class TransactionInfoModel extends HiveObject implements IPicPhotoStorable {
   @HiveField(15)
   String? technician3Nik;
 
+  // Bukti kendala saat Suhu Akhir di-skip dengan alasan ber-flag
+  // require_remark: keterangan tambahan + foto bukti (pola POS).
+  @HiveField(16)
+  String? finalTempSkipRemark;
+
+  @HiveField(17)
+  List<CapturedImageDetail>? finalTempSkipPhotos;
+
   TransactionInfoModel({
     required this.transNo,
     this.picNik,
@@ -74,5 +82,7 @@ class TransactionInfoModel extends HiveObject implements IPicPhotoStorable {
     this.finalTemperatureInImage,
     this.isFinalTempSkipped,
     this.finalTempNote,
+    this.finalTempSkipRemark,
+    this.finalTempSkipPhotos,
   });
 }

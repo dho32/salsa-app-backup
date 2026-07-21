@@ -40,6 +40,37 @@ class UpdateTransportStatus extends InstallationEvent {
   List<Object?> get props => [hasTransport];
 }
 
+// --- PIC TOKO (mirror RRO Cut Off) ---
+class UpdatePicInfo extends InstallationEvent {
+  final String? picName;
+  final String? picPhone;
+  final String? picNik;
+  final String? picPosition;
+  final bool? isPicActive;
+
+  const UpdatePicInfo({
+    this.picName,
+    this.picPhone,
+    this.picNik,
+    this.picPosition,
+    this.isPicActive,
+  });
+
+  @override
+  List<Object?> get props =>
+      [picName, picPhone, picNik, picPosition, isPicActive];
+}
+
+// Simpan foto PIC hasil validasi lokasi (di OtpDialog) sebelum submit
+class UpdatePicPhoto extends InstallationEvent {
+  final InstallationPhotoModel? photo;
+
+  const UpdatePicPhoto(this.photo);
+
+  @override
+  List<Object?> get props => [photo];
+}
+
 // --- FASE 1: INDOOR ---
 class SaveIndoorUnit extends InstallationEvent {
   final InstallationUnitModel unit;

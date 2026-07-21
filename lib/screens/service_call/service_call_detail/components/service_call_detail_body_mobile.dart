@@ -29,12 +29,14 @@ import '../../../../blocs/upload_progress/upload_progress_cubit.dart';
 // ---
 
 import '../../../../components/constants.dart';
+import '../../../../components/services/photo_capture_service.dart';
 import '../../../../components/shared_function.dart';
 import '../../../../components/shared_widgets.dart';
 import '../../../../components/widgets/aho_dialog.dart';
 import '../../../../components/widgets/ddl_pic_position.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
 import '../../../../components/widgets/otp.dart';
+import '../../../../components/widgets/remark_photo_picker.dart';
 import '../../../../components/widgets/scan_qr.dart';
 import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/common/note_option.dart';
@@ -81,8 +83,12 @@ class _ServiceCallDetailBodyMobileState
   TextEditingController();
   final TextEditingController _tech2SearchController = TextEditingController();
   final TextEditingController _tech3SearchController = TextEditingController();
+  late final TextEditingController _finalTempSkipRemarkController;
+  bool _capturingFinalTempSkipPhoto = false;
 
   bool _showTechnician3 = false;
+  // Konfirmasi "angka sesuai foto" untuk Suhu Akhir (SC detail).
+  bool _finalTempConfirmed = false;
   Future<Map<String, ValidationStatus>>? _validationStatusFuture;
   String technicianName = '';
   String maintenanceBy = '';
@@ -124,6 +130,8 @@ class _ServiceCallDetailBodyMobileState
         TextEditingController(text: initialFormState.technician3);
     _finalTempController =
         TextEditingController(text: initialFormState.finalTempIn);
+    _finalTempSkipRemarkController =
+        TextEditingController(text: initialFormState.finalTempSkipRemark);
 
     _showTechnician3 = initialFormState.showTechnician3;
 
@@ -168,6 +176,13 @@ class _ServiceCallDetailBodyMobileState
         formCubit.onFieldChanged();
       }
     });
+    _finalTempSkipRemarkController.addListener(() {
+      if (formCubit.state.finalTempSkipRemark !=
+          _finalTempSkipRemarkController.text) {
+        formCubit
+            .finalTempSkipRemarkChanged(_finalTempSkipRemarkController.text);
+      }
+    });
   }
 
   @override
@@ -180,6 +195,7 @@ class _ServiceCallDetailBodyMobileState
     _technician3Controller.dispose();
     _finalTempController.dispose();
     _finalTempNoteSearchController.dispose();
+    _finalTempSkipRemarkController.dispose();
     _tech2SearchController.dispose();
     _tech3SearchController.dispose();
     super.dispose();
@@ -380,6 +396,14 @@ class _ServiceCallDetailBodyMobileState
 
               final List<NoteOption> noteOptions =
                   detailState.data.noteIndoorAfterOptions;
+
+              // Cubit perlu master catatan untuk cek flag require_remark
+              // pada validasi skip suhu akhir (post-frame agar tidak emit
+              // saat build; setNoteOptions punya guard anti-loop).
+              final formCubitForNotes = context.read<ScFormCubit>();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                formCubitForNotes.setNoteOptions(noteOptions);
+              });
 
               return BlocBuilder<ScFormCubit, ScFormState>(
                 builder: (context, formState) {
@@ -611,7 +635,14 @@ class _ServiceCallDetailBodyMobileState
                                             prev.finalTempInImage !=
                                                 current.finalTempInImage ||
                                             prev.minFinalTempInLimit !=
-                                                current.minFinalTempInLimit;
+                                                current.minFinalTempInLimit ||
+                                            // Tanpa ini, foto bukti kendala
+                                            // yang baru diambil tidak langsung
+                                            // tampil di RemarkPhotoPicker.
+                                            prev.finalTempSkipRemark !=
+                                                current.finalTempSkipRemark ||
+                                            prev.finalTempSkipPhotos !=
+                                                current.finalTempSkipPhotos;
                                       },
                                       builder: (context, formStateForTemp) {
                                         final bool isEnabled =
@@ -1247,6 +1278,8 @@ class _ServiceCallDetailBodyMobileState
             limits: finalTempLimits,
             transNo: widget.transNo,
             initialImage: formState.finalTempInImage,
+            enableConfirmDialog: true,
+            onConfirmedChanged: (c) => setState(() => _finalTempConfirmed = c),
             onEditingComplete: (finalValue) {
               if (formCubit.state.finalTempIn != finalValue) {
                 formCubit.finalTempInChanged(finalValue);
@@ -1262,9 +1295,10 @@ class _ServiceCallDetailBodyMobileState
             onSkipChanged: (isSkipped) {
               // Panggil method baru di Cubit
               formCubit.finalTempSkippedChanged(isSkipped);
+              if (isSkipped) setState(() => _finalTempConfirmed = false);
             },
           ),
-          if (formState.isFinalTempSkipped)
+          if (formState.isFinalTempSkipped) ...[
             _buildNoteDropdown(
               context: context,
               options: noteOptions,
@@ -1272,13 +1306,68 @@ class _ServiceCallDetailBodyMobileState
               searchController: _finalTempNoteSearchController,
               label: 'Alasan Skip Suhu Akhir',
               onChanged: (value) {
+                _finalTempSkipRemarkController.clear();
                 formCubit.finalTempNoteChanged(value); // Panggil method baru
                 formCubit.onFieldChanged();
               },
             ),
+            // Alasan ber-flag require_remark (mis. "Terkendala dengan alat
+            // kerja") wajib keterangan tambahan + foto bukti — pola POS/SC.
+            if (formCubit.noteRequiresRemark(formState.finalTempNote)) ...[
+              TextFormField(
+                controller: _finalTempSkipRemarkController,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                decoration: InputDecoration(
+                  labelText: 'Keterangan Tambahan (*Wajib)',
+                  hintText: 'Jelaskan detail kendala (Min. 20 huruf)...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.only(top: 10, bottom: 10, right: 12),
+                  prefixIcon: const Icon(Icons.edit_note, size: 25),
+                ),
+                maxLines: 2,
+                validator: (value) {
+                  final text = value ?? '';
+                  if (text.trim().isEmpty) return 'Wajib diisi';
+                  final int charCount = text.replaceAll(' ', '').length;
+                  if (charCount < 20) {
+                    return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              RemarkPhotoPicker(
+                photos: formState.finalTempSkipPhotos,
+                isLoading: _capturingFinalTempSkipPhoto,
+                isReadOnly: false,
+                onAddTap: () => _handleFinalTempSkipPhoto(formCubit),
+                onRemoveTap: formCubit.removeFinalTempSkipPhoto,
+              ),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _handleFinalTempSkipPhoto(ScFormCubit formCubit) async {
+    if (formCubit.state.finalTempSkipPhotos.length >= 5) {
+      _showValidationSnackbar(
+          context, 'Maksimal hanya bisa upload 5 foto bukti.');
+      return;
+    }
+    setState(() => _capturingFinalTempSkipPhoto = true);
+    try {
+      final img = await captureWatermarkedPhoto(widget.transNo,
+          photoLabel: 'Bukti Kendala Suhu Akhir');
+      if (img != null) formCubit.addFinalTempSkipPhoto(img);
+    } finally {
+      if (mounted) setState(() => _capturingFinalTempSkipPhoto = false);
+    }
   }
 
   Widget _buildSubmitButton(BuildContext context, ServiceCallHeader header,
@@ -1307,6 +1396,13 @@ class _ServiceCallDetailBodyMobileState
               scFormCubit.onFieldChanged();
               final latestFormState = scFormCubit.state;
 
+              // Suhu Akhir (non-skip) wajib dikonfirmasi "sesuai foto" dulu.
+              if (!latestFormState.isFinalTempSkipped && !_finalTempConfirmed) {
+                _showValidationSnackbar(context,
+                    'Konfirmasi Suhu Akhir sesuai foto terlebih dahulu.');
+                return;
+              }
+
               if (latestFormState.isFormReadyToSubmit) {
                 context.read<ServiceCallSubmittedBloc>().add(
                   ScFinalValidationRequested(
@@ -1325,8 +1421,13 @@ class _ServiceCallDetailBodyMobileState
                   _showValidationSnackbar(
                       context, 'Lengkapi validasi semua unit.');
                 } else if (!latestFormState.isFinalTempValid) {
-                  _showValidationSnackbar(
-                      context, 'Lengkapi suhu dalam ruangan & fotonya.');
+                  if (latestFormState.isFinalTempSkipped) {
+                    _showValidationSnackbar(context,
+                        'Lengkapi alasan skip, keterangan tambahan (min. 20 huruf) & foto bukti kendala Suhu Akhir.');
+                  } else {
+                    _showValidationSnackbar(
+                        context, 'Lengkapi suhu dalam ruangan & fotonya.');
+                  }
                 } else {
                   _showValidationSnackbar(
                       context, 'Periksa kembali data Anda.');

@@ -23,6 +23,9 @@ class ScFormState extends Equatable {
   final double? minFinalTempInLimit;
   final bool isFinalTempSkipped;
   final String? finalTempNote;
+  // Bukti kendala skip (alasan ber-flag require_remark)
+  final String finalTempSkipRemark;
+  final List<CapturedImageDetail> finalTempSkipPhotos;
 
   // Validation & Status Fields
   final bool isPicStoreValid;
@@ -48,6 +51,8 @@ class ScFormState extends Equatable {
     this.minFinalTempInLimit,
     this.isFinalTempSkipped = false,
     this.finalTempNote,
+    this.finalTempSkipRemark = '',
+    this.finalTempSkipPhotos = const [],
     this.isPicStoreValid = false,
     this.allUnitsValidated = false,
     this.isFinalTempValid = false,
@@ -76,6 +81,8 @@ class ScFormState extends Equatable {
     bool? isFinalTempValid,
     bool? isFinalTempSkipped,
     String? finalTempNote,
+    String? finalTempSkipRemark,
+    List<CapturedImageDetail>? finalTempSkipPhotos,
     bool? isFormReadyToSubmit,
   }) {
     return ScFormState(
@@ -96,6 +103,8 @@ class ScFormState extends Equatable {
       minFinalTempInLimit: minFinalTempInLimit ?? this.minFinalTempInLimit,
       isFinalTempSkipped: isFinalTempSkipped ?? this.isFinalTempSkipped,
       finalTempNote: finalTempNote ?? this.finalTempNote,
+      finalTempSkipRemark: finalTempSkipRemark ?? this.finalTempSkipRemark,
+      finalTempSkipPhotos: finalTempSkipPhotos ?? this.finalTempSkipPhotos,
       isPicStoreValid: isPicStoreValid ?? this.isPicStoreValid,
       allUnitsValidated: allUnitsValidated ?? this.allUnitsValidated,
       isFinalTempValid: isFinalTempValid ?? this.isFinalTempValid,
@@ -120,6 +129,8 @@ class ScFormState extends Equatable {
         finalTempIn,
         isFinalTempSkipped,
         finalTempNote,
+        finalTempSkipRemark,
+        finalTempSkipPhotos,
         finalTempInImage,
         isPicStoreValid,
         allUnitsValidated,

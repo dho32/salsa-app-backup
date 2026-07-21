@@ -27,13 +27,16 @@ class ProofOfServiceFreezerInfoModelAdapter
       technician1: fields[6] as String?,
       technician2: fields[7] as String?,
       technician3: fields[8] as String?,
+      technician1Nik: fields[9] as String?,
+      technician2Nik: fields[10] as String?,
+      technician3Nik: fields[11] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ProofOfServiceFreezerInfoModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -51,7 +54,13 @@ class ProofOfServiceFreezerInfoModelAdapter
       ..writeByte(7)
       ..write(obj.technician2)
       ..writeByte(8)
-      ..write(obj.technician3);
+      ..write(obj.technician3)
+      ..writeByte(9)
+      ..write(obj.technician1Nik)
+      ..writeByte(10)
+      ..write(obj.technician2Nik)
+      ..writeByte(11)
+      ..write(obj.technician3Nik);
   }
 
   @override

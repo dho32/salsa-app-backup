@@ -38,6 +38,22 @@ class ValidationDropdownBloc
     // HANDLER BARU (FOTO REMARK)
     on<AddRemarkPhoto>(_onAddRemarkPhoto);
     on<RemoveRemarkPhoto>(_onRemoveRemarkPhoto);
+    on<SetMeasurementConfirmed>(_onSetMeasurementConfirmed);
+  }
+
+  // Konfirmasi "angka sesuai foto" per pengukuran (transient, tidak ke Hive).
+  void _onSetMeasurementConfirmed(
+      SetMeasurementConfirmed event, Emitter<ValidationDropdownState> emit) {
+    if (state is! ValidationDropdownLoaded) return;
+    final s = state as ValidationDropdownLoaded;
+    final set = Set<String>.from(
+        event.isBefore ? s.confirmedBefore : s.confirmedAfter);
+    final changed =
+        event.confirmed ? set.add(event.measurementId) : set.remove(event.measurementId);
+    if (!changed) return;
+    emit(event.isBefore
+        ? s.copyWith(confirmedBefore: set)
+        : s.copyWith(confirmedAfter: set));
   }
 
   // --- HELPER METHODS ---
@@ -155,6 +171,7 @@ class ValidationDropdownBloc
 
       // Ambil Foto Remark dari State
       final photosAfter = state.remarkPhotosAfter;
+      final photosBefore = state.remarkPhotosBefore;
 
       final validationEntry = ServiceCallValidationEntryModel(
         unitType: state.selectedUnitType ?? '',
@@ -188,6 +205,10 @@ class ValidationDropdownBloc
         remarkPhotosIndoorAfter: photosAfter[NoteType.indoor],
         remarkPhotosOutdoorAfter: photosAfter[NoteType.outdoor],
         remarkPhotosOutdoorPsiAfter: photosAfter[NoteType.outdoorPsi],
+        // Foto bukti skip fase Sebelum (ID 25, 26, 27)
+        remarkPhotosIndoorBefore: photosBefore[NoteType.indoor],
+        remarkPhotosOutdoorBefore: photosBefore[NoteType.outdoor],
+        remarkPhotosOutdoorPsiBefore: photosBefore[NoteType.outdoorPsi],
       );
 
       if (existingKey != null) {
@@ -247,6 +268,7 @@ class ValidationDropdownBloc
 
       // --- LOGIC LOAD FOTO REMARK KE MAP ---
       Map<NoteType, List<CapturedImageDetail>> loadedRemarkPhotosAfter = {};
+      Map<NoteType, List<CapturedImageDetail>> loadedRemarkPhotosBefore = {};
 
       if (initialData != null) {
         if (initialData.remarkPhotosIndoorAfter != null) {
@@ -260,6 +282,18 @@ class ValidationDropdownBloc
         if (initialData.remarkPhotosOutdoorPsiAfter != null) {
           loadedRemarkPhotosAfter[NoteType.outdoorPsi] =
               initialData.remarkPhotosOutdoorPsiAfter!;
+        }
+        if (initialData.remarkPhotosIndoorBefore != null) {
+          loadedRemarkPhotosBefore[NoteType.indoor] =
+              initialData.remarkPhotosIndoorBefore!;
+        }
+        if (initialData.remarkPhotosOutdoorBefore != null) {
+          loadedRemarkPhotosBefore[NoteType.outdoor] =
+              initialData.remarkPhotosOutdoorBefore!;
+        }
+        if (initialData.remarkPhotosOutdoorPsiBefore != null) {
+          loadedRemarkPhotosBefore[NoteType.outdoorPsi] =
+              initialData.remarkPhotosOutdoorPsiBefore!;
         }
       }
 
@@ -307,6 +341,7 @@ class ValidationDropdownBloc
 
           // Inject ke State
           remarkPhotosAfter: loadedRemarkPhotosAfter,
+          remarkPhotosBefore: loadedRemarkPhotosBefore,
         ),
       );
     } catch (e) {
@@ -357,6 +392,7 @@ class ValidationDropdownBloc
       }
 
       final photosAfter = stateSaatEventMulai.remarkPhotosAfter;
+      final photosBefore = stateSaatEventMulai.remarkPhotosBefore;
 
       final validationEntry = ServiceCallValidationEntryModel(
         unitType: stateSaatEventMulai.selectedUnitType ?? '',
@@ -392,6 +428,10 @@ class ValidationDropdownBloc
         remarkPhotosIndoorAfter: photosAfter[NoteType.indoor],
         remarkPhotosOutdoorAfter: photosAfter[NoteType.outdoor],
         remarkPhotosOutdoorPsiAfter: photosAfter[NoteType.outdoorPsi],
+        // Foto bukti skip fase Sebelum
+        remarkPhotosIndoorBefore: photosBefore[NoteType.indoor],
+        remarkPhotosOutdoorBefore: photosBefore[NoteType.outdoor],
+        remarkPhotosOutdoorPsiBefore: photosBefore[NoteType.outdoorPsi],
       );
 
       if (existingKey != null) {

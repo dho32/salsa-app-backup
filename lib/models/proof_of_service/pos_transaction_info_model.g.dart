@@ -43,13 +43,19 @@ class PosTransactionInfoModelAdapter
       tempOutNote: fields[18] as String?,
       isFinalTempInSkipped: fields[19] as bool?,
       finalTempInNote: fields[20] as String?,
+      tempInSkipRemark: fields[25] as String?,
+      tempOutSkipRemark: fields[26] as String?,
+      finalTempInSkipRemark: fields[27] as String?,
+      tempInSkipPhotos: (fields[28] as List?)?.cast<CapturedImageDetail>(),
+      tempOutSkipPhotos: (fields[29] as List?)?.cast<CapturedImageDetail>(),
+      finalTempInSkipPhotos: (fields[30] as List?)?.cast<CapturedImageDetail>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, PosTransactionInfoModel obj) {
     writer
-      ..writeByte(25)
+      ..writeByte(31)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -99,7 +105,19 @@ class PosTransactionInfoModelAdapter
       ..writeByte(23)
       ..write(obj.technician2Nik)
       ..writeByte(24)
-      ..write(obj.technician3Nik);
+      ..write(obj.technician3Nik)
+      ..writeByte(25)
+      ..write(obj.tempInSkipRemark)
+      ..writeByte(26)
+      ..write(obj.tempOutSkipRemark)
+      ..writeByte(27)
+      ..write(obj.finalTempInSkipRemark)
+      ..writeByte(28)
+      ..write(obj.tempInSkipPhotos)
+      ..writeByte(29)
+      ..write(obj.tempOutSkipPhotos)
+      ..writeByte(30)
+      ..write(obj.finalTempInSkipPhotos);
   }
 
   @override

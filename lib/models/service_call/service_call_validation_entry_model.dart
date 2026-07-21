@@ -82,6 +82,17 @@ class ServiceCallValidationEntryModel extends HiveObject {
   @HiveField(24)
   List<CapturedImageDetail>? remarkPhotosOutdoorPsiAfter;
 
+  // Foto bukti kendala skip pengukuran fase SEBELUM (pola sama dengan After).
+  // Teks remark fase Sebelum tersimpan di measurementsBefore[].remark.
+  @HiveField(25)
+  List<CapturedImageDetail>? remarkPhotosIndoorBefore;
+
+  @HiveField(26)
+  List<CapturedImageDetail>? remarkPhotosOutdoorBefore;
+
+  @HiveField(27)
+  List<CapturedImageDetail>? remarkPhotosOutdoorPsiBefore;
+
   ServiceCallValidationEntryModel({
     required this.unitType,
     required this.serialNo,
@@ -108,6 +119,9 @@ class ServiceCallValidationEntryModel extends HiveObject {
     this.remarkPhotosIndoorAfter,
     this.remarkPhotosOutdoorAfter,
     this.remarkPhotosOutdoorPsiAfter,
+    this.remarkPhotosIndoorBefore,
+    this.remarkPhotosOutdoorBefore,
+    this.remarkPhotosOutdoorPsiBefore,
   });
 
   factory ServiceCallValidationEntryModel.empty() {
@@ -137,6 +151,9 @@ class ServiceCallValidationEntryModel extends HiveObject {
       remarkPhotosIndoorAfter: [],
       remarkPhotosOutdoorAfter: [],
       remarkPhotosOutdoorPsiAfter: [],
+      remarkPhotosIndoorBefore: [],
+      remarkPhotosOutdoorBefore: [],
+      remarkPhotosOutdoorPsiBefore: [],
     );
   }
 }

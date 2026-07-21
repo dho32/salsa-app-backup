@@ -7,7 +7,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_validation/posf_validation_cubit.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_validation/posf_validation_state.dart';
 import '../../../../components/services/photo_capture_service.dart';
+import '../../../../components/widgets/full_screen_image_viewer.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
+import '../../../../components/widgets/remark_photo_picker.dart';
 import '../../../../models/common/captured_image_detail.dart';
 import '../../../../models/common/measurement_entry.dart';
 import '../../../../models/proof_of_service_freezer/proof_of_service_freezer_constants.dart';
@@ -29,27 +31,67 @@ class ProofOfServiceFreezerValidationBodyMobile extends StatefulWidget {
 
 class _ProofOfServiceFreezerValidationBodyMobileState
     extends State<ProofOfServiceFreezerValidationBodyMobile> {
-  static const _stepTitles = ['Kondisi Awal', 'Proses Cuci', 'Pemeriksaan Teknis'];
+  static const _stepTitles = ['Sebelum', 'Sesudah'];
+  static const _stepCount = 2;
 
   final _arrivalTempController = TextEditingController();
   final _initialNoteController = TextEditingController();
-  final _cleaningProductController = TextEditingController();
   final Map<String, TextEditingController> _measurementControllers = {
     for (final m in kPosfMeasurements) m.id: TextEditingController(),
   };
+  // Remark bukti kendala skip per grup.
+  final _arrivalSkipRemarkController = TextEditingController();
+  final _tempSkipRemarkController = TextEditingController();
+  final _elecSkipRemarkController = TextEditingController();
+  // Keterangan tambahan kondisi (Ada Keluhan / Tidak terpakai).
+  final _conditionNoteController = TextEditingController();
 
   bool _controllersReady = false;
   bool _capturingInitial = false;
   bool _capturingAfter = false;
+  bool _capturingCondition = false;
+
+  // Pengukuran yang sudah dikonfirmasi "sesuai foto" (id: 'arrival_temp',
+  // 'temperature', 'ampere', 'volt'). Tombol Lanjut/Selesai dikunci sampai
+  // semua pengukuran non-skip pada step aktif terkonfirmasi.
+  final Set<String> _confirmedIds = {};
+
+  void _setConfirmed(String id, bool confirmed) {
+    final changed =
+        confirmed ? _confirmedIds.add(id) : _confirmedIds.remove(id);
+    if (changed && mounted) setState(() {});
+  }
+
+  // Semua pengukuran non-skip pada step ini sudah dikonfirmasi?
+  bool _measurementsConfirmedForStep(PosfValidationState s, int step) {
+    if (step == 0) {
+      if (s.hasUnused) return true; // tidak ada pengukuran
+      return s.arrivalTempSkipped || _confirmedIds.contains('arrival_temp');
+    }
+    if (step == 1) {
+      for (final m in s.measurements) {
+        if (m.isSkipped ?? false) continue;
+        if (!_confirmedIds.contains(m.measurementId)) return false;
+      }
+      return true;
+    }
+    return true;
+  }
+  // Grup foto bukti skip yang sedang mengambil foto
+  // ('arrival' / 'temperature' / 'elec'), null bila tidak ada.
+  String? _capturingSkipGroup;
 
   @override
   void dispose() {
     _arrivalTempController.dispose();
     _initialNoteController.dispose();
-    _cleaningProductController.dispose();
     for (final c in _measurementControllers.values) {
       c.dispose();
     }
+    _arrivalSkipRemarkController.dispose();
+    _tempSkipRemarkController.dispose();
+    _elecSkipRemarkController.dispose();
+    _conditionNoteController.dispose();
     super.dispose();
   }
 
@@ -57,13 +99,19 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     if (_controllersReady) return;
     _arrivalTempController.text = s.arrivalTemp;
     _initialNoteController.text = s.initialNote;
-    _cleaningProductController.text = s.cleaningProduct;
     for (final m in s.measurements) {
       final c = _measurementControllers[m.measurementId];
       if (c != null) c.text = m.value == 0 ? '' : m.value.toString();
     }
+    _arrivalSkipRemarkController.text = s.arrivalTempSkipRemark;
+    _tempSkipRemarkController.text = s.tempSkipRemark;
+    _elecSkipRemarkController.text = s.elecSkipRemark;
+    _conditionNoteController.text = s.conditionNote;
     _controllersReady = true;
   }
+
+  // Jumlah step efektif: "Tidak terpakai" cukup 1 step (Sebelum).
+  int _effectiveStepCount(PosfValidationState s) => s.hasUnused ? 1 : _stepCount;
 
   PosfValidationCubit get _cubit => context.read<PosfValidationCubit>();
 
@@ -164,6 +212,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   // Header progress
   // ---------------------------------------------------------------------------
   Widget _buildStepHeader(PosfValidationState s) {
+    final int stepCount = _effectiveStepCount(s);
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -173,7 +222,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Step ${s.currentStep + 1} dari 3',
+              Text('Step ${s.currentStep + 1} dari $stepCount',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 14)),
               Text(_stepTitles[s.currentStep],
@@ -182,12 +231,12 @@ class _ProofOfServiceFreezerValidationBodyMobileState
           ),
           const SizedBox(height: 8),
           Row(
-            children: List.generate(3, (i) {
+            children: List.generate(stepCount, (i) {
               final done = i < s.currentStep || (s.isStepValid(i));
               final active = i == s.currentStep;
               return Expanded(
                 child: Container(
-                  margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                  margin: EdgeInsets.only(right: i < stepCount - 1 ? 6 : 0),
                   height: 6,
                   decoration: BoxDecoration(
                     color: active
@@ -209,136 +258,284 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   Widget _buildStepContent(PosfValidationState s) {
     switch (s.currentStep) {
       case 0:
-        return _buildStep1(s);
+        return _buildStepBefore(s);
       case 1:
-        return _buildStep2(s);
-      case 2:
-        return _buildStep3(s);
+        return _buildStepAfter(s);
       default:
         return const SizedBox.shrink();
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Step 1 — Kondisi Awal
+  // Step Sebelum — Kondisi Awal
   // ---------------------------------------------------------------------------
-  Widget _buildStep1(PosfValidationState s) {
+  Widget _buildStepBefore(PosfValidationState s) {
+    // "Tidak terpakai": cukup dokumentasi kondisi (alasan + note + foto),
+    // sisanya (suhu, ketebalan, foto standar, catatan, step Sesudah) disembunyikan.
+    final bool unused = s.hasUnused;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // --- Kondisi fungsi Freezer (selalu tampil) ---
         _card(
-          'Suhu terbaca saat tiba',
+          'Kondisi fungsi Freezer saat teknisi tiba di toko',
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _chipGroup(kPosfGeneralConditions, s.generalCondition, (v) {
+                // Ganti kondisi = reset detail; kosongkan juga controller note.
+                _conditionNoteController.clear();
+                _cubit.generalConditionChanged(v);
+              }),
+              // Detail wajib saat "Ada Keluhan" / "Tidak terpakai":
+              // alasan + keterangan tambahan + foto bukti.
+              if (s.needsConditionDetail) ...[
+                const SizedBox(height: 12),
+                _buildConditionReasonDropdown(s),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _conditionNoteController,
+                  maxLines: 3,
+                  onChanged: _cubit.conditionNoteChanged,
+                  decoration:
+                      _inputDecoration('Keterangan tambahan (*Wajib)'),
+                ),
+                const SizedBox(height: 12),
+                RemarkPhotoPicker(
+                  photos: s.conditionPhotos,
+                  isLoading: _capturingCondition,
+                  isReadOnly: false,
+                  onAddTap: _captureConditionPhoto,
+                  onRemoveTap: _cubit.removeConditionPhoto,
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (!unused) ...[
           MeasurementInputWidget(
             controller: _arrivalTempController,
             transNo: _cubit.transNo,
-            label: 'Suhu terbaca saat tiba (°C)',
+            label: 'Suhu sebelum pembersihan (°C)',
             keyboardType: const TextInputType.numberWithOptions(
                 decimal: true, signed: true),
             limits: kPosfArrivalTempLimit,
             initialImage: s.arrivalTempImage,
-            isSkipEnabled: false,
+            isSkipEnabled: true,
+            isSkipped: s.arrivalTempSkipped,
+            // onChanged = sinkron live ke state (draft aman walau belum blur);
+            // onEditingComplete = commit setelah dialog konfirmasi "sesuai foto".
             onChanged: _cubit.arrivalTempChanged,
+            onEditingComplete: _cubit.arrivalTempChanged,
             onImageChanged: _cubit.arrivalTempImageChanged,
+            enableConfirmDialog: true,
+            onConfirmedChanged: (c) => _setConfirmed('arrival_temp', c),
+            onSkipChanged: (skip) {
+              if (skip) {
+                _arrivalTempController.clear();
+                _setConfirmed('arrival_temp', false);
+              }
+              _cubit.arrivalTempSkipChanged(skip);
+            },
           ),
-        ),
-        _card(
-          'Kondisi umum saat datang',
-          _chipGroup(kPosfGeneralConditions, s.generalCondition,
-              _cubit.generalConditionChanged),
-        ),
-        _card(
-          'Ketebalan bunga es',
-          _chipGroup(
-              kPosfFrostThickness, s.frostThickness, _cubit.frostThicknessChanged),
-        ),
-        _card(
-          'Foto Kondisi Awal',
-          _buildInitialPhotoSlots(s),
-        ),
-        _card(
-          'Catatan kondisi awal (opsional)',
-          TextField(
-            controller: _initialNoteController,
-            maxLines: 3,
-            onChanged: _cubit.initialNoteChanged,
-            decoration: _inputDecoration('Keluhan dari pihak outlet, dll.'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Step 2 — Proses Cuci
-  // ---------------------------------------------------------------------------
-  Widget _buildStep2(PosfValidationState s) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _card(
-          'Checklist Proses Cuci (semua wajib)',
-          Column(
-            children: [
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: s.isStep2Valid,
-                onChanged: (v) => _cubit.toggleAllChecklist(v ?? false),
-                title: const Text('Centang semua',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          // Alasan bila suhu tidak bisa diukur (+ remark & foto bukti
+          // bila alasan mewajibkan).
+          if (s.arrivalTempSkipped)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 12),
+              child: _buildSkipReasonSection(
+                reason: s.arrivalTempReason,
+                onReasonChanged: (r) {
+                  _arrivalSkipRemarkController.clear();
+                  _cubit.arrivalTempReasonChanged(r);
+                },
+                remarkController: _arrivalSkipRemarkController,
+                onRemarkChanged: _cubit.arrivalTempSkipRemarkChanged,
+                photos: s.arrivalTempSkipPhotos,
+                photoGroup: 'arrival',
+                photoLabel: 'Bukti Kendala Suhu Sebelum Pembersihan',
+                onPhotoCaptured: _cubit.addArrivalTempSkipPhoto,
+                onPhotoRemoved: _cubit.removeArrivalTempSkipPhoto,
               ),
-              const Divider(height: 1),
-              for (int i = 0; i < kPosfCleaningChecklist.length; i++)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: i < s.cleaningChecklist.length
-                      ? s.cleaningChecklist[i]
-                      : false,
-                  onChanged: (v) => _cubit.toggleChecklist(i, v ?? false),
-                  title: Text(kPosfCleaningChecklist[i],
-                      style: const TextStyle(fontSize: 13)),
-                ),
-            ],
+            ),
+          const SizedBox(height: 12),
+          _card(
+            'Ketebalan bunga es',
+            _chipGroup(kPosfFrostThickness, s.frostThickness,
+                _cubit.frostThicknessChanged),
           ),
-        ),
-        _card(
-          'Produk pembersih yang digunakan',
-          TextField(
-            controller: _cleaningProductController,
-            onChanged: _cubit.cleaningProductChanged,
-            decoration: _inputDecoration('Mis. sabun food-grade, dll'),
+          _card(
+            'Foto Kondisi Awal',
+            _buildInitialPhotoSlots(s),
           ),
-        ),
+          _card(
+            'Catatan kondisi awal (opsional)',
+            TextField(
+              controller: _initialNoteController,
+              maxLines: 3,
+              onChanged: _cubit.initialNoteChanged,
+              decoration: _inputDecoration('Keluhan dari pihak outlet, dll.'),
+            ),
+          ),
+        ],
       ],
     );
   }
 
+  Future<void> _captureConditionPhoto() async {
+    if (_cubit.state.conditionPhotos.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Maksimal 5 foto.')));
+      return;
+    }
+    setState(() => _capturingCondition = true);
+    try {
+      final img = await captureWatermarkedPhoto(_cubit.transNo,
+          photoLabel: 'Kondisi Freezer - ${_cubit.state.generalCondition ?? ''}');
+      if (img != null) _cubit.addConditionPhoto(img);
+    } finally {
+      if (mounted) setState(() => _capturingCondition = false);
+    }
+  }
+
+  // Dropdown alasan "tidak bisa diukur" (metode sama seperti POS).
+  Widget _buildSkipReasonDropdown(
+      String? selected, ValueChanged<String?> onChanged,
+      {String label = 'Alasan tidak bisa diukur'}) {
+    final value = kPosfSkipReasons.contains(selected) ? selected : null;
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: _inputDecoration(label),
+      hint: const Text('Pilih alasan', style: TextStyle(fontSize: 14)),
+      items: kPosfSkipReasons
+          .map((o) => DropdownMenuItem(
+                value: o,
+                child: Text(o,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14)),
+              ))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  /// Dropdown alasan skip + (bila alasan ada di [kPosfSkipReasonsRequireRemark])
+  /// keterangan tambahan min. 20 huruf + foto bukti kendala — pola POS/SC.
+  Widget _buildSkipReasonSection({
+    required String? reason,
+    required ValueChanged<String?> onReasonChanged,
+    required TextEditingController remarkController,
+    required ValueChanged<String> onRemarkChanged,
+    required List<CapturedImageDetail> photos,
+    required String photoGroup,
+    required String photoLabel,
+    required ValueChanged<CapturedImageDetail> onPhotoCaptured,
+    required ValueChanged<String> onPhotoRemoved,
+    String label = 'Alasan tidak bisa diukur',
+  }) {
+    final bool requireRemark =
+        reason != null && kPosfSkipReasonsRequireRemark.contains(reason);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSkipReasonDropdown(reason, onReasonChanged, label: label),
+        if (requireRemark) ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: remarkController,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            decoration: _inputDecoration('Keterangan Tambahan (*Wajib)')
+                .copyWith(
+              hintText: 'Jelaskan detail kendala (Min. 20 huruf)...',
+              prefixIcon: const Icon(Icons.edit_note, size: 25),
+            ),
+            maxLines: 2,
+            onChanged: onRemarkChanged,
+            validator: (value) {
+              final text = value ?? '';
+              if (text.trim().isEmpty) return 'Wajib diisi';
+              final int charCount = text.replaceAll(' ', '').length;
+              if (charCount < 20) {
+                return 'Kurang ${20 - charCount} huruf lagi (tanpa spasi)';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          RemarkPhotoPicker(
+            photos: photos,
+            isLoading: _capturingSkipGroup == photoGroup,
+            isReadOnly: false,
+            onAddTap: () => _captureSkipEvidencePhoto(
+              group: photoGroup,
+              photoLabel: photoLabel,
+              currentCount: photos.length,
+              onCaptured: onPhotoCaptured,
+            ),
+            onRemoveTap: onPhotoRemoved,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _captureSkipEvidencePhoto({
+    required String group,
+    required String photoLabel,
+    required int currentCount,
+    required ValueChanged<CapturedImageDetail> onCaptured,
+  }) async {
+    if (currentCount >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Maksimal hanya bisa upload 5 foto bukti.')));
+      return;
+    }
+    setState(() => _capturingSkipGroup = group);
+    try {
+      final img = await captureWatermarkedPhoto(_cubit.transNo,
+          photoLabel: photoLabel);
+      if (img != null) onCaptured(img);
+    } finally {
+      if (mounted) setState(() => _capturingSkipGroup = null);
+    }
+  }
+
+  // Dropdown alasan kondisi: opsi keluhan (Ada Keluhan) atau opsi tidak
+  // terpakai (Tidak terpakai), tergantung kondisi terpilih.
+  Widget _buildConditionReasonDropdown(PosfValidationState s) {
+    final bool unused = s.hasUnused;
+    final options = unused ? kPosfUnusedOptions : kPosfComplaintOptions;
+    final hint = unused ? 'Pilih alasan' : 'Pilih keluhan';
+    final value = options.contains(s.complaint) ? s.complaint : null;
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: _inputDecoration(hint),
+      hint: Text(hint, style: const TextStyle(fontSize: 14)),
+      items: options
+          .map((o) => DropdownMenuItem(
+                value: o,
+                child: Text(o,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14)),
+              ))
+          .toList(),
+      onChanged: _cubit.complaintChanged,
+    );
+  }
+
   // ---------------------------------------------------------------------------
-  // Step 3 — Pemeriksaan Teknis
+  // Step Sesudah — Pengukuran Aktual & Foto Setelah Cuci
   // ---------------------------------------------------------------------------
-  Widget _buildStep3(PosfValidationState s) {
+  Widget _buildStepAfter(PosfValidationState s) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _card(
-          'Sistem Refrigerasi',
-          Column(
-            children: kPosfRefrigerationItems
-                .map((it) => _statusChips(it, s.statusFlags[it.id]))
-                .toList(),
-          ),
-        ),
-        _card(
-          'Kelistrikan',
-          Column(
-            children: kPosfElectricalItems
-                .map((it) => _statusChips(it, s.statusFlags[it.id]))
-                .toList(),
-          ),
+          'Foto Setelah Cuci',
+          _buildAfterPhotoSlots(s),
         ),
         _card(
           'Pengukuran Aktual',
@@ -347,29 +544,88 @@ class _ProofOfServiceFreezerValidationBodyMobileState
               for (final limit in kPosfMeasurements)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: MeasurementInputWidget(
-                    controller: _measurementControllers[limit.id]!,
-                    transNo: _cubit.transNo,
-                    label: limit.label,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    limits: limit,
-                    initialImage: _measurementFor(s, limit.id)?.capturedImage,
-                    isSkipEnabled: true,
-                    isSkipped: _measurementFor(s, limit.id)?.isSkipped ?? false,
-                    onChanged: (v) => _cubit.measurementValueChanged(limit.id, v),
-                    onImageChanged: (img) =>
-                        _cubit.measurementImageChanged(limit.id, img),
-                    onSkipChanged: (skip) =>
-                        _cubit.measurementSkipChanged(limit.id, skip),
+                  child: Column(
+                    children: [
+                      MeasurementInputWidget(
+                        controller: _measurementControllers[limit.id]!,
+                        transNo: _cubit.transNo,
+                        label: limit.label,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
+                        limits: limit,
+                        initialImage:
+                            _measurementFor(s, limit.id)?.capturedImage,
+                        isSkipEnabled: true,
+                        isSkipped:
+                            _measurementFor(s, limit.id)?.isSkipped ?? false,
+                        // onChanged = sinkron live ke state (draft aman walau
+                        // belum blur); onEditingComplete = commit setelah
+                        // dialog konfirmasi "angka sesuai foto".
+                        onChanged: (v) =>
+                            _cubit.measurementValueChanged(limit.id, v),
+                        onEditingComplete: (v) =>
+                            _cubit.measurementValueChanged(limit.id, v),
+                        onImageChanged: (img) =>
+                            _cubit.measurementImageChanged(limit.id, img),
+                        enableConfirmDialog: true,
+                        onConfirmedChanged: (c) =>
+                            _setConfirmed(limit.id, c),
+                        onSkipChanged: (skip) {
+                          // Skip -> kosongkan controller semua pengukuran terkait
+                          // (Arus & Tegangan diukur bersama).
+                          if (skip) {
+                            for (final mid
+                                in _cubit.linkedMeasurementIds(limit.id)) {
+                              _measurementControllers[mid]?.clear();
+                              _setConfirmed(mid, false);
+                            }
+                          }
+                          _cubit.measurementSkipChanged(limit.id, skip);
+                        },
+                      ),
+                      // Alasan bila pengukuran ini tidak bisa diukur (+ remark
+                      // & foto bukti bila alasan mewajibkan). Untuk pasangan
+                      // Arus & Tegangan, seksi cukup satu (dirender di bawah
+                      // Tegangan / 'volt').
+                      if ((_measurementFor(s, limit.id)?.isSkipped ?? false) &&
+                          limit.id != 'ampere')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: _buildSkipReasonSection(
+                            reason: _measurementFor(s, limit.id)?.remark,
+                            onReasonChanged: (r) {
+                              (limit.id == 'temperature'
+                                      ? _tempSkipRemarkController
+                                      : _elecSkipRemarkController)
+                                  .clear();
+                              _cubit.measurementReasonChanged(limit.id, r);
+                            },
+                            remarkController: limit.id == 'temperature'
+                                ? _tempSkipRemarkController
+                                : _elecSkipRemarkController,
+                            onRemarkChanged: (v) => _cubit
+                                .measurementSkipRemarkChanged(limit.id, v),
+                            photos: s.skipPhotosFor(limit.id),
+                            photoGroup: limit.id == 'temperature'
+                                ? 'temperature'
+                                : 'elec',
+                            photoLabel: limit.id == 'temperature'
+                                ? 'Bukti Kendala Suhu Pull-down'
+                                : 'Bukti Kendala Arus & Tegangan',
+                            onPhotoCaptured: (img) => _cubit
+                                .addMeasurementSkipPhoto(limit.id, img),
+                            onPhotoRemoved: (path) => _cubit
+                                .removeMeasurementSkipPhoto(limit.id, path),
+                            label: limit.id == 'volt'
+                                ? 'Alasan tidak bisa diukur (Arus & Tegangan)'
+                                : 'Alasan tidak bisa diukur',
+                          ),
+                        ),
+                    ],
                   ),
                 ),
             ],
           ),
-        ),
-        _card(
-          'Foto Setelah Cuci',
-          _buildAfterPhotoSlots(s),
         ),
       ],
     );
@@ -382,59 +638,16 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     return null;
   }
 
-  Widget _statusChips(PosfStatusItem item, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(item.label, style: const TextStyle(fontSize: 13)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            children: kPosfStatusOptions.map((o) {
-              final selected = value == o;
-              final c = _statusColor(o);
-              return ChoiceChip(
-                label: Text(o,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: selected ? Colors.white : c)),
-                selected: selected,
-                showCheckmark: false,
-                backgroundColor: c.withValues(alpha: 0.10),
-                selectedColor: c,
-                side: BorderSide(
-                    color: c.withValues(alpha: selected ? 1 : 0.4)),
-                onSelected: (_) => _cubit.statusFlagChanged(item.id, o),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'OK':
-        return Colors.green;
-      case 'Perhatian':
-        return Colors.orange;
-      case 'Masalah':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // Nav buttons
   // ---------------------------------------------------------------------------
   Widget _buildNavButtons(PosfValidationState s) {
-    final isLast = s.currentStep == 2;
-    final canProceed = s.isStepValid(s.currentStep);
+    // "Tidak terpakai" → step Before adalah step terakhir (langsung Selesai).
+    final isLast = s.currentStep == _effectiveStepCount(s) - 1;
+    // Selain valid, semua pengukuran non-skip di step ini wajib dikonfirmasi
+    // "sesuai foto" dulu (cegah balapan dengan tombol Lanjut/Selesai).
+    final canProceed = s.isStepValid(s.currentStep) &&
+        _measurementsConfirmedForStep(s, s.currentStep);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -570,6 +783,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   }
 
   Widget _buildInitialPhotoSlots(PosfValidationState s) => _photoSlotRow(
+        slots: kPosfInitialPhotoSlots, // Display Produk paling atas
         photos: s.initialPhotos,
         capturing: _capturingInitial,
         onCapture: _captureInitialSlot,
@@ -577,6 +791,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
       );
 
   Widget _buildAfterPhotoSlots(PosfValidationState s) => _photoSlotRow(
+        slots: kPosfAfterPhotoSlots, // Display Produk paling akhir
         photos: s.afterPhotos,
         capturing: _capturingAfter,
         onCapture: _captureAfterSlot,
@@ -584,27 +799,38 @@ class _ProofOfServiceFreezerValidationBodyMobileState
       );
 
   Widget _photoSlotRow({
+    required List<PosfPhotoSlot> slots,
     required Map<String, CapturedImageDetail> photos,
     required bool capturing,
     required void Function(String slotId) onCapture,
     required void Function(String slotId) onRemove,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (int i = 0; i < kPosfPhotoSlots.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          Expanded(
-            child: _photoSlot(
-              slot: kPosfPhotoSlots[i],
-              photo: photos[kPosfPhotoSlots[i].id],
-              capturing: capturing,
-              onCapture: () => onCapture(kPosfPhotoSlots[i].id),
-              onRemove: () => onRemove(kPosfPhotoSlots[i].id),
-            ),
-          ),
-        ],
-      ],
+    const double spacing = 10;
+    const int perRow = 3;
+    // Wrap 3 per baris agar slot ke-4 (Display Produk) turun ke baris berikutnya
+    // dengan ukuran seragam, tidak menyempit dalam satu baris.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double itemWidth =
+            (constraints.maxWidth - spacing * (perRow - 1)) / perRow;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final slot in slots)
+              SizedBox(
+                width: itemWidth,
+                child: _photoSlot(
+                  slot: slot,
+                  photo: photos[slot.id],
+                  capturing: capturing,
+                  onCapture: () => onCapture(slot.id),
+                  onRemove: () => onRemove(slot.id),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -618,7 +844,18 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     final filled = photo != null;
     final primary = Theme.of(context).primaryColor;
     return GestureDetector(
-      onTap: capturing ? null : onCapture,
+      // Terisi -> tap untuk preview full-screen; kosong -> tap untuk ambil foto.
+      onTap: capturing
+          ? null
+          : (filled
+              ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          FullScreenImageViewer(imageDetail: photo),
+                    ),
+                  )
+              : onCapture),
       child: AspectRatio(
         aspectRatio: 1,
         child: Container(

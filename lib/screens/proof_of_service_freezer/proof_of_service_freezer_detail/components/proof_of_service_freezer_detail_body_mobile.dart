@@ -1,11 +1,13 @@
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
 
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_form/posf_form_cubit.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_form/posf_form_state.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_submitted/posf_submitted_bloc.dart';
+import '../../../../blocs/proof_of_service_freezer/posf_submitted/posf_submitted_repository.dart';
 import '../../../../blocs/proof_of_service_freezer/proof_of_service_freezer_detail/proof_of_service_freezer_detail_bloc.dart';
 import '../../../../blocs/location_validation/location_validation_bloc.dart';
 import '../../../../blocs/otp/otp_bloc.dart';
@@ -14,7 +16,9 @@ import '../../../../components/constants.dart';
 import '../../../../components/shared_function.dart';
 import '../../../../components/widgets/otp.dart';
 import '../../../../components/widgets/scan_qr.dart';
+import '../../../../models/proof_of_service_freezer/proof_of_service_freezer_constants.dart';
 import '../../../../models/proof_of_service_freezer/proof_of_service_freezer_detail_model.dart';
+import '../../../../models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
 import '../../proof_of_service_freezer_validation/proof_of_service_freezer_validation_screen.dart';
 
 class ProofOfServiceFreezerDetailBodyMobile extends StatefulWidget {
@@ -712,6 +716,11 @@ class _ProofOfServiceFreezerDetailBodyMobileState
     final uploadCubit = context.read<UploadProgressCubit>();
     final submittedBloc = context.read<PosfSubmittedBloc>();
 
+    // Freezer "Ada Keluhan" wajib punya tiket SC aktif (pola POS). Bila belum
+    // ada, blokir submit & arahkan teknisi koordinasi dengan PIC toko.
+    final blokirKarenaSc = await _checkServiceCallBlocking(header.transNo);
+    if (!mounted || blokirKarenaSc) return;
+
     final isPhotoReady = formCubit.state.picImageDetail != null;
     final wajibOtp = await OtpStorage.isOtpRequired();
     if (!mounted) return;
@@ -748,6 +757,37 @@ class _ProofOfServiceFreezerDetailBodyMobileState
         ),
       ),
     );
+  }
+
+  /// Bila ada freezer berkondisi "Ada Keluhan" tapi toko belum punya tiket SC
+  /// aktif, tampilkan dialog info (pola POS) & kembalikan `true` untuk memblokir
+  /// submit. Mengembalikan `false` bila tidak ada keluhan atau SC sudah ada.
+  Future<bool> _checkServiceCallBlocking(String transNo) async {
+    final tx = transNo.trim().toUpperCase();
+    final entryBox =
+        Hive.box<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox);
+    final adaKeluhan = entryBox.values.any((e) =>
+        e.transNo.trim().toUpperCase() == tx &&
+        e.generalCondition == kPosfConditionComplaint);
+    if (!adaKeluhan) return false;
+
+    final hasActiveSc =
+        await PosfSubmittedRepository().checkActiveServiceCall(tx);
+    if (!mounted || hasActiveSc) return false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Unit Bermasalah Terdeteksi'),
+        content: const Text(kStringDialogUnitProblem),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
+    return true;
   }
 
   void _showSnack(String msg) {

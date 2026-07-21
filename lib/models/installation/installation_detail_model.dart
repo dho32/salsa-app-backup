@@ -29,6 +29,14 @@ class InstallationHeaderDetailModel {
   @HiveField(9, defaultValue: 0.0)
   final double longitude;
 
+  // --- PIC & OTP (mirror RRO Cut Off) ---
+  @HiveField(10, defaultValue: true)
+  final bool isPic;
+  @HiveField(11, defaultValue: '')
+  final String shipTo;
+  @HiveField(12, defaultValue: '')
+  final String shipToMail;
+
   InstallationHeaderDetailModel({
     required this.transNo,
     required this.roType,
@@ -40,6 +48,9 @@ class InstallationHeaderDetailModel {
     required this.shipToAddress,
     required this.latitude,
     required this.longitude,
+    this.isPic = true,
+    this.shipTo = '',
+    this.shipToMail = '',
   });
 
   factory InstallationHeaderDetailModel.fromJson(Map<String, dynamic> json) {
@@ -61,6 +72,9 @@ class InstallationHeaderDetailModel {
       shipToAddress: json['ship_to_address'] ?? '',
       latitude: parseDouble(json['latitude']),
       longitude: parseDouble(json['longitude']),
+      isPic: json['is_pic'] ?? true,
+      shipTo: json['ship_to'] ?? '',
+      shipToMail: json['ship_to_mail'] ?? '',
     );
   }
 }

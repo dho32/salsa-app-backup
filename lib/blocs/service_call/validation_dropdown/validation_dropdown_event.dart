@@ -272,3 +272,16 @@ class RemoveRemarkPhoto extends ValidationDropdownEvent {
   @override
   List<Object?> get props => [noteType, imagePath, isBefore];
 }
+
+/// Status konfirmasi "angka sesuai foto" sebuah pengukuran berubah.
+class SetMeasurementConfirmed extends ValidationDropdownEvent {
+  final String measurementId;
+  final bool confirmed;
+  final bool isBefore;
+
+  const SetMeasurementConfirmed(this.measurementId, this.confirmed,
+      {required this.isBefore});
+
+  @override
+  List<Object?> get props => [measurementId, confirmed, isBefore];
+}

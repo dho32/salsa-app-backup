@@ -66,6 +66,10 @@ Future<UploadResult> uploadAllImagesToS3(
         .split('/')
         .last] = transactionInfo.finalTemperatureInImage!.imagePath;
   }
+  // Foto bukti kendala skip Suhu Akhir
+  for (final photo in transactionInfo?.finalTempSkipPhotos ?? <CapturedImageDetail>[]) {
+    localFileMap[photo.imagePath.split('/').last] = photo.imagePath;
+  }
 
   final validationEntries =
       validationBox.values.where((e) => e.transNo == transNo);
@@ -82,6 +86,9 @@ Future<UploadResult> uploadAllImagesToS3(
       ...entry.remarkPhotosIndoorAfter ?? [],
       ...entry.remarkPhotosOutdoorAfter ?? [],
       ...entry.remarkPhotosOutdoorPsiAfter ?? [],
+      ...entry.remarkPhotosIndoorBefore ?? [],
+      ...entry.remarkPhotosOutdoorBefore ?? [],
+      ...entry.remarkPhotosOutdoorPsiBefore ?? [],
     ];
     for (final imageDetail in allUnitImages) {
       localFileMap[imageDetail.imagePath.split('/').last] =
@@ -142,6 +149,15 @@ Future<UploadResult> uploadPosImagesToS3(
     localFileMap[transactionInfo!.temperatureOutImage!.imagePath
         .split('/')
         .last] = transactionInfo.temperatureOutImage!.imagePath;
+  }
+  // Foto bukti kendala skip suhu (remark photos level transaksi)
+  final skipEvidencePhotos = [
+    ...transactionInfo?.tempInSkipPhotos ?? [],
+    ...transactionInfo?.tempOutSkipPhotos ?? [],
+    ...transactionInfo?.finalTempInSkipPhotos ?? [],
+  ];
+  for (final photo in skipEvidencePhotos) {
+    localFileMap[photo.imagePath.split('/').last] = photo.imagePath;
   }
 
   final validationEntries =
@@ -367,6 +383,9 @@ Future<InstallationUploadResult> uploadInstallationFiles({
   if (draft.storeFrontPhoto != null) {
     localFileMap[draft.storeFrontPhoto!.imageFileName] =
         draft.storeFrontPhoto!.imagePath;
+  }
+  if (draft.picPhoto != null) {
+    localFileMap[draft.picPhoto!.imageFileName] = draft.picPhoto!.imagePath;
   }
   if (draft.hasTransport && draft.transportEvidencePhoto != null) {
     localFileMap[draft.transportEvidencePhoto!.imageFileName] =
@@ -627,6 +646,12 @@ Future<UploadResult> uploadProofOfServiceFreezerImagesToS3(
       ...entry.measurements
           .map((m) => m.capturedImage)
           .whereType<CapturedImageDetail>(),
+      // Foto bukti kendala skip pengukuran
+      ...entry.arrivalTempSkipPhotos ?? [],
+      ...entry.tempSkipPhotos ?? [],
+      ...entry.elecSkipPhotos ?? [],
+      // Foto bukti kondisi (Ada Keluhan / Tidak terpakai)
+      ...entry.conditionPhotos ?? [],
     ];
     for (final img in imgs) {
       localFileMap[img.imagePath.split('/').last] = img.imagePath;

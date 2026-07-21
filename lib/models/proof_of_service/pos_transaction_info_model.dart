@@ -84,6 +84,26 @@ class PosTransactionInfoModel extends HiveObject implements IPicPhotoStorable {
   @HiveField(24)
   String? technician3Nik;
 
+  // Bukti kendala saat suhu di-skip dengan alasan ber-flag require_remark
+  // (mis. "Terkendala dengan alat kerja"): keterangan tambahan + foto bukti.
+  @HiveField(25)
+  String? tempInSkipRemark;
+
+  @HiveField(26)
+  String? tempOutSkipRemark;
+
+  @HiveField(27)
+  String? finalTempInSkipRemark;
+
+  @HiveField(28)
+  List<CapturedImageDetail>? tempInSkipPhotos;
+
+  @HiveField(29)
+  List<CapturedImageDetail>? tempOutSkipPhotos;
+
+  @HiveField(30)
+  List<CapturedImageDetail>? finalTempInSkipPhotos;
+
   PosTransactionInfoModel({
     required this.transNo,
     this.picNik,
@@ -110,5 +130,11 @@ class PosTransactionInfoModel extends HiveObject implements IPicPhotoStorable {
     this.tempOutNote,
     this.isFinalTempInSkipped,
     this.finalTempInNote,
+    this.tempInSkipRemark,
+    this.tempOutSkipRemark,
+    this.finalTempInSkipRemark,
+    this.tempInSkipPhotos,
+    this.tempOutSkipPhotos,
+    this.finalTempInSkipPhotos,
   });
 }

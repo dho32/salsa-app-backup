@@ -95,6 +95,24 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
 
   bool _isSubmittingFinal = false;
 
+  // Pengukuran yang sudah dikonfirmasi "sesuai foto". Tombol Simpan dikunci
+  // sampai semua pengukuran non-skip terkonfirmasi.
+  final Set<String> _confirmedIds = {};
+
+  void _setConfirmed(String id, bool confirmed) {
+    final changed =
+        confirmed ? _confirmedIds.add(id) : _confirmedIds.remove(id);
+    if (changed && mounted) setState(() {});
+  }
+
+  bool get _allMeasurementsConfirmed {
+    for (final m in _measurementEntries) {
+      if (m.isSkipped == true) continue;
+      if (!_confirmedIds.contains(m.measurementId)) return false;
+    }
+    return true;
+  }
+
   bool get _isOriginalCompleted => widget.existingData?.status == 'COMPLETED';
 
   @override
@@ -681,6 +699,8 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                     controllers: _measurementControllers,
                     limitsMap: _limitsMap,
                     indoorTemp: null,
+                    enableConfirmDialog: true,
+                    onMeasurementConfirmedChanged: _setConfirmed,
                     onUpdate: (updatedEntry) {
                       setState(() {
                         final index = _measurementEntries.indexWhere((e) =>
@@ -688,7 +708,10 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                         if (index != -1) {
                           _measurementEntries[index] = updatedEntry;
                         }
-                        if (updatedEntry.isSkipped == false) {
+                        if (updatedEntry.isSkipped == true) {
+                          // Di-skip → tak perlu konfirmasi.
+                          _confirmedIds.remove(updatedEntry.measurementId);
+                        } else if (updatedEntry.isSkipped == false) {
                           _selectedNoteReason = null;
                           _remarkController.clear();
                           _notePhotos = [];
@@ -738,36 +761,58 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                   blurRadius: 10,
                   offset: const Offset(0, -4))
             ]),
-            child: ElevatedButton(
-              onPressed: _isProcessingWatermark
-                  ? null
-                  : () => _dispatchSave(isFinal: true),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  elevation: 0),
-              child:
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (_isProcessingWatermark)
-                  const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                else
-                  const Icon(Icons.save_as_outlined, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(
-                    _isProcessingWatermark
-                        ? "MEMPROSES FOTO..."
-                        : "SIMPAN DATA INDOOR",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.white))
-              ]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!_allMeasurementsConfirmed)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Konfirmasi (Sesuai Foto) semua hasil pengukuran untuk menyimpan.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ElevatedButton(
+                  onPressed:
+                      (_isProcessingWatermark || !_allMeasurementsConfirmed)
+                          ? null
+                          : () => _dispatchSave(isFinal: true),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      minimumSize: const Size(double.infinity, 0),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_isProcessingWatermark)
+                          const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                        else
+                          const Icon(Icons.save_as_outlined,
+                              color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                            _isProcessingWatermark
+                                ? "MEMPROSES FOTO..."
+                                : "SIMPAN DATA INDOOR",
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.white))
+                      ]),
+                ),
+              ],
             ),
           ),
         ],

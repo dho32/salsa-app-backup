@@ -18,7 +18,8 @@ class TaskMaintenanceBloc extends Bloc<TaskMaintenanceEvent, TaskMaintenanceStat
           event.transNo, event.maintenanceBy);
       emit(POSearchSuccess(results));
     } catch (e) {
-      emit(POSearchFailure(e.toString()));
+      emit(POSearchFailure(
+          e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '')));
     }
   }
 

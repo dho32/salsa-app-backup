@@ -84,6 +84,7 @@ class InstallationRepository {
     required InstallationEntryModel draft,
     required String remark,
     required String deviceName,
+    required bool isPic,
   }) async {
     // --- Helper Maps ---
     Map<String, dynamic>? mapPhoto(InstallationPhotoModel? photo) {
@@ -295,6 +296,14 @@ class InstallationRepository {
       "finish_date": DateTime.now().toIso8601String(),
       "remark": remark,
       "created_by": createdBy,
+      // --- PIC Toko (mirror RRO Cut Off) ---
+      "is_pic": isPic,
+      "pic_name": isPic ? draft.picName : "",
+      "pic_phone": isPic ? draft.picPhone : "",
+      "pic_nik": isPic ? draft.picNik : "",
+      "pic_position": isPic ? draft.picPosition : "",
+      if (isPic && draft.picPhoto != null)
+        "pic_image_detail": mapPhoto(draft.picPhoto),
       "has_transport": draft.hasTransport,
       if (draft.storeFrontPhoto != null)
         "store_front_image": mapPhoto(draft.storeFrontPhoto),

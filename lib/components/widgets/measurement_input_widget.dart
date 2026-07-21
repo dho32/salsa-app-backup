@@ -30,6 +30,17 @@ class MeasurementInputWidget extends StatefulWidget {
   /// Label jenis foto untuk watermark. Default: [label].
   final String? photoLabel;
 
+  /// Bila true, saat field kehilangan fokus dengan nilai baru yang valid,
+  /// muncul dialog konfirmasi "angka sesuai foto". Nilai baru hanya dikirim
+  /// ke [onEditingComplete] setelah dikonfirmasi. Default false (layar lain
+  /// commit langsung tanpa dialog).
+  final bool enableConfirmDialog;
+
+  /// Callback status konfirmasi berubah: true = nilai saat ini sudah
+  /// dikonfirmasi "sesuai foto"; false = belum/berubah. Dipakai layar untuk
+  /// menonaktifkan tombol Simpan sampai semua pengukuran terkonfirmasi.
+  final ValueChanged<bool>? onConfirmedChanged;
+
   const MeasurementInputWidget({
     super.key,
     required this.controller,
@@ -45,6 +56,8 @@ class MeasurementInputWidget extends StatefulWidget {
     this.onSkipChanged,
     this.onEditingComplete,
     this.photoLabel,
+    this.enableConfirmDialog = false,
+    this.onConfirmedChanged,
   });
 
   @override
@@ -57,12 +70,33 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   String? _errorText;
   late final FocusNode _focusNode;
 
+  // Nilai terakhir yang sudah dikonfirmasi "sesuai foto". Nilai awal dari
+  // draft dianggap sudah terkonfirmasi (tidak memunculkan dialog saat load).
+  String _lastConfirmedText = '';
+  bool _isConfirmDialogOpen = false;
+
   @override
   void initState() {
     super.initState();
+    _lastConfirmedText = widget.controller.text;
     _updateSliderAndValidate(widget.controller.text, widget.limits);
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
+
+    // Laporkan status konfirmasi AWAL sekali: nilai dari draft yang sudah
+    // punya angka valid + foto dianggap sudah terkonfirmasi (agar gerbang
+    // tombol Simpan tidak mengunci unit saat draft dibuka kembali).
+    if (widget.enableConfirmDialog) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final t = widget.controller.text;
+        final bool confirmed = t.isNotEmpty &&
+            widget.initialImage != null &&
+            _getValidationError(t, widget.limits) == null &&
+            double.tryParse(t) != null;
+        widget.onConfirmedChanged?.call(confirmed);
+      });
+    }
   }
 
   // 🔥 TAMBAHAN PENTING: Update UI kalau data dari BLoC berubah (misal diclear/swap)
@@ -85,11 +119,131 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
     if (!_focusNode.hasFocus) {
       final text = widget.controller.text;
       setState(() {
-        _errorText = _getValidationError(widget.controller.text, widget.limits);
+        _errorText = _getValidationError(text, widget.limits);
         _updateSliderFromText(text);
-        widget.onEditingComplete?.call(text); // 🔥 Tetap kirim saat un-focus
       });
+      _handleCommit(text);
     }
+  }
+
+  /// Saat selesai (blur / lepas slider): commit nilai. Bila
+  /// [enableConfirmDialog] aktif & nilai baru valid & ada foto → minta
+  /// konfirmasi "sesuai foto" dulu, nilai baru dikirim setelah dikonfirmasi.
+  Future<void> _handleCommit(String text) async {
+    // Tanpa konfirmasi (layar lain / tanpa pengelolaan foto): commit langsung.
+    if (!widget.enableConfirmDialog || widget.onImageChanged == null) {
+      widget.onEditingComplete?.call(text);
+      return;
+    }
+    if (text.isEmpty) {
+      _lastConfirmedText = '';
+      widget.onEditingComplete?.call(text);
+      widget.onConfirmedChanged?.call(false);
+      return;
+    }
+    // Tidak berubah dari yang sudah dikonfirmasi → tetap terkonfirmasi.
+    if (text == _lastConfirmedText) {
+      widget.onEditingComplete?.call(text);
+      widget.onConfirmedChanged?.call(true);
+      return;
+    }
+    // Angka belum valid → biarkan error text bicara, anggap belum terkonfirmasi.
+    if (_getValidationError(text, widget.limits) != null ||
+        double.tryParse(text) == null) {
+      widget.onConfirmedChanged?.call(false);
+      return;
+    }
+    // Belum ada foto (input harusnya masih terkunci) → jangan konfirmasi.
+    if (widget.initialImage == null) return;
+    if (_isConfirmDialogOpen) return;
+
+    _isConfirmDialogOpen = true;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) =>
+          _buildConfirmValueDialog(dialogContext, text),
+    );
+    _isConfirmDialogOpen = false;
+    if (!mounted) return;
+
+    if (confirmed == true) {
+      _lastConfirmedText = text;
+      widget.onEditingComplete?.call(text);
+      widget.onConfirmedChanged?.call(true);
+    } else {
+      // Teknisi mau koreksi — fokus kembali ke field angka.
+      widget.onConfirmedChanged?.call(false);
+      _focusNode.requestFocus();
+    }
+  }
+
+  Widget _buildConfirmValueDialog(BuildContext dialogContext, String text) {
+    final String unit = widget.limits.unit;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Konfirmasi Hasil Pengukuran',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.initialImage != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: 260,
+                  child: InteractiveViewer(
+                    maxScale: 5,
+                    child: Image.file(
+                      File(widget.initialImage!.imagePath),
+                      fit: BoxFit.contain,
+                      errorBuilder: (c, e, st) => const Icon(
+                          Icons.broken_image,
+                          size: 60,
+                          color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(widget.label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: Colors.black54)),
+            Text('$text $unit',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 28, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text(
+              'Apakah angka di atas SAMA dengan yang tertera di foto?',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+      actionsAlignment: MainAxisAlignment.spaceBetween,
+      actions: [
+        // "Sesuai Foto" jadi link teks biru (kiri).
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          style: TextButton.styleFrom(foregroundColor: Colors.blue),
+          child: const Text('Sesuai Foto'),
+        ),
+        // "Ubah Angka" jadi tombol biru (kanan).
+        ElevatedButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Ubah Angka'),
+        ),
+      ],
+    );
   }
 
   String? _getValidationError(String text, MeasurementLimits limits) {
@@ -201,8 +355,20 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
   }
 
   void removePhoto() {
-    // 🔥 Minta BLoC buat hapus fotonya
+    // 🔥 Minta BLoC buat hapus fotonya.
+    // Foto adalah bukti angka — tanpa foto, angka ikut di-reset dan input
+    // terkunci lagi sampai teknisi foto ulang.
     widget.onImageChanged?.call(null);
+    widget.controller.clear();
+    _lastConfirmedText = '';
+    setState(() {
+      _errorText = null;
+      _updateSliderFromText('');
+    });
+    widget.onChanged?.call('');
+    widget.onEditingComplete?.call('');
+    // Tanpa foto, nilai belum bisa dianggap terkonfirmasi.
+    widget.onConfirmedChanged?.call(false);
   }
 
   @override
@@ -263,6 +429,12 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
 
   Widget _buildInputContent(Color primary) {
     // 🔥 PERHATIKAN: Sekarang kita pakai widget.initialImage sebagai sumber kebenaran (Source of Truth)
+    // Input angka terkunci sampai foto pengukuran diambil (foto dulu, baru
+    // angka). Layar legacy tanpa pengelolaan foto (onImageChanged null)
+    // tidak dikunci.
+    final bool managesPhoto = widget.onImageChanged != null;
+    final bool hasPhoto = widget.initialImage != null;
+    final bool inputLocked = managesPhoto && !hasPhoto;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
@@ -273,16 +445,27 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             padding: EdgeInsets.symmetric(vertical: 12.0),
             child: Center(child: CircularProgressIndicator()),
           )
-              : widget.initialImage != null // 🔥 Cek langsung dari Data BLoC
+              : hasPhoto
               ? _buildPhotoPreview(widget.initialImage!)
               : _buildPhotoButton(primary),
           const SizedBox(height: 16),
-          _buildSliderAndTextfield(),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0),
+          AbsorbPointer(
+            absorbing: inputLocked,
+            child: Opacity(
+              opacity: inputLocked ? 0.4 : 1.0,
+              child: _buildSliderAndTextfield(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
-              "**Pastikan angka yang diinput sesuai dengan yang di foto",
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              inputLocked
+                  ? "**Ambil foto hasil pengukuran terlebih dahulu untuk membuka input angka"
+                  : "**Pastikan angka yang diinput sesuai dengan yang di foto",
+              style: TextStyle(
+                  fontSize: 12,
+                  color:
+                      inputLocked ? Colors.orange.shade800 : Colors.grey),
             ),
           ),
         ],
@@ -384,13 +567,18 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
                   _errorText = null;
                   widget.onChanged?.call(newText);
                   // 🔥 Jangan kirim update ke BLoC dari dalam sini pas di-slide (biar ga spam event).
-                  // Biarin onEditingComplete (pas blur/keyboard tutup) yg ngirim!
+                  // Biarin onChangeEnd (pas lepas jari) yg ngirim!
                 });
+                // Menggeser = nilai berubah → tandai belum terkonfirmasi.
+                if (widget.enableConfirmDialog &&
+                    newText != _lastConfirmedText) {
+                  widget.onConfirmedChanged?.call(false);
+                }
               },
-              // 🔥 Kirim update ke BLoC saat user lepas jari dari slider
+              // 🔥 Saat lepas jari dari slider: commit (+ konfirmasi bila aktif).
               onChangeEnd: (newValue) {
                 final newText = _formatValue(newValue);
-                widget.onEditingComplete?.call(newText);
+                _handleCommit(newText);
               },
             ),
           ),
@@ -405,7 +593,14 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
-              onChanged: widget.onChanged,
+              onChanged: (val) {
+                // Mengetik nilai baru → tandai belum terkonfirmasi supaya
+                // tombol Simpan terkunci lagi sampai dikonfirmasi ulang.
+                if (widget.enableConfirmDialog && val != _lastConfirmedText) {
+                  widget.onConfirmedChanged?.call(false);
+                }
+                widget.onChanged?.call(val);
+              },
               decoration: InputDecoration(
                 labelText: widget.limits.unit,
                 isDense: true,

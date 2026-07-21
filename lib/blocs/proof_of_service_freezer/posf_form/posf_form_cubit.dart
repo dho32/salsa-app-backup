@@ -16,10 +16,21 @@ class PosfFormCubit extends Cubit<PosfFormState> {
 
   String _userType = '';
   String _userName = '';
+  String _userId = '';
   List<Map<String, String>> _technicianList = [];
 
   String get userType => _userType;
   List<Map<String, String>> get technicianList => _technicianList;
+
+  /// Cari NIK (technician_id) teknisi berdasarkan nama di technicianList.
+  /// Kembalikan '' bila tidak ketemu (mis. nama diketik manual / di luar list).
+  String _nikForName(String name) {
+    if (name.isEmpty) return '';
+    for (final t in _technicianList) {
+      if (t['technician_name'] == name) return t['technician_id'] ?? '';
+    }
+    return '';
+  }
 
   String _getHiveKey(String transNo) =>
       transNo.trim().toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
@@ -34,6 +45,7 @@ class PosfFormCubit extends Cubit<PosfFormState> {
     final userData = await AuthStorage.getUser();
     _userType = userData['maintenance_type'] ?? 'WH';
     _userName = userData['name'] ?? '';
+    _userId = userData['user_id'] ?? '';
 
     final configBox = Hive.box(kAppConfigBox);
     final rawList = configBox.get('technician_list');
@@ -61,16 +73,31 @@ class PosfFormCubit extends Cubit<PosfFormState> {
         technician1: info.technician1 ?? '',
         technician2: info.technician2 ?? '',
         technician3: info.technician3 ?? '',
+        technician1Nik: (info.technician1 ?? '').isEmpty ? '' : _userId,
+        technician2Nik: (info.technician2Nik?.isNotEmpty ?? false)
+            ? info.technician2Nik!
+            : _nikForName(info.technician2 ?? ''),
+        technician3Nik: (info.technician3Nik?.isNotEmpty ?? false)
+            ? info.technician3Nik!
+            : _nikForName(info.technician3 ?? ''),
         showTechnician3: (info.technician3 ?? '').isNotEmpty,
         picImageDetail: info.picImageDetail,
       ));
     } else {
       final initialTech1 = _userType == 'WH' ? _userName : '';
+      final initialTech1Nik = initialTech1.isEmpty ? '' : _userId;
       _infoBox.put(
         key,
-        ProofOfServiceFreezerInfoModel(transNo: transNo, technician1: initialTech1),
+        ProofOfServiceFreezerInfoModel(
+          transNo: transNo,
+          technician1: initialTech1,
+          technician1Nik: initialTech1Nik,
+        ),
       );
-      emit(state.copyWith(technician1: initialTech1));
+      emit(state.copyWith(
+        technician1: initialTech1,
+        technician1Nik: initialTech1Nik,
+      ));
     }
     _validateForm();
   }
@@ -80,9 +107,18 @@ class PosfFormCubit extends Cubit<PosfFormState> {
   void picNikChanged(String v) => emit(state.copyWith(picNik: v));
   void picPositionChanged(String v) => emit(state.copyWith(picPosition: v));
   void picPhoneChanged(String v) => emit(state.copyWith(picPhone: v));
-  void technician1Changed(String v) => emit(state.copyWith(technician1: v));
-  void technician2Changed(String v) => emit(state.copyWith(technician2: v));
-  void technician3Changed(String v) => emit(state.copyWith(technician3: v));
+  void technician1Changed(String v) => emit(state.copyWith(
+        technician1: v,
+        technician1Nik: v.isEmpty ? '' : _userId,
+      ));
+  void technician2Changed(String v) => emit(state.copyWith(
+        technician2: v,
+        technician2Nik: _nikForName(v),
+      ));
+  void technician3Changed(String v) => emit(state.copyWith(
+        technician3: v,
+        technician3Nik: _nikForName(v),
+      ));
   void toggleTechnician3(bool show) => emit(state.copyWith(showTechnician3: show));
 
   void picImageChanged(CapturedImageDetail? image) {
@@ -135,6 +171,9 @@ class PosfFormCubit extends Cubit<PosfFormState> {
     info.technician1 = state.technician1;
     info.technician2 = state.technician2;
     info.technician3 = state.technician3;
+    info.technician1Nik = state.technician1Nik;
+    info.technician2Nik = state.technician2Nik;
+    info.technician3Nik = state.technician3Nik;
     info.picImageDetail = state.picImageDetail;
     await _infoBox.put(key, info);
   }

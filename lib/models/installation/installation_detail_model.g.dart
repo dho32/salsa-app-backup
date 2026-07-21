@@ -28,13 +28,16 @@ class InstallationHeaderDetailModelAdapter
       shipToAddress: fields[7] == null ? '' : fields[7] as String,
       latitude: fields[8] == null ? 0.0 : fields[8] as double,
       longitude: fields[9] == null ? 0.0 : fields[9] as double,
+      isPic: fields[10] == null ? true : fields[10] as bool,
+      shipTo: fields[11] == null ? '' : fields[11] as String,
+      shipToMail: fields[12] == null ? '' : fields[12] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, InstallationHeaderDetailModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -54,7 +57,13 @@ class InstallationHeaderDetailModelAdapter
       ..writeByte(8)
       ..write(obj.latitude)
       ..writeByte(9)
-      ..write(obj.longitude);
+      ..write(obj.longitude)
+      ..writeByte(10)
+      ..write(obj.isPic)
+      ..writeByte(11)
+      ..write(obj.shipTo)
+      ..writeByte(12)
+      ..write(obj.shipToMail);
   }
 
   @override

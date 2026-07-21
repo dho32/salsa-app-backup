@@ -52,6 +52,37 @@ class PosSubmittedRepository {
         'final_temp_in_note': transactionInfo?.isFinalTempInSkipped ?? false
             ? transactionInfo?.finalTempInNote ?? ''
             : '',
+        // Bukti kendala skip suhu (alasan ber-flag require_remark):
+        // keterangan tambahan + foto bukti (filename-only, pola remark_photos).
+        // NOTE(backend): endpoint submitted/v4 perlu menerima field-field ini
+        // dan mengembalikan presigned URL untuk file foto bukti tersebut di
+        // result.detail[].uploads[] agar ikut terupload ke S3.
+        'temp_in_note_remark': transactionInfo?.isTempInSkipped ?? false
+            ? transactionInfo?.tempInSkipRemark ?? ''
+            : '',
+        'temp_out_note_remark': transactionInfo?.isTempOutSkipped ?? false
+            ? transactionInfo?.tempOutSkipRemark ?? ''
+            : '',
+        'final_temp_in_note_remark':
+            transactionInfo?.isFinalTempInSkipped ?? false
+                ? transactionInfo?.finalTempInSkipRemark ?? ''
+                : '',
+        'temp_in_remark_photos': transactionInfo?.isTempInSkipped ?? false
+            ? (transactionInfo?.tempInSkipPhotos ?? [])
+                .map((e) => e.toJson())
+                .toList()
+            : [],
+        'temp_out_remark_photos': transactionInfo?.isTempOutSkipped ?? false
+            ? (transactionInfo?.tempOutSkipPhotos ?? [])
+                .map((e) => e.toJson())
+                .toList()
+            : [],
+        'final_temp_in_remark_photos':
+            transactionInfo?.isFinalTempInSkipped ?? false
+                ? (transactionInfo?.finalTempInSkipPhotos ?? [])
+                    .map((e) => e.toJson())
+                    .toList()
+                : [],
         'items': items,
       };
 
@@ -62,7 +93,7 @@ class PosSubmittedRepository {
       log("================================");
 
       // Ganti dengan endpoint API Proof of Service Anda
-      Uri uri = getUrl(pathUrl: '/proof_of_service/submitted/v3');
+      Uri uri = getUrl(pathUrl: '/proof_of_service/submitted/v4');
 
       final response = await http.post(
         uri,

@@ -7,6 +7,11 @@ part 'proof_of_service_freezer_entry_model.g.dart';
 
 // --- TYPE ID: 154 --- (data wizard per-freezer; pola PosValidationEntryModel)
 //
+// Wizard 2 step:
+//   - Sebelum : kondisi awal (suhu tiba, kondisi umum + keluhan, ketebalan
+//               bunga es, foto kondisi awal, catatan).
+//   - Sesudah : pengukuran aktual + foto setelah cuci.
+//
 // Key Hive per-unit (lihat cubit/bloc validasi):
 //   - generic : GEN_<transNo>_<unitIndex>
 //   - serial  : serialNo.trim().toUpperCase()
@@ -33,12 +38,18 @@ class ProofOfServiceFreezerEntryModel extends HiveObject {
   @HiveField(6)
   bool isCompleted;
 
-  // --- Step 1: Kondisi Awal ---
+  // --- Step Sebelum: Kondisi Awal ---
   @HiveField(7)
   double? arrivalTemp; // suhu terbaca saat tiba (°C)
 
   @HiveField(8)
   CapturedImageDetail? arrivalTempImage; // foto pembacaan suhu tiba (watermark)
+
+  @HiveField(19)
+  bool arrivalTempSkipped; // true bila suhu tiba "tidak bisa diukur"
+
+  @HiveField(20)
+  String? arrivalTempReason; // alasan bila arrivalTempSkipped
 
   @HiveField(9)
   String? generalCondition; // Normal / Ada Keluhan / Tidak Beroperasi
@@ -52,22 +63,47 @@ class ProofOfServiceFreezerEntryModel extends HiveObject {
   @HiveField(12)
   String? initialNote;
 
-  // --- Step 2: Proses Cuci ---
-  @HiveField(13)
-  List<bool> cleaningChecklist; // index sesuai daftar item checklist (7 item)
+  // Alasan terpilih untuk kondisi non-Normal: jenis keluhan (Ada Keluhan) atau
+  // alasan tidak terpakai (Tidak terpakai). Dipakai ulang lintas kedua kondisi.
+  @HiveField(18)
+  String? complaint;
 
-  @HiveField(14)
-  String? cleaningProduct; // produk pembersih yang digunakan
+  // Keterangan tambahan (wajib) untuk kondisi "Ada Keluhan" / "Tidak terpakai".
+  // CATATAN: indeks 27/28 (BUKAN 13/14) — field 13/14 pernah dipakai tipe lain
+  // pada adapter typeId 154 versi lama; reuse akan merusak draft lama.
+  @HiveField(27)
+  String? conditionNote;
 
-  // --- Step 3: Pemeriksaan Teknis ---
-  @HiveField(15)
-  Map<String, String> statusFlags; // id item -> OK / Perhatian / Masalah
+  // Foto bukti kondisi (wajib ≥1) untuk "Ada Keluhan" / "Tidak terpakai".
+  @HiveField(28)
+  List<CapturedImageDetail>? conditionPhotos;
 
+  // --- Step Sesudah: Pengukuran & Foto ---
   @HiveField(16)
   List<MeasurementEntry> measurements; // arus kompresor (A), tegangan (V), suhu pull-down (°C)
 
   @HiveField(17)
   Map<String, CapturedImageDetail> afterPhotos; // slot id -> foto setelah cuci
+
+  // --- Bukti kendala skip (alasan di kPosfSkipReasonsRequireRemark):
+  //     keterangan tambahan + foto bukti per grup pengukuran ---
+  @HiveField(21)
+  String? arrivalTempSkipRemark;
+
+  @HiveField(22)
+  List<CapturedImageDetail>? arrivalTempSkipPhotos;
+
+  @HiveField(23)
+  String? tempSkipRemark; // grup suhu pull-down ('temperature')
+
+  @HiveField(24)
+  List<CapturedImageDetail>? tempSkipPhotos;
+
+  @HiveField(25)
+  String? elecSkipRemark; // grup Arus & Tegangan ('ampere' + 'volt')
+
+  @HiveField(26)
+  List<CapturedImageDetail>? elecSkipPhotos;
 
   ProofOfServiceFreezerEntryModel({
     required this.transNo,
@@ -79,19 +115,24 @@ class ProofOfServiceFreezerEntryModel extends HiveObject {
     this.isCompleted = false,
     this.arrivalTemp,
     this.arrivalTempImage,
+    this.arrivalTempSkipped = false,
+    this.arrivalTempReason,
     this.generalCondition,
     this.frostThickness,
     Map<String, CapturedImageDetail>? initialPhotos,
     this.initialNote,
-    List<bool>? cleaningChecklist,
-    this.cleaningProduct,
-    Map<String, String>? statusFlags,
+    this.complaint,
+    this.conditionNote,
+    this.conditionPhotos,
     List<MeasurementEntry>? measurements,
     Map<String, CapturedImageDetail>? afterPhotos,
+    this.arrivalTempSkipRemark,
+    this.arrivalTempSkipPhotos,
+    this.tempSkipRemark,
+    this.tempSkipPhotos,
+    this.elecSkipRemark,
+    this.elecSkipPhotos,
   })  : initialPhotos = initialPhotos ?? {},
-        cleaningChecklist =
-            cleaningChecklist ?? List<bool>.generate(7, (_) => false),
-        statusFlags = statusFlags ?? {},
         measurements = measurements ?? [],
         afterPhotos = afterPhotos ?? {};
 }

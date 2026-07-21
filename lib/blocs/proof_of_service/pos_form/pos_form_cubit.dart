@@ -11,6 +11,7 @@ import 'package:salsa/models/common/captured_image_detail.dart';
 import 'package:salsa/models/proof_of_service/pos_transaction_info_model.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 
+import '../../../models/common/note_option.dart';
 import '../../../models/proof_of_service/pos_validation_entry_model.dart';
 import '../../auth/auth_storage.dart';
 
@@ -21,6 +22,9 @@ class PosFormCubit extends Cubit<PosFormState> {
   String _userName = '';
   String _userId = '';
   List<Map<String, String>> _technicianList = [];
+
+  // Master catatan skip dari server (untuk cek flag require_remark).
+  List<NoteOption> _noteOptions = [];
 
   String get userType => _userType;
   List<Map<String, String>> get technicianList => _technicianList;
@@ -101,6 +105,12 @@ class PosFormCubit extends Cubit<PosFormState> {
         tempOutNote: info.tempOutNote ?? '',
         isFinalTempInSkipped: info.isFinalTempInSkipped ?? false,
         finalTempInNote: info.finalTempInNote ?? '',
+        tempInSkipRemark: info.tempInSkipRemark ?? '',
+        tempOutSkipRemark: info.tempOutSkipRemark ?? '',
+        finalTempInSkipRemark: info.finalTempInSkipRemark ?? '',
+        tempInSkipPhotos: info.tempInSkipPhotos ?? const [],
+        tempOutSkipPhotos: info.tempOutSkipPhotos ?? const [],
+        finalTempInSkipPhotos: info.finalTempInSkipPhotos ?? const [],
       ));
     } else {
       String initialTechnician1 = '';
@@ -136,6 +146,8 @@ class PosFormCubit extends Cubit<PosFormState> {
       tempIn: isSkipped ? '' : state.tempIn,
       clearTemperatureInImage: isSkipped,
       tempInNote: !isSkipped ? '' : state.tempInNote,
+      tempInSkipRemark: !isSkipped ? '' : state.tempInSkipRemark,
+      tempInSkipPhotos: !isSkipped ? const [] : state.tempInSkipPhotos,
     ));
     onFieldChanged();
   }
@@ -146,22 +158,37 @@ class PosFormCubit extends Cubit<PosFormState> {
       tempOut: isSkipped ? '' : state.tempOut,
       clearTemperatureOutImage: isSkipped,
       tempOutNote: !isSkipped ? '' : state.tempOutNote,
+      tempOutSkipRemark: !isSkipped ? '' : state.tempOutSkipRemark,
+      tempOutSkipPhotos: !isSkipped ? const [] : state.tempOutSkipPhotos,
     ));
     onFieldChanged();
   }
 
+  // Ganti alasan skip = reset remark + foto bukti (alasan baru, bukti baru).
   void tempInNoteChanged(String value) {
-    emit(state.copyWith(tempInNote: value));
+    emit(state.copyWith(
+      tempInNote: value,
+      tempInSkipRemark: '',
+      tempInSkipPhotos: const [],
+    ));
     onFieldChanged();
   }
 
   void tempOutNoteChanged(String value) {
-    emit(state.copyWith(tempOutNote: value));
+    emit(state.copyWith(
+      tempOutNote: value,
+      tempOutSkipRemark: '',
+      tempOutSkipPhotos: const [],
+    ));
     onFieldChanged();
   }
 
   void finalTempInNoteChanged(String value) {
-    emit(state.copyWith(finalTempInNote: value));
+    emit(state.copyWith(
+      finalTempInNote: value,
+      finalTempInSkipRemark: '',
+      finalTempInSkipPhotos: const [],
+    ));
     onFieldChanged();
   }
 
@@ -171,8 +198,93 @@ class PosFormCubit extends Cubit<PosFormState> {
       finalTempIn: isSkipped ? '' : state.finalTempIn,
       clearFinalTempInImage: isSkipped,
       finalTempInNote: !isSkipped ? '' : state.finalTempInNote,
+      finalTempInSkipRemark: !isSkipped ? '' : state.finalTempInSkipRemark,
+      finalTempInSkipPhotos: !isSkipped ? const [] : state.finalTempInSkipPhotos,
     ));
     onFieldChanged();
+  }
+
+  // --- Bukti kendala skip (remark + foto) ---
+  void tempInSkipRemarkChanged(String value) {
+    emit(state.copyWith(tempInSkipRemark: value));
+    onFieldChanged();
+  }
+
+  void tempOutSkipRemarkChanged(String value) {
+    emit(state.copyWith(tempOutSkipRemark: value));
+    onFieldChanged();
+  }
+
+  void finalTempInSkipRemarkChanged(String value) {
+    emit(state.copyWith(finalTempInSkipRemark: value));
+    onFieldChanged();
+  }
+
+  void addTempInSkipPhoto(CapturedImageDetail photo) {
+    emit(state.copyWith(
+        tempInSkipPhotos: [...state.tempInSkipPhotos, photo]));
+    onFieldChanged();
+  }
+
+  void removeTempInSkipPhoto(String path) {
+    emit(state.copyWith(
+        tempInSkipPhotos: state.tempInSkipPhotos
+            .where((p) => p.imagePath != path)
+            .toList()));
+    onFieldChanged();
+  }
+
+  void addTempOutSkipPhoto(CapturedImageDetail photo) {
+    emit(state.copyWith(
+        tempOutSkipPhotos: [...state.tempOutSkipPhotos, photo]));
+    onFieldChanged();
+  }
+
+  void removeTempOutSkipPhoto(String path) {
+    emit(state.copyWith(
+        tempOutSkipPhotos: state.tempOutSkipPhotos
+            .where((p) => p.imagePath != path)
+            .toList()));
+    onFieldChanged();
+  }
+
+  void addFinalTempInSkipPhoto(CapturedImageDetail photo) {
+    emit(state.copyWith(
+        finalTempInSkipPhotos: [...state.finalTempInSkipPhotos, photo]));
+    onFieldChanged();
+  }
+
+  void removeFinalTempInSkipPhoto(String path) {
+    emit(state.copyWith(
+        finalTempInSkipPhotos: state.finalTempInSkipPhotos
+            .where((p) => p.imagePath != path)
+            .toList()));
+    onFieldChanged();
+  }
+
+  /// Dipanggil layar detail saat master catatan (noteIndoorOptions) tersedia,
+  /// agar validasi tahu alasan mana yang ber-flag require_remark.
+  void setNoteOptions(List<NoteOption> options) {
+    if (identical(_noteOptions, options)) return; // guard anti rebuild-loop
+    _noteOptions = options;
+    _validateForm();
+  }
+
+  bool noteRequiresRemark(String noteLabel) {
+    if (noteLabel.isEmpty) return false;
+    final opt =
+        _noteOptions.firstWhereOrNull((o) => o.label == noteLabel);
+    return opt?.requireRemark ?? false;
+  }
+
+  /// Skip dianggap lengkap bila alasan terpilih; alasan ber-flag
+  /// require_remark juga wajib remark ≥ 20 huruf + minimal 1 foto bukti.
+  bool isSkipComplete(
+      String note, String remark, List<CapturedImageDetail> photos) {
+    if (note.isEmpty) return false;
+    if (!noteRequiresRemark(note)) return true;
+    final int charCount = remark.replaceAll(' ', '').length;
+    return charCount >= 20 && photos.isNotEmpty;
   }
 
   void finalTempInChanged(String value) =>
@@ -277,16 +389,22 @@ class PosFormCubit extends Cubit<PosFormState> {
 
     final bool tempInValid =
         (state.tempIn.isNotEmpty && state.temperatureInImage != null) ||
-            (state.isTempInSkipped && state.tempInNote.isNotEmpty);
+            (state.isTempInSkipped &&
+                isSkipComplete(state.tempInNote, state.tempInSkipRemark,
+                    state.tempInSkipPhotos));
     final bool tempOutValid =
         (state.tempOut.isNotEmpty && state.temperatureOutImage != null) ||
-            (state.isTempOutSkipped && state.tempOutNote.isNotEmpty);
+            (state.isTempOutSkipped &&
+                isSkipComplete(state.tempOutNote, state.tempOutSkipRemark,
+                    state.tempOutSkipPhotos));
 
     final serviceInfoValid = tempInValid && tempOutValid;
 
     final finalTempValid =
         (state.finalTempIn.isNotEmpty && state.finalTempInImage != null) ||
-            (state.isFinalTempInSkipped && state.finalTempInNote.isNotEmpty);
+            (state.isFinalTempInSkipped &&
+                isSkipComplete(state.finalTempInNote,
+                    state.finalTempInSkipRemark, state.finalTempInSkipPhotos));
 
     final isReady = picStoreValid &&
         technicianValid &&
@@ -341,6 +459,12 @@ class PosFormCubit extends Cubit<PosFormState> {
     infoToSave.tempOutNote = state.tempOutNote;
     infoToSave.isFinalTempInSkipped = state.isFinalTempInSkipped;
     infoToSave.finalTempInNote = state.finalTempInNote;
+    infoToSave.tempInSkipRemark = state.tempInSkipRemark;
+    infoToSave.tempOutSkipRemark = state.tempOutSkipRemark;
+    infoToSave.finalTempInSkipRemark = state.finalTempInSkipRemark;
+    infoToSave.tempInSkipPhotos = state.tempInSkipPhotos;
+    infoToSave.tempOutSkipPhotos = state.tempOutSkipPhotos;
+    infoToSave.finalTempInSkipPhotos = state.finalTempInSkipPhotos;
 
     // 4. Save
     await _transactionInfoBox.put(key, infoToSave);

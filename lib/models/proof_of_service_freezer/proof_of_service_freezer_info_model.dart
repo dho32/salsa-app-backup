@@ -41,6 +41,15 @@ class ProofOfServiceFreezerInfoModel extends HiveObject implements IPicPhotoStor
   @HiveField(8)
   String? technician3;
 
+  @HiveField(9)
+  String? technician1Nik;
+
+  @HiveField(10)
+  String? technician2Nik;
+
+  @HiveField(11)
+  String? technician3Nik;
+
   ProofOfServiceFreezerInfoModel({
     required this.transNo,
     this.picName,
@@ -51,5 +60,8 @@ class ProofOfServiceFreezerInfoModel extends HiveObject implements IPicPhotoStor
     this.technician1,
     this.technician2,
     this.technician3,
+    this.technician1Nik,
+    this.technician2Nik,
+    this.technician3Nik,
   });
 }

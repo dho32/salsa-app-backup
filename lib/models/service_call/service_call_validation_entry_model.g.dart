@@ -46,13 +46,19 @@ class ServiceCallValidationEntryModelAdapter
           (fields[23] as List?)?.cast<CapturedImageDetail>(),
       remarkPhotosOutdoorPsiAfter:
           (fields[24] as List?)?.cast<CapturedImageDetail>(),
+      remarkPhotosIndoorBefore:
+          (fields[25] as List?)?.cast<CapturedImageDetail>(),
+      remarkPhotosOutdoorBefore:
+          (fields[26] as List?)?.cast<CapturedImageDetail>(),
+      remarkPhotosOutdoorPsiBefore:
+          (fields[27] as List?)?.cast<CapturedImageDetail>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, ServiceCallValidationEntryModel obj) {
     writer
-      ..writeByte(25)
+      ..writeByte(28)
       ..writeByte(0)
       ..write(obj.unitType)
       ..writeByte(1)
@@ -102,7 +108,13 @@ class ServiceCallValidationEntryModelAdapter
       ..writeByte(23)
       ..write(obj.remarkPhotosOutdoorAfter)
       ..writeByte(24)
-      ..write(obj.remarkPhotosOutdoorPsiAfter);
+      ..write(obj.remarkPhotosOutdoorPsiAfter)
+      ..writeByte(25)
+      ..write(obj.remarkPhotosIndoorBefore)
+      ..writeByte(26)
+      ..write(obj.remarkPhotosOutdoorBefore)
+      ..writeByte(27)
+      ..write(obj.remarkPhotosOutdoorPsiBefore);
   }
 
   @override

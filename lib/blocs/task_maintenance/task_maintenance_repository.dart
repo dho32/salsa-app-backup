@@ -15,36 +15,46 @@ class TaskMaintenanceRepository {
 
       Uri uri = getUrl(pathUrl: 'task_maintenance/v4', params: params);
       final response = await http.get(uri);
+      log("task_maintenance/v4 [${response.statusCode}]: ${response.body}");
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body['status'] == 'OK') {
-          final List<dynamic> results = body['result'] ?? [];
-
-          for (var item in results) {
-            if (item['trans_no'] != null) {
-              final bool isOtpRequired = item['is_otp_required'] ?? true;
-
-              // Simpan ke SharedPreferences
-              await OtpStorage.saveOtpFlag(isOtpRequired);
-            }
-          }
-
-          return results
-              .map((json) => TransactionSuggestion.fromJson(json))
-              .toList();
-        } else {
-          throw Exception(body['message'] ?? 'Transaksi tidak ditemukan');
-        }
-      } else {
+      dynamic body;
+      try {
+        body = jsonDecode(response.body);
+      } on FormatException {
+        // Body bukan JSON (misal halaman error HTML dari gateway)
         throw Exception(
             'Gagal memuat data PO. Status Code: ${response.statusCode}');
       }
+
+      if (response.statusCode == 200 && body['status'] == 'OK') {
+        final List<dynamic> results = body['result'] ?? [];
+
+        for (var item in results) {
+          if (item['trans_no'] != null) {
+            final bool isOtpRequired = item['is_otp_required'] ?? true;
+
+            // Simpan ke SharedPreferences
+            await OtpStorage.saveOtpFlag(isOtpRequired);
+          }
+        }
+
+        return results
+            .map((json) => TransactionSuggestion.fromJson(json))
+            .toList();
+      }
+
+      // Teruskan pesan asli dari server (status != OK maupun HTTP non-200),
+      // misal error stored procedure di sandbox, supaya tampil di snackbar
+      throw Exception(body is Map && body['message'] != null
+          ? body['message']
+          : 'Gagal memuat data PO. Status Code: ${response.statusCode}');
     } on http.ClientException {
       throw Exception(
           'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
     } catch (e) {
-      throw Exception('Terjadi kesalahan tidak terduga saat mencari PO.');
+      if (e is Exception) rethrow;
+      // Error non-Exception (misal TypeError saat parsing model)
+      throw Exception('Terjadi kesalahan saat mencari PO: $e');
     }
   }
 

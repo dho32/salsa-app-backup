@@ -289,10 +289,25 @@ class _ServiceCallValidationScreenState
     );
   }
 
+  // Semua pengukuran non-skip fase ini sudah dikonfirmasi "sesuai foto"?
+  bool _allMeasurementsConfirmed(ValidationDropdownLoaded s,
+      {required bool isBefore}) {
+    final measurements =
+        isBefore ? s.capturedMeasurementsBefore : s.capturedMeasurementsAfter;
+    final confirmed = isBefore ? s.confirmedBefore : s.confirmedAfter;
+    for (final m in measurements) {
+      if (m.isSkipped ?? false) continue;
+      if (!confirmed.contains(m.measurementId)) return false;
+    }
+    return true;
+  }
+
   Widget _buildFloatingButtons(
       BuildContext context, ValidationDropdownLoaded state) {
     final bloc = context.read<ValidationDropdownBloc>();
     final Color primary = Theme.of(context).primaryColor;
+    final bool confirmedForStep = _allMeasurementsConfirmed(state,
+        isBefore: state.currentStep == 0);
 
     return Container(
       padding: const EdgeInsets.all(16.0)
@@ -300,7 +315,22 @@ class _ServiceCallValidationScreenState
       decoration: const BoxDecoration(
         color: Colors.transparent,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!confirmedForStep)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Konfirmasi (Sesuai Foto) semua hasil pengukuran terlebih dahulu.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w500),
+              ),
+            ),
+          Row(
         children: [
           if (state.currentStep == 1) ...[
             Expanded(
@@ -316,8 +346,13 @@ class _ServiceCallValidationScreenState
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: () async {
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                ),
+                onPressed: !confirmedForStep
+                    ? null
+                    : () async {
                   FocusScope.of(context).unfocus();
                   await Future.delayed(const Duration(milliseconds: 200));
 
@@ -407,7 +442,12 @@ class _ServiceCallValidationScreenState
             // const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                onPressed: () async {
+                style: ElevatedButton.styleFrom(
+                  disabledBackgroundColor: Colors.grey.shade300,
+                ),
+                onPressed: !confirmedForStep
+                    ? null
+                    : () async {
                   FocusScope.of(context).unfocus();
                   await Future.delayed(const Duration(milliseconds: 200));
 
@@ -449,6 +489,8 @@ class _ServiceCallValidationScreenState
           ],
         ],
       ),
+        ],
+      ),
     );
   }
 
@@ -482,27 +524,29 @@ class _ServiceCallValidationScreenState
           return 'Catatan $groupName wajib diisi jika ada pengukuran yang di-skip.';
         }
 
-        // 3. Cek apakah Note ini butuh Remark (Keterangan Tambahan)
-        if (!isBefore) {
-          final selectedOptionObj = options.firstWhere(
-              (o) => o.label == selectedNoteLabel,
-              orElse: () => NoteOption(label: '', requireRemark: false));
+        // 3. Cek apakah Note ini butuh Remark (Keterangan Tambahan).
+        //    Berlaku untuk fase Sebelum & Sesudah.
+        final selectedOptionObj = options.firstWhere(
+            (o) => o.label == selectedNoteLabel,
+            orElse: () => NoteOption(label: '', requireRemark: false));
 
-          if (selectedOptionObj.requireRemark) {
-            final firstSkipped = skippedItems.first;
-            final remarkText = firstSkipped.remark ?? '';
-            if (firstSkipped.remark == null ||
-                firstSkipped.remark!.trim().isEmpty) {
-              return 'Keterangan Tambahan untuk $groupName wajib diisi.';
-            }
-            final int charCount = remarkText.replaceAll(' ', '').length;
-            if (charCount < 20) {
-              return 'Keterangan $groupName minimal 20 huruf (tanpa spasi). Saat ini: $charCount.';
-            }
-            final photos = state.remarkPhotosAfter[noteType] ?? [];
-            if (photos.isEmpty) {
-              return 'Wajib melampirkan minimal 1 foto untuk Remark $groupName.';
-            }
+        if (selectedOptionObj.requireRemark) {
+          final firstSkipped = skippedItems.first;
+          final remarkText = firstSkipped.remark ?? '';
+          if (firstSkipped.remark == null ||
+              firstSkipped.remark!.trim().isEmpty) {
+            return 'Keterangan Tambahan untuk $groupName wajib diisi.';
+          }
+          final int charCount = remarkText.replaceAll(' ', '').length;
+          if (charCount < 20) {
+            return 'Keterangan $groupName minimal 20 huruf (tanpa spasi). Saat ini: $charCount.';
+          }
+          final photos = (isBefore
+                  ? state.remarkPhotosBefore
+                  : state.remarkPhotosAfter)[noteType] ??
+              [];
+          if (photos.isEmpty) {
+            return 'Wajib melampirkan minimal 1 foto untuk Remark $groupName.';
           }
         }
       }

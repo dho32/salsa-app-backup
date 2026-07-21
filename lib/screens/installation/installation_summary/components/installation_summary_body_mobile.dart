@@ -19,10 +19,31 @@ import 'package:salsa/blocs/upload_progress/upload_progress_cubit.dart';
 
 // Widgets
 import 'package:salsa/components/widgets/full_screen_image_viewer.dart';
+import 'package:salsa/components/widgets/otp.dart';
 import 'package:salsa/components/shared_widgets.dart';
+import 'package:salsa/blocs/otp/otp_bloc.dart';
+import 'package:salsa/blocs/otp/otp_state.dart';
+import 'package:salsa/blocs/location_validation/location_validation_bloc.dart';
+import 'package:salsa/blocs/location_validation/location_validation_state.dart';
 import '../../../../blocs/auth/auth_storage.dart';
 import '../../../../components/services/watermark_service.dart';
 import '../../../../models/installation/installation_detail_model.dart';
+
+// Caption thumbnail foto unit di summary — cermin urutan & label slot foto di
+// form input (indoor/outdoor_input_form_body_mobile.dart). Key = measurementId.
+// Jika slot di form input berubah, sinkronkan peta ini.
+const Map<String, String> _kIndoorPhotoLabels = {
+  'IN_INSTALL_PHOTO_1': 'Tampak Dekat',
+  'IN_INSTALL_PHOTO_2': 'Tampak Jauh',
+  'IN_INSTALL_PHOTO_3': 'Barcode',
+};
+const Map<String, String> _kOutdoorPhotoLabels = {
+  'OUT_INSTALL_PHOTO_1': 'Akses',
+  'OUT_INSTALL_PHOTO_2': 'Posisi',
+  'OUT_INSTALL_PHOTO_3': 'Bobokan',
+  'OUT_INSTALL_PHOTO_4': 'Barcode',
+  'OUT_INSTALL_PHOTO_5': 'Vacum',
+};
 
 class InstallationSummaryBodyMobile extends StatefulWidget {
   final String transNo;
@@ -43,10 +64,15 @@ class _InstallationSummaryBodyMobileState
   bool _hasReachedBottom = false;
   bool _isAgreed = false;
   bool _isProcessingTransportPhoto = false;
+  // Teknisi WH tidak perlu input Transport & Jasa Perapihan (section
+  // disembunyikan). Vendor tetap bisa input. Default false (vendor) →
+  // ter-update setelah tipe user dibaca dari AuthStorage.
+  bool _isWH = false;
 
   @override
   void initState() {
     super.initState();
+    _loadUserType();
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -64,6 +90,14 @@ class _InstallationSummaryBodyMobileState
     _scrollController.dispose();
     _remarkController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserType() async {
+    final user = await AuthStorage.getUser();
+    if (!mounted) return;
+    setState(() {
+      _isWH = (user['maintenance_type'] ?? 'WH') == 'WH';
+    });
   }
 
   void _onScroll() {
@@ -222,15 +256,106 @@ class _InstallationSummaryBodyMobileState
     if (confirm != true) return;
     if (!mounted) return;
 
-    setState(() => _isSubmitting = true);
+    final state = context.read<InstallationBloc>().state;
+    final header = state.taskDetail?.header;
+    final draftEntry = state.draftEntry;
+    // PIC final: aktif HANYA bila surat tugas mengizinkan PIC (header.isPic)
+    // DAN teknisi menyalakan toggle "Ada PIC di Lokasi?" (draft.isPicActive).
+    // Default toggle OFF → tanpa PIC & tanpa OTP (kebalikan RRO Cut Off).
+    final bool finalIsPic =
+        (header?.isPic ?? true) && (draftEntry?.isPicActive ?? false);
 
-    if (mounted) {
+    // Tanpa PIC → submit langsung tanpa OTP (mirror RRO Cut Off).
+    if (!finalIsPic) {
+      setState(() => _isSubmitting = true);
       context.read<InstallationBloc>().add(SubmitInstallationFinal(
-        transNo: widget.transNo,
-        remark: _remarkController.text,
-        progressCubit: context.read<UploadProgressCubit>(),
-      ));
+            transNo: widget.transNo,
+            remark: _remarkController.text,
+            progressCubit: context.read<UploadProgressCubit>(),
+          ));
+      return;
     }
+
+    // Dengan PIC → wajib verifikasi OTP ke email toko, dengan fallback
+    // validasi lokasi (foto PIC + GPS).
+    await _showOtpThenSubmit(header);
+  }
+
+  Future<void> _showOtpThenSubmit(
+      InstallationHeaderDetailModel? header) async {
+    final wajibOtp = await OtpStorage.isOtpRequired();
+    if (!mounted) return;
+
+    final installationBloc = context.read<InstallationBloc>();
+    final otpBloc = context.read<OtpBloc>();
+    final locationBloc = context.read<LocationValidationBloc>();
+    final uploadCubit = context.read<UploadProgressCubit>();
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (otpContext) {
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: otpBloc),
+            BlocProvider.value(value: uploadCubit),
+            BlocProvider.value(value: locationBloc),
+          ],
+          child:
+              BlocListener<LocationValidationBloc, LocationValidationState>(
+            listener: (context, locState) {
+              // Tangkap foto validasi lokasi → simpan sebagai foto PIC di draft.
+              CapturedImageDetail? photo;
+              if (locState is LocationPhotoLoaded) {
+                photo = locState.photo;
+              } else if (locState is LocationValidationFailure) {
+                photo = locState.photo;
+              }
+              if (photo != null) {
+                installationBloc
+                    .add(UpdatePicPhoto(_toInstallationPhoto(photo)));
+              }
+            },
+            child: OtpDialog(
+              transNo: widget.transNo,
+              shipTo: header?.shipTo ?? '',
+              email: header?.shipToMail ?? '',
+              storeLat: header?.latitude ?? 0.0,
+              storeLong: header?.longitude ?? 0.0,
+              isPhotoExisting: true,
+              isOtpRequired: wajibOtp,
+              onVerified: () {
+                Navigator.pop(otpContext);
+
+                // Verifikasi via OTP email → tidak menyertakan foto PIC.
+                if (otpBloc.state is OtpVerified) {
+                  installationBloc.add(const UpdatePicPhoto(null));
+                }
+
+                if (!mounted) return;
+                setState(() => _isSubmitting = true);
+                installationBloc.add(SubmitInstallationFinal(
+                  transNo: widget.transNo,
+                  remark: _remarkController.text,
+                  progressCubit: uploadCubit,
+                ));
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  InstallationPhotoModel _toInstallationPhoto(CapturedImageDetail c) {
+    return InstallationPhotoModel(
+      imagePath: c.imagePath,
+      imageFileName: c.imagePath.split('/').last,
+      timestamp: c.timestamp.toIso8601String(),
+      latitude: c.latitude,
+      longitude: c.longitude,
+      deviceModel: c.deviceModel,
+    );
   }
 
   @override
@@ -334,6 +459,7 @@ class _InstallationSummaryBodyMobileState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeaderInfo(state),
+                    _buildPicSummaryCard(state),
                     const SizedBox(height: 20),
                     _buildStoreFrontPhotoSummary(draft),
                     const SizedBox(height: 20),
@@ -346,13 +472,16 @@ class _InstallationSummaryBodyMobileState
                     _buildUnifiedUnitList(draft),
                     const SizedBox(height: 12),
                     _buildTotalMaterialSummary(draft),
-                    const SizedBox(height: 16),
 
-                    _buildTransportSwitch(draft, state.taskDetail?.header),
-
-                    // --- [PERUBAHAN ALUR 1] BLOK UI JASA PERAPIHAN ---
-                    _buildTidyingServiceSwitch(draft),
-                    // -------------------------------------------------
+                    // Biaya Transport & Jasa Perapihan hanya untuk vendor.
+                    // Teknisi WH tidak perlu input → section disembunyikan.
+                    if (!_isWH) ...[
+                      const SizedBox(height: 16),
+                      _buildTransportSwitch(draft, state.taskDetail?.header),
+                      // --- [PERUBAHAN ALUR 1] BLOK UI JASA PERAPIHAN ---
+                      _buildTidyingServiceSwitch(draft),
+                      // -----------------------------------------------
+                    ],
 
                     const Divider(height: 40, thickness: 1),
                     const Text("Catatan Akhir (Opsional)",
@@ -635,6 +764,61 @@ class _InstallationSummaryBodyMobileState
     );
   }
 
+  Widget _buildPicSummaryCard(InstallationState state) {
+    final header = state.taskDetail?.header;
+    final draft = state.draftEntry;
+    final bool finalIsPic =
+        (header?.isPic ?? true) && (draft?.isPicActive ?? false);
+    if (!finalIsPic || draft == null) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.person_pin_circle, color: Colors.blue.shade700, size: 18),
+            const SizedBox(width: 8),
+            const Text("PIC Toko",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          ]),
+          const Divider(height: 20),
+          _buildInfoItem("Nama", draft.picName.isEmpty ? '-' : draft.picName,
+              Icons.person_outline),
+          const SizedBox(height: 12),
+          _buildInfoItem(
+              "No. Telepon",
+              draft.picPhone.isEmpty ? '-' : draft.picPhone,
+              Icons.phone_outlined),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+                child: _buildInfoItem("NIK",
+                    draft.picNik.isEmpty ? '-' : draft.picNik,
+                    Icons.badge_outlined)),
+            Expanded(
+                child: _buildInfoItem(
+                    "Jabatan",
+                    draft.picPosition.isEmpty ? '-' : draft.picPosition,
+                    Icons.work_outline)),
+          ]),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTotalMaterialSummary(InstallationEntryModel draft) {
     final Map<String, double> pipeMap = {};
     final Map<String, double> cableMap = {};
@@ -785,6 +969,19 @@ class _InstallationSummaryBodyMobileState
       }
     }
 
+    // Foto dokumentasi unit (slot wajib saat input form): indoor =
+    // IN_INSTALL_PHOTO_*, outdoor = OUT_INSTALL_PHOTO_*. Measurement disimpan
+    // utuh agar measurementId bisa dipetakan ke caption (lihat _kIndoor/
+    // _kOutdoorPhotoLabels).
+    final indoorPhotos = indoor.measurements
+        .where((m) =>
+            m.measurementId.startsWith('IN_INSTALL_PHOTO') && m.photo != null)
+        .toList();
+    final outdoorPhotos = outdoor.measurements
+        .where((m) =>
+            m.measurementId.startsWith('OUT_INSTALL_PHOTO') && m.photo != null)
+        .toList();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -855,6 +1052,10 @@ class _InstallationSummaryBodyMobileState
                       fontSize: 12,
                     )),
               const SizedBox(height: 16),
+              _buildPhotoGroup(
+                  "Foto Indoor:", indoorPhotos, _kIndoorPhotoLabels),
+              _buildPhotoGroup(
+                  "Foto Outdoor:", outdoorPhotos, _kOutdoorPhotoLabels),
               if (relatedEvidences.isNotEmpty) ...[
                 const Text("Foto Bukti Merk:",
                     style:
@@ -1018,6 +1219,77 @@ class _InstallationSummaryBodyMobileState
                 image: DecorationImage(
                     image: FileImage(File(ev.photoPath)), fit: BoxFit.cover),
                 border: Border.all(color: Colors.grey.shade300))));
+  }
+
+  // Grup thumbnail foto unit (indoor / outdoor) + caption. Sembunyi bila kosong.
+  Widget _buildPhotoGroup(String title,
+      List<InstallationMeasurementModel> photos, Map<String, String> labels) {
+    if (photos.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style:
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: photos
+                .map((m) => _buildPhotoThumbnail(
+                    m.photo!, labels[m.measurementId] ?? ''))
+                .toList()),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildPhotoThumbnail(InstallationPhotoModel photo, String caption) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () {
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => FullScreenImageViewer(
+                          imageDetail: CapturedImageDetail(
+                            imagePath: photo.imagePath,
+                            timestamp: DateTime.tryParse(photo.timestamp) ??
+                                DateTime.now(),
+                            technicianName: '',
+                            deviceModel: photo.deviceModel,
+                            transNo: widget.transNo,
+                            latitude: photo.latitude,
+                            longitude: photo.longitude,
+                            address: '',
+                          ),
+                        )));
+          },
+          child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  image: DecorationImage(
+                      image: FileImage(File(photo.imagePath)),
+                      fit: BoxFit.cover),
+                  border: Border.all(color: Colors.grey.shade300))),
+        ),
+        if (caption.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 60,
+            child: Text(caption,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 9, color: Colors.grey.shade700)),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildStoreFrontPhotoSummary(InstallationEntryModel draft) {
