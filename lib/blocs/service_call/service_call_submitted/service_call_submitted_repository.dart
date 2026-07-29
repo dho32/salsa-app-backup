@@ -23,9 +23,10 @@ class ServiceCallSubmittedRepository {
         'temperature_in_after':
             double.tryParse(transactionInfo?.finalTemperatureIn ?? '0') ?? 0,
         'temperature_in_note': transactionInfo?.isFinalTempSkipped ?? false ? transactionInfo?.finalTempNote ?? '' : '',
-        // Bukti kendala skip Suhu Akhir (alasan ber-flag require_remark).
-        // NOTE(backend): field baru — backend perlu menerima field ini dan
-        // mengembalikan presigned URL untuk file foto bukti di uploads[].
+        // Bukti kendala skip Suhu Dalam Ruangan (alasan ber-flag require_remark).
+        // Ditangani backend endpoint submitted/v4 (SubmitServiceCallValidationV4):
+        // keterangan tersimpan via SP v4, foto bukti dapat presigned URL di
+        // detail[].uploads[] lalu terupload ke S3.
         'temperature_in_note_remark':
             transactionInfo?.isFinalTempSkipped ?? false
                 ? transactionInfo?.finalTempSkipRemark ?? ''
@@ -62,7 +63,10 @@ class ServiceCallSubmittedRepository {
       log(prettyJson);
       log("================================");
 
-      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted/v3');
+      // PENTING: v4 menyimpan keterangan + foto bukti skip suhu dalam ruangan.
+      // JANGAN rilis build ini sebelum backend v4 (sp_salsa_service_call_validation_insert_v4)
+      // sudah deploy, kalau tidak submit SC akan error/404.
+      Uri uri = getUrl(pathUrl: '/service_call/validation/submitted/v4');
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},

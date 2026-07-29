@@ -54,9 +54,9 @@ class PosSubmittedRepository {
             : '',
         // Bukti kendala skip suhu (alasan ber-flag require_remark):
         // keterangan tambahan + foto bukti (filename-only, pola remark_photos).
-        // NOTE(backend): endpoint submitted/v4 perlu menerima field-field ini
-        // dan mengembalikan presigned URL untuk file foto bukti tersebut di
-        // result.detail[].uploads[] agar ikut terupload ke S3.
+        // Ditangani backend endpoint submitted/v5 (SubmitProofOfServiceV5):
+        // keterangan tersimpan via SP v5, foto bukti dapat presigned URL di
+        // result.detail[].uploads[] lalu terupload ke S3.
         'temp_in_note_remark': transactionInfo?.isTempInSkipped ?? false
             ? transactionInfo?.tempInSkipRemark ?? ''
             : '',
@@ -93,7 +93,10 @@ class PosSubmittedRepository {
       log("================================");
 
       // Ganti dengan endpoint API Proof of Service Anda
-      Uri uri = getUrl(pathUrl: '/proof_of_service/submitted/v4');
+      // PENTING: v5 menyimpan keterangan + foto bukti skip suhu. JANGAN rilis build
+      // ini sebelum backend v5 (sp_salsa_proof_of_service_insert_v5) sudah deploy,
+      // kalau tidak submit POS akan error/404.
+      Uri uri = getUrl(pathUrl: '/proof_of_service/submitted/v5');
 
       final response = await http.post(
         uri,
