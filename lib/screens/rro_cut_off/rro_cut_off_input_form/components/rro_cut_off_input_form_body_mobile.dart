@@ -242,6 +242,26 @@ class _RROCutOffInputFormBodyMobileState
         double tempLat = 0.0;
         double tempLng = 0.0;
 
+        // Ambil GPS untuk watermark + payload (pola sama dengan foto toko di
+        // layar detail). Tanpa ini lat/lng foto unit bongkar selalu 0.0.
+        try {
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+          if (permission == LocationPermission.whileInUse ||
+              permission == LocationPermission.always) {
+            final position = await Geolocator.getCurrentPosition(
+                locationSettings:
+                    const LocationSettings(accuracy: LocationAccuracy.high));
+            tempLat = position.latitude;
+            tempLng = position.longitude;
+            locationString = '$tempLat, $tempLng';
+          }
+        } catch (e) {
+          debugPrint("Gagal narik lokasi GPS: $e");
+        }
+
         final req = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,

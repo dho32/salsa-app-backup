@@ -3,6 +3,7 @@ import 'package:hive/hive.dart';
 import '../../../components/constants.dart';
 import '../../../components/upload_s3_service.dart';
 import '../../../models/rro_cut_off/rro_cut_off_entry_model.dart';
+import '../../../models/task_maintenance/confirmation_task_queue.dart';
 import '../../service/service_repository.dart';
 import 'rro_cut_off_submit_event.dart';
 import 'rro_cut_off_submit_state.dart';
@@ -42,10 +43,27 @@ class RROCutOffSubmitBloc
       if (uploadResult.allSuccess) {
         // SUKSES SEMUA
         try {
-          await serviceRepo.confirmUploadSuccess(event.transNo);
+          // confirmUploadSuccess TIDAK pernah throw — ia mengembalikan
+          // {'status':'ERROR'} bila gagal, jadi statusnya WAJIB dicek manual.
+          final confirmResponse =
+              await serviceRepo.confirmUploadSuccess(event.transNo);
+
+          // Foto sudah aman di S3 & metadata sudah tersimpan di server; yang
+          // gagal hanya update status task. Antrikan ke ConfirmationService
+          // agar di-retry otomatis saat startup (maks 5x), pola sama dengan
+          // modul lain (mis. SC unserviceable). Tanpa ini konfirmasi hilang
+          // diam-diam padahal draft sudah kadung dihapus.
+          if (confirmResponse['status'] != 'OK') {
+            final queueBox = Hive.isBoxOpen(kConfirmationQueueBox)
+                ? Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox)
+                : await Hive.openBox<ConfirmationTaskModel>(
+                    kConfirmationQueueBox);
+            await queueBox.put(
+                event.transNo, ConfirmationTaskModel(transNo: event.transNo));
+          }
 
           final draftBox = await Hive.openBox(kRROFormDraftBox);
-          draftBox.deleteAll([
+          await draftBox.deleteAll([
             '${event.transNo}_picName',
             '${event.transNo}_picPhone',
             '${event.transNo}_picNik',
@@ -58,7 +76,11 @@ class RROCutOffSubmitBloc
             '${event.transNo}_tech3Nik',
             '${event.transNo}_storeFrontPhoto',
             '${event.transNo}_storeFrontLat',
-            '${event.transNo}_storeFrontLng'
+            '${event.transNo}_storeFrontLng',
+            '${event.transNo}_isPicActive',
+            '${event.transNo}_picPhotoPath',
+            '${event.transNo}_picLat',
+            '${event.transNo}_picLng',
           ]);
 
           final entryBox =
@@ -68,13 +90,22 @@ class RROCutOffSubmitBloc
               .toList();
           await entryBox.deleteAll(keysToDelete);
 
+          // Bersihkan juga entry pembawa foto PIC (RROCutOffFormModel) di box
+          // form supaya tidak menumpuk pointer foto basi lintas transaksi.
+          final formBox =
+              await Hive.openBox<RROCutOffFormModel>(kRROCutOffFormBox);
+          final formKeys = formBox.keys
+              .where((k) => formBox.get(k)?.transNo == event.transNo)
+              .toList();
+          await formBox.deleteAll(formKeys);
+
           emit(state.copyWith(status: RROCutOffSubmitStatus.success));
         } catch (e) {
           emit(state.copyWith(
             status: RROCutOffSubmitStatus.uploadPartial,
             successCount: uploadResult.successCount,
             failureCount: 1,
-            failedFiles: ["Confirmation Failed: $e"],
+            failedFiles: ["Gagal finalisasi (konfirmasi / bersih draft): $e"],
           ));
         }
       } else {
