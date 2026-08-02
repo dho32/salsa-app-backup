@@ -109,10 +109,13 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
   Future<void> _initializeData() async {
     try {
       final user = await AuthStorage.getUser();
-      final vendorCode = user['maintenance_by']?.toString() ?? '';
+      final userType = user['maintenance_type']?.toString() ?? 'WH';
       final userName = user['name']?.toString() ?? '';
       _userId = user['user_id']?.toString() ?? '';
-      _isWH = vendorCode.isEmpty || vendorCode.toUpperCase() == 'WH';
+      // Samakan dengan modul lain (Installation/POS/SC/POSF): status WH diambil
+      // dari `maintenance_type`, BUKAN `maintenance_by` (itu kode vendor, mis.
+      // "V000065" — bikin _isWH selalu false → teknisi 2/3 jatuh ke text manual).
+      _isWH = userType == 'WH';
 
       final configBox = Hive.box(kAppConfigBox);
       final rawList = configBox.get('technician_list');
