@@ -59,9 +59,24 @@ class _MeasurementNoteDropdownState extends State<MeasurementNoteDropdown> {
 
   @override
   Widget build(BuildContext context) {
+    // dropdown_button2 mewajibkan `value` cocok dengan TEPAT SATU item.
+    // Master catatan dari backend kadang memuat label kembar, dan draft lama
+    // bisa menyimpan alasan yang sudah tidak ada di master. Keduanya memicu
+    // assertion "zero or 2 or more items with the same value" (crash saat
+    // alasan dipilih / form dibuka). Lindungi di sini agar SEMUA modul yang
+    // pakai widget ini aman: de-dup opsi berdasar label (value dropdown =
+    // label) & pakai `value` hanya bila benar-benar ada, selain itu null.
+    final List<MeasurementNoteOption> uniqueOptions = [];
+    final Set<String> seenLabels = <String>{};
+    for (final opt in widget.options) {
+      if (seenLabels.add(opt.label)) uniqueOptions.add(opt);
+    }
+    final String? safeValue =
+        seenLabels.contains(widget.value) ? widget.value : null;
+
     // Cek apakah opsi yang dipilih butuh remark tambahan
-    final selectedOption = widget.options.firstWhere(
-      (opt) => opt.label == widget.value,
+    final selectedOption = uniqueOptions.firstWhere(
+      (opt) => opt.label == safeValue,
       orElse: () => const MeasurementNoteOption(label: ''),
     );
     final bool requireRemark = selectedOption.requireRemark;
@@ -70,7 +85,7 @@ class _MeasurementNoteDropdownState extends State<MeasurementNoteDropdown> {
     return Column(
       children: [
         DropdownButtonFormField2<String>(
-          value: widget.value,
+          value: safeValue,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: '${widget.label} (*Wajib)',
@@ -89,7 +104,7 @@ class _MeasurementNoteDropdownState extends State<MeasurementNoteDropdown> {
               widget.onRemarkChanged?.call('');
             }
           },
-          items: widget.options
+          items: uniqueOptions
               .map((item) => DropdownMenuItem<String>(
                     value: item.label,
                     child:

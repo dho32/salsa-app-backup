@@ -366,13 +366,24 @@ class _InstallationDetailBodyMobileState
 
         bool isStorePhotoFilled = draft?.storeFrontPhoto != null;
 
+        // PIC wajib HANYA bila toggle "Ada PIC di Lokasi?" menyala (opsional
+        // secara default, kebalikan RRO). Dihitung di sini juga supaya tombol
+        // "Ready" konsisten dengan validasi tap di bawah — sebelumnya tombol
+        // bisa tampil hijau/siap walau Nama/No HP PIC belum diisi.
+        final bool picRequired =
+            detail.header.isPic && (draft?.isPicActive ?? false);
+        bool isPicComplete = !picRequired ||
+            ((draft?.picName.trim().isNotEmpty ?? false) &&
+                (draft?.picPhone.trim().isNotEmpty ?? false));
+
         // Final Status
         bool isReadyToSubmit = isIndoorComplete &&
             isOutdoorComplete &&
             isMaterialComplete &&
             isEvidenceComplete &&
             isDateFilled &&
-            isStorePhotoFilled; // Masuk ke validasi final
+            isStorePhotoFilled &&
+            isPicComplete; // Masuk ke validasi final
 
         return Column(
           children: [
@@ -502,11 +513,7 @@ class _InstallationDetailBodyMobileState
                   // Validasi PIC: wajib HANYA bila teknisi menyalakan toggle
                   // "Ada PIC di Lokasi?" (untuk surat tugas yang mengizinkan
                   // PIC). Default toggle OFF → PIC opsional (kebalikan RRO).
-                  final bool picRequired =
-                      detail.header.isPic && draft.isPicActive;
-                  if (picRequired &&
-                      (draft.picName.trim().isEmpty ||
-                          draft.picPhone.trim().isEmpty)) {
+                  if (!isPicComplete) {
                     _showErrorSnack(context,
                         "⚠️ Harap lengkapi Nama dan No HP PIC.");
                     return;

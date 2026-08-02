@@ -1,12 +1,14 @@
 import 'package:hive/hive.dart';
 
 import '../common/captured_image_detail.dart';
+import '../common/i_pic_photo_storable.dart';
 
 part 'rro_cut_off_entry_model.g.dart';
 
 // --- MODEL FORM ---
 @HiveType(typeId: 217)
-class RROCutOffFormModel extends HiveObject {
+class RROCutOffFormModel extends HiveObject implements IPicPhotoStorable {
+  @override
   @HiveField(0)
   final String transNo;
 
@@ -126,7 +128,7 @@ class RROCutOffEntryModel extends HiveObject {
     required this.unitIndex,
     required this.lineNo,
     this.selectedSerialNumber,
-    this.photos = const [], // Defaultnya list kosong
+    List<RROCutOffPhotoModel>? photos, // default list kosong yang mutable
     this.isCompleted = false,
-  });
+  }) : photos = photos ?? <RROCutOffPhotoModel>[];
 }

@@ -178,7 +178,7 @@ class _AppInitializerState extends State<AppInitializer> {
       await _openBoxSafely<OtpTrackingModel>(kOtpTrackingBox);
       await _openBoxSafely<RROCutOffResult>(kRROCutOffDetailBox);
       await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffEntryBox);
-      await _openBoxSafely<RROCutOffEntryModel>(kRROCutOffFormBox);
+      await _openBoxSafely<RROCutOffFormModel>(kRROCutOffFormBox);
       await _openBoxSafely<ProofOfServiceFreezerDetailModel>(kProofOfServiceFreezerDetailBox);
       await _openBoxSafely<ProofOfServiceFreezerInfoModel>(kProofOfServiceFreezerInfoBox);
       await _openBoxSafely<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox);

@@ -15,7 +15,7 @@ import '../../../../blocs/otp/otp_repository.dart';
 // 🔥 TAMBAHAN UNTUK LOCATION
 import '../../../../blocs/location_validation/location_validation_bloc.dart';
 import '../../../../blocs/location_validation/location_validation_event.dart';
-import '../../../../models/proof_of_service/pos_transaction_info_model.dart';
+import '../../../../models/rro_cut_off/rro_cut_off_entry_model.dart';
 import '../../../../components/constants.dart';
 
 import 'components/rro_cut_off_summary_body_mobile.dart';
@@ -35,7 +35,7 @@ class RROCutOffSummaryScreen extends StatefulWidget {
 }
 
 class _RROCutOffSummaryScreenState extends State<RROCutOffSummaryScreen> {
-  Box<PosTransactionInfoModel>? _transactionInfoBox;
+  Box<RROCutOffFormModel>? _transactionInfoBox;
 
   @override
   void initState() {
@@ -44,7 +44,30 @@ class _RROCutOffSummaryScreenState extends State<RROCutOffSummaryScreen> {
   }
 
   Future<void> _openHiveBox() async {
-    final box = await Hive.openBox<PosTransactionInfoModel>(kPosTransactionInfoHiveBox);
+    final box = await Hive.openBox<RROCutOffFormModel>(kRROCutOffFormBox);
+
+    // Seed entry RROCutOffFormModel utk transNo ini bila belum ada, supaya
+    // LocationValidationBloc bisa MENYIMPAN foto PIC ke Hive (persist) — bukan
+    // cuma hidup di state. Data PIC/teknisi tetap di kRROFormDraftBox; model
+    // ini murni pembawa foto (IPicPhotoStorable). Key WAJIB dinormalisasi sama
+    // seperti yang dipakai bloc (generateHiveKey).
+    final key = LocationValidationBloc.generateHiveKey(widget.transNo);
+    if (box.get(key) == null) {
+      await box.put(
+        key,
+        RROCutOffFormModel(
+          transNo: widget.transNo,
+          picName: '',
+          picPhone: '',
+          picNik: '',
+          picPosition: '',
+          technician1: '',
+          technician2: '',
+          technician3: '',
+        ),
+      );
+    }
+
     if (mounted) {
       setState(() {
         _transactionInfoBox = box;

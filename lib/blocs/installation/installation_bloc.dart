@@ -158,21 +158,32 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
               .timeout(const Duration(seconds: 15));
           await _taskBox?.put(event.transNo, fresh);
 
+          // PENTING: pakai draft TERKINI dari state, bukan `draft` lokal yang
+          // di-snapshot sebelum await di atas. Bloc ini tidak pakai event
+          // transformer → semua event diproses concurrent (default flutter_
+          // bloc), jadi selagi fetch di atas berjalan (s.d. 15s) teknisi bisa
+          // sudah mengedit draft lewat event lain (toggle PIC, simpan unit,
+          // dst). Emit balik snapshot lama akan menimpa/menghilangkan editan
+          // itu dari state in-memory walau sudah tersimpan di Hive.
+          final currentDraft = state.draftEntry ?? draft;
+
           // Cache tadi bisa stale (unit_index 0) sehingga draft ikut stale.
           // Rekonsiliasi lagi terhadap targets FRESH agar unit_index selaras.
-          final repaired = _reconcileDraftUnits(draft, fresh.targets);
-          if (repaired != null) {
-            draft = draft.copyWith(units: repaired);
-            await _draftBox?.put(event.transNo, draft);
-          }
+          final repaired = _reconcileDraftUnits(currentDraft, fresh.targets);
+          final finalDraft = repaired != null
+              ? currentDraft.copyWith(units: repaired)
+              : currentDraft;
 
           if (!emit.isDone) {
             emit(state.copyWith(
               taskDetail: fresh,
-              draftEntry: draft,
-              availableIndoors: _calculateAvailableIndoors(draft),
+              draftEntry: finalDraft,
+              availableIndoors: _calculateAvailableIndoors(finalDraft),
               measurementLimits: _buildLimits(configBox, fresh),
             ));
+          }
+          if (repaired != null) {
+            await _draftBox?.put(event.transNo, finalDraft);
           }
         } catch (_) {
           // Offline / gagal → biarkan tampilan cache.

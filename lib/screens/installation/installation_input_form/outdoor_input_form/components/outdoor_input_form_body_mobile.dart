@@ -520,7 +520,14 @@ class _OutdoorInputFormBodyMobileState
 
       if (updated.isSkipped == true) {
         for (var i = 0; i < _elecEntries.length; i++) {
-          _elecEntries[i] = _elecEntries[i].copyWith(isSkipped: true);
+          // value & capturedImage ikut dibersihkan (bukan cuma isSkipped),
+          // supaya pasangan yang belum di-skip manual tidak menyisakan foto
+          // lama yang tak terkait saat skip dibatalkan lagi — kalau tidak,
+          // foto basi itu tetap lolos gerbang foto-dulu-baru-angka karena
+          // widget mengunci input berdasar `capturedImage != null`, bukan
+          // teks yang sudah dikosongkan.
+          _elecEntries[i] = _elecEntries[i]
+              .copyWith(isSkipped: true, value: 0, clearCapturedImage: true);
           _elecControllers[_elecEntries[i].measurementId]?.clear();
           // Di-skip → tak perlu konfirmasi.
           _confirmedIds.remove(_elecEntries[i].measurementId);
