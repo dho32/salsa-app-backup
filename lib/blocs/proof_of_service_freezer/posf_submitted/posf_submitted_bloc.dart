@@ -7,6 +7,8 @@ import '../../../components/upload_s3_service.dart';
 import '../../../models/proof_of_service_freezer/proof_of_service_freezer_detail_model.dart';
 import '../../../models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
 import '../../../models/proof_of_service_freezer/proof_of_service_freezer_info_model.dart';
+import '../../../models/task_maintenance/confirmation_task_queue.dart';
+import '../../service/service_repository.dart';
 import '../../upload_progress/upload_progress_cubit.dart';
 import 'posf_submitted_repository.dart';
 
@@ -15,6 +17,7 @@ part 'posf_submitted_state.dart';
 
 class PosfSubmittedBloc extends Bloc<PosfSubmittedEvent, PosfSubmittedState> {
   final PosfSubmittedRepository repository;
+  final ServiceTaskRepository _serviceRepo = ServiceTaskRepository();
 
   PosfSubmittedBloc({required this.repository}) : super(PosfSubmittedInitial()) {
     on<SubmitPosfValidation>(_onSubmit);
@@ -117,6 +120,23 @@ class PosfSubmittedBloc extends Bloc<PosfSubmittedEvent, PosfSubmittedState> {
         );
 
         if (uploadResult.allSuccess) {
+          // Konfirmasi ke server bahwa upload sukses → flip status task jadi
+          // selesai lewat /task_maintenance/update (SP sp_salsa_task_status_update,
+          // module-agnostic, cukup trans_no). Tanpa ini task nyangkut di daftar
+          // pending teknisi walau data & foto sudah masuk.
+          // confirmUploadSuccess TIDAK pernah throw — mengembalikan
+          // {'status':'ERROR'} bila gagal, jadi statusnya WAJIB dicek manual.
+          // Foto sudah aman di S3 & metadata sudah tersimpan; yang gagal hanya
+          // update status. Antrikan ke ConfirmationService agar di-retry otomatis
+          // saat startup (maks 5x), pola sama dengan RRO cut off & SC unserviceable.
+          // Draft tetap dihapus & sukses tetap di-emit karena data inti aman.
+          final confirmResponse = await _serviceRepo.confirmUploadSuccess(tx);
+          if (confirmResponse['status'] != 'OK') {
+            final queueBox = Hive.isBoxOpen(kConfirmationQueueBox)
+                ? Hive.box<ConfirmationTaskModel>(kConfirmationQueueBox)
+                : await Hive.openBox<ConfirmationTaskModel>(kConfirmationQueueBox);
+            await queueBox.put(tx, ConfirmationTaskModel(transNo: tx));
+          }
           await _clearDrafts(event.transNo, entryBox, infoBox);
           emit(PosfSubmitSuccess());
         } else {
