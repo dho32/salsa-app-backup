@@ -21,6 +21,7 @@ import 'package:salsa/blocs/upload_progress/upload_progress_cubit.dart';
 import 'package:salsa/components/widgets/full_screen_image_viewer.dart';
 import 'package:salsa/components/widgets/otp.dart';
 import 'package:salsa/components/shared_widgets.dart';
+import 'package:salsa/components/shared_function.dart';
 import 'package:salsa/blocs/otp/otp_bloc.dart';
 import 'package:salsa/blocs/otp/otp_state.dart';
 import 'package:salsa/blocs/location_validation/location_validation_bloc.dart';
@@ -155,7 +156,7 @@ class _InstallationSummaryBodyMobileState
         final req = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: header.transNo,
+          storeName: storeTag(header.shipToName, header.shipTo),
           formattedDate: formattedDate,
           technicianName: user['name'] ?? 'Teknisi',
           deviceModel: deviceModel,
@@ -258,12 +259,10 @@ class _InstallationSummaryBodyMobileState
 
     final state = context.read<InstallationBloc>().state;
     final header = state.taskDetail?.header;
-    final draftEntry = state.draftEntry;
-    // PIC final: aktif HANYA bila surat tugas mengizinkan PIC (header.isPic)
-    // DAN teknisi menyalakan toggle "Ada PIC di Lokasi?" (draft.isPicActive).
-    // Default toggle OFF → tanpa PIC & tanpa OTP (kebalikan RRO Cut Off).
-    final bool finalIsPic =
-        (header?.isPic ?? true) && (draftEntry?.isPicActive ?? false);
+    // PIC final: mengikuti surat tugas (header.isPic) — bila true, data PIC
+    // wajib & verifikasi OTP jalan; tidak ada toggle untuk mematikannya
+    // (sama seperti RRO Cut Off).
+    final bool finalIsPic = header?.isPic ?? true;
 
     // Tanpa PIC → submit langsung tanpa OTP (mirror RRO Cut Off).
     if (!finalIsPic) {
@@ -319,6 +318,7 @@ class _InstallationSummaryBodyMobileState
             child: OtpDialog(
               transNo: widget.transNo,
               shipTo: header?.shipTo ?? '',
+              shipToName: header?.shipToName ?? '',
               email: header?.shipToMail ?? '',
               storeLat: header?.latitude ?? 0.0,
               storeLong: header?.longitude ?? 0.0,
@@ -767,8 +767,7 @@ class _InstallationSummaryBodyMobileState
   Widget _buildPicSummaryCard(InstallationState state) {
     final header = state.taskDetail?.header;
     final draft = state.draftEntry;
-    final bool finalIsPic =
-        (header?.isPic ?? true) && (draft?.isPicActive ?? false);
+    final bool finalIsPic = header?.isPic ?? true;
     if (!finalIsPic || draft == null) return const SizedBox.shrink();
 
     return Container(

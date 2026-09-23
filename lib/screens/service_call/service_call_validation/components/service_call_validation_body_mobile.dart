@@ -29,6 +29,7 @@ class ServiceCallValidationBodyMobile extends StatefulWidget {
   final String leasesEndingDate;
   final String complaintDetails;
   final String imageFile;
+  final String storeName;
   final ServiceCallValidationEntryModel? initialData;
 
   const ServiceCallValidationBodyMobile({
@@ -42,6 +43,7 @@ class ServiceCallValidationBodyMobile extends StatefulWidget {
     required this.leasesEndingDate,
     required this.complaintDetails,
     required this.imageFile,
+    required this.storeName,
     this.initialData,
   });
 
@@ -126,7 +128,7 @@ class _ServiceCallValidationBodyMobileState
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: widget.storeName,
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
@@ -310,6 +312,7 @@ class _ServiceCallValidationBodyMobileState
               ScMeasurementInputSection(
                 key: const ValueKey('measurements_before'),
                 transNo: widget.transNo,
+                storeName: widget.storeName,
                 measurements: state.capturedMeasurementsBefore,
                 isBefore: true,
                 limitsMap: state.limitsScBefore,
@@ -358,6 +361,7 @@ class _ServiceCallValidationBodyMobileState
                 key: const ValueKey('measurements_after'),
                 // Key tetap penting
                 transNo: widget.transNo,
+                storeName: widget.storeName,
                 measurements: state.capturedMeasurementsAfter,
                 isBefore: false,
                 limitsMap: state.limitsScAfter,

@@ -133,7 +133,7 @@ class RROCutOffEntryModelAdapter extends TypeAdapter<RROCutOffEntryModel> {
       unitIndex: fields[3] as int,
       lineNo: fields[7] as int,
       selectedSerialNumber: fields[4] as String?,
-      photos: (fields[5] as List).cast<RROCutOffPhotoModel>(),
+      photos: (fields[5] as List?)?.cast<RROCutOffPhotoModel>(),
       isCompleted: fields[6] as bool,
     );
   }

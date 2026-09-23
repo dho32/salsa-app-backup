@@ -480,7 +480,7 @@ class _OutdoorInputFormBodyMobileState
       final req = WatermarkRequest(
         originalPath: image.path,
         targetPath: targetPath,
-        transNo: widget.transNo,
+        storeName: storeTag(context.read<InstallationBloc>().state.taskDetail?.header.shipToName, context.read<InstallationBloc>().state.taskDetail?.header.shipTo),
         formattedDate: formattedDate,
         technicianName: techName,
         deviceModel: deviceModel,
@@ -969,6 +969,7 @@ class _OutdoorInputFormBodyMobileState
                               fontSize: 13))),
                   GenericMeasurementInputSection(
                       transNo: widget.transNo,
+                      storeName: storeTag(context.read<InstallationBloc>().state.taskDetail?.header.shipToName, context.read<InstallationBloc>().state.taskDetail?.header.shipTo),
                       measurements: _elecEntries,
                       controllers: _elecControllers,
                       limitsMap: _limitsMap,
@@ -1015,6 +1016,7 @@ class _OutdoorInputFormBodyMobileState
                               fontSize: 13))),
                   GenericMeasurementInputSection(
                       transNo: widget.transNo,
+                      storeName: storeTag(context.read<InstallationBloc>().state.taskDetail?.header.shipToName, context.read<InstallationBloc>().state.taskDetail?.header.shipTo),
                       measurements: _psiEntries,
                       controllers: _psiControllers,
                       limitsMap: _limitsMap,

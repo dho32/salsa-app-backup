@@ -52,7 +52,8 @@ class PosSubmittedBloc extends Bloc<PosSubmittedEvent, PosSubmittedState> {
         return isNoteBroken && isMeasurementSkipped;
       });
 
-      if (hasBrokenUnit) {
+      // Gate SC unit bermasalah bisa dimatikan via kEnableUnitProblemScGate.
+      if (kEnableUnitProblemScGate && hasBrokenUnit) {
         final bool hasActiveSC =
             await repository.checkActiveServiceCall(event.transNo);
         if (!hasActiveSC) {

@@ -8,7 +8,7 @@ import 'package:image/image.dart' as img;
 class WatermarkRequest {
   final String originalPath;
   final String targetPath;
-  final String transNo;
+  final String storeName;
   final String formattedDate;
   final String technicianName;
   final String deviceModel;
@@ -21,7 +21,7 @@ class WatermarkRequest {
   WatermarkRequest({
     required this.originalPath,
     required this.targetPath,
-    required this.transNo,
+    required this.storeName,
     required this.formattedDate,
     required this.technicianName,
     required this.deviceModel,
@@ -59,7 +59,7 @@ class WatermarkService {
     // ===============================
     final lines = [
       if (req.photoLabel?.isNotEmpty == true) 'Foto: ${req.photoLabel}',
-      req.transNo,
+      if (req.storeName.isNotEmpty) 'Toko : ${req.storeName}',
       req.formattedDate,
       'Difoto Oleh: ${req.technicianName}',
       'Device: ${req.deviceModel}',

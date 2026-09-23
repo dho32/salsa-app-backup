@@ -290,11 +290,11 @@ class _ProofOfServiceBodyMobileState extends State<ProofOfServiceBodyMobile> {
                 Expanded(
                     child: _buildTextField(
                         controller: _nikPicCtrl,
-                        label: "NIK",
+                        label: "NIK Karyawan",
                         align: TextAlign.left,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'NIK tidak boleh kosong';
+                            return 'NIK Karyawan tidak boleh kosong';
                           }
                           return null;
                         })),

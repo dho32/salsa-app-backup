@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart'; // dipakai kDebugMode tombol debug Cuci Freezer
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,6 +12,7 @@ import '../../../blocs/task_maintenance/task_maintenance_bloc.dart';
 import '../../../blocs/task_maintenance/task_maintenance_event.dart';
 import '../../../blocs/task_maintenance/task_maintenance_repository.dart';
 import '../../../blocs/task_maintenance/task_maintenance_state.dart';
+import '../../../components/constants.dart';
 import '../../../components/widgets/salsa_pending_dialog.dart';
 import '../../../components/widgets/scan_qr.dart';
 import '../../../models/task_maintenance/task_maintenance_model.dart';
@@ -21,6 +21,55 @@ import '../../installation/installation_detail/installation_detail_screen.dart';
 import '../../proof_of_service/proof_of_service_detail/proof_of_service_detail_screen.dart';
 import '../../proof_of_service_freezer/proof_of_service_freezer_detail/proof_of_service_freezer_detail_screen.dart';
 import '../../service_call/service_call_detail/service_call_detail_screen.dart';
+import '../../service_call_freezer/scf_detail/scf_detail_screen.dart';
+
+/// Bagian data toko yang belum terdaftar, diturunkan dari field `status`
+/// milik suggestion `task_maintenance/v4`.
+enum _MissingStoreData {
+  /// Email & titik lokasi sama-sama kosong.
+  emailDanLokasi,
+
+  /// Titik lokasi sudah ada, email belum.
+  email,
+
+  /// Email sudah ada, titik lokasi belum.
+  lokasi,
+
+  /// Status non-AKTIF lain (misal transaksi ditutup) — bukan urusan dialog ini.
+  none,
+}
+
+/// Menerjemahkan status dari server ke [_MissingStoreData].
+///
+/// Dicocokkan dulu dengan konstanta resmi (`kStatus*BelumTerdaftar` di
+/// constants.dart) secara case-insensitive. Bila tidak persis sama, dipakai
+/// pencocokan kata kunci sebagai jaring pengaman supaya variasi penulisan dari
+/// backend (mis. "Lokasi Toko Belum Terdaftar" vs "Titik Lokasi Toko Belum
+/// Terdaftar") tetap terbaca dan dialog tidak berhenti muncul.
+_MissingStoreData _classifyMissingStoreData(String status) {
+  final normalized = status.trim().toLowerCase();
+
+  if (normalized == kStatusEmailDanLokasiBelumTerdaftar.toLowerCase()) {
+    return _MissingStoreData.emailDanLokasi;
+  }
+  if (normalized == kStatusEmailBelumTerdaftar.toLowerCase()) {
+    return _MissingStoreData.email;
+  }
+  if (normalized == kStatusLokasiBelumTerdaftar.toLowerCase()) {
+    return _MissingStoreData.lokasi;
+  }
+
+  // Fallback: deteksi berbasis kata kunci.
+  if (!normalized.contains('belum terdaftar')) return _MissingStoreData.none;
+
+  final missingEmail = normalized.contains('email');
+  final missingLokasi = normalized.contains('lokasi');
+
+  if (missingEmail && missingLokasi) return _MissingStoreData.emailDanLokasi;
+  if (missingEmail) return _MissingStoreData.email;
+  if (missingLokasi) return _MissingStoreData.lokasi;
+  return _MissingStoreData.none;
+}
 
 class TaskMaintenanceBodyMobile extends StatefulWidget {
   final Map<String, String?> userData;
@@ -229,37 +278,6 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
                     ),
                     const SizedBox(height: 24),
 
-                    // [DEBUG] Entry-point sementara untuk Cuci Freezer.
-                    // Schedule belum mengirim task bertipe CUCI_FREEZER dari
-                    // backend, jadi tombol ini dipakai untuk testing modul.
-                    // Hanya tampil di debug build (kDebugMode).
-                    // HAPUS sebelum rilis produksi.
-                    // if (kDebugMode) ...[
-                    //   OutlinedButton.icon(
-                    //     onPressed: () {
-                    //       Navigator.push(
-                    //         context,
-                    //         MaterialPageRoute(
-                    //           builder: (_) =>
-                    //               const ProofOfServiceFreezerDetailScreen(
-                    //                   transNo: 'CF-DEBUG-001'),
-                    //         ),
-                    //       );
-                    //     },
-                    //     icon: const Icon(Icons.bug_report),
-                    //     label: const Text('[DEBUG] Buka Cuci Freezer'),
-                    //     style: OutlinedButton.styleFrom(
-                    //       foregroundColor: Colors.deepOrange,
-                    //       side: const BorderSide(color: Colors.deepOrange),
-                    //       shape: const StadiumBorder(),
-                    //       padding: const EdgeInsets.symmetric(
-                    //           horizontal: 24, vertical: 12),
-                    //     ),
-                    //   ),
-                    //   const SizedBox(height: 24),
-                    // ],
-
-                    // ... (Widget BlocBuilder Zombie & Shimmer tetap sama) ...
                     BlocBuilder<TaskMaintenanceBloc, TaskMaintenanceState>(
                       builder: (context, taskState) {
                         if (taskState is POSearchLoading) {
@@ -406,10 +424,18 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     if (suggestions.length == 1) {
       final singleItem = suggestions.first;
       if (singleItem.status.toUpperCase() != 'AKTIF') {
-        if (singleItem.status == "Email & Lokasi Toko Belum Terdaftar") {
-          _showUpdateInfoDialog(singleItem);
-        } else {
-          _showSnackBar(singleItem.status, Colors.orange[500]!);
+        switch (_classifyMissingStoreData(singleItem.status)) {
+          case _MissingStoreData.emailDanLokasi:
+            // Belum ada dua-duanya: minta email, titik lokasi diambil sekalian.
+            _showUpdateEmailDialog(singleItem, captureLocation: true);
+          case _MissingStoreData.email:
+            // Titik lokasi sudah terdaftar, cukup lengkapi email.
+            _showUpdateEmailDialog(singleItem, captureLocation: false);
+          case _MissingStoreData.lokasi:
+            // Email sudah terdaftar, cukup ambil titik lokasi.
+            _showUpdateLocationDialog(singleItem);
+          case _MissingStoreData.none:
+            _showSnackBar(singleItem.status, Colors.orange[500]!);
         }
         return;
       }
@@ -550,6 +576,11 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     } else if (suggestion.type == 'CUCI_FREEZER') {
       destinationScreen =
           ProofOfServiceFreezerDetailScreen(transNo: suggestion.transNo);
+    } else if (suggestion.type == 'SERVICE_FREEZER') {
+      destinationScreen = ScfDetailScreen(
+        transNo: suggestion.transNo,
+        vendorId: widget.userData['maintenance_by'] ?? '',
+      );
     } else {
       _showSnackBar(
           "Tipe transaksi tidak dikenali: ${suggestion.type}", Colors.red);
@@ -568,11 +599,25 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     });
   }
 
-  Future<void> _showUpdateInfoDialog(TransactionSuggestion suggestion) async {
+  /// Dialog pengkinian EMAIL toko.
+  ///
+  /// Dipakai untuk dua kondisi:
+  /// - [captureLocation] `false` → titik lokasi toko sudah terdaftar, yang
+  ///   dikirim ke server hanya email.
+  /// - [captureLocation] `true`  → email dan titik lokasi sama-sama belum ada,
+  ///   jadi koordinat ikut diambil otomatis saat tombol Simpan ditekan.
+  Future<void> _showUpdateEmailDialog(
+    TransactionSuggestion suggestion, {
+    required bool captureLocation,
+  }) async {
     final emailController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     final String dynamicDomain = suggestion.domainMail ?? "@STORE.SAT.CO.ID";
+
+    final String infoText = captureLocation
+        ? "Email dan Titik Lokasi untuk toko \"${suggestion.customerName}\" belum terdaftar.\n\nSilahkan tanyakan Email Toko kepada Pejabat Toko, lalu masukan USERNAME email saja (tanpa @STORE....) untuk proses pengkinian data.\n\nTitik lokasi toko akan ikut terekam otomatis dari posisi Anda. Pastikan berada ditoko saat akan memproses data."
+        : "Email untuk toko \"${suggestion.customerName}\" belum terdaftar. Titik lokasi toko sudah terdaftar sebelumnya.\n\nSilahkan tanyakan Email Toko kepada Pejabat Toko, lalu masukan USERNAME email saja (tanpa @STORE....) untuk proses pengkinian data.";
 
     bool isLoading = false;
     String? errorMessage;
@@ -583,201 +628,84 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              elevation: 5,
-              backgroundColor: Colors.white,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                shape: BoxShape.circle),
-                            child: Icon(Icons.store_mall_directory_rounded,
-                                size: 40, color: Colors.blue.shade700),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text("Update Data Toko",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87)),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border:
-                                  Border.all(color: Colors.orange.shade200)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.info_outline,
-                                      size: 20, color: Colors.orange.shade800),
-                                  const SizedBox(width: 8),
-                                  Text("Data Belum Lengkap",
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.orange.shade900,
-                                          fontSize: 13)),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                "Email dan Titik Lokasi untuk toko \"${suggestion.customerName}\" belum terdaftar.\n\nSilahkan tanyakan Email Toko kepada Pejabat Toko, lalu masukan USERNAME email saja (tanpa @STORE....) untuk proses pengkinian data.\n\nPastikan berada ditoko saat akan memproses data.",
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.black87,
-                                    height: 1.4),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        TextFormField(
-                          controller: emailController,
-                          textCapitalization: TextCapitalization.characters,
-                          inputFormatters: [
-                            TextInputFormatter.withFunction(
-                                (oldValue, newValue) => newValue.copyWith(
-                                    text: newValue.text.toUpperCase(),
-                                    selection: newValue.selection)),
-                            FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                          ],
-                          keyboardType: TextInputType.text,
-                          decoration: InputDecoration(
-                            labelText: 'Username Email Toko',
-                            hintText: 'CONTOH: SATBABAKAN.MLG',
-                            prefixIcon: const Icon(Icons.email_outlined),
-                            suffixText: dynamicDomain,
-                            suffixStyle: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.bold),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
-                          ),
-                          validator: (val) {
-                            if (val == null || val.isEmpty)
-                              return 'Username email wajib diisi';
-                            if (val.contains('@'))
-                              return 'Cukup masukkan username, hapus tanda @';
-                            return null;
-                          },
-                        ),
-                        if (errorMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(8)),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.error_outline,
-                                      color: Colors.red, size: 20),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                      child: Text(errorMessage!,
-                                          style: const TextStyle(
-                                              color: Colors.red,
-                                              fontSize: 12))),
-                                ],
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 24),
-                        if (isLoading)
-                          const Center(child: CircularProgressIndicator())
-                        else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                  style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8))),
-                                  child: const Text("Batal"),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (formKey.currentState!.validate()) {
-                                      setStateDialog(() {
-                                        isLoading = true;
-                                        errorMessage = null;
-                                      });
-                                      try {
-                                        final pos = await _getCurrentLocation();
-                                        final rawUsername = emailController.text
-                                            .trim()
-                                            .toUpperCase();
-                                        final finalEmail =
-                                            "$rawUsername$dynamicDomain";
+            return _buildUpdateDialogShell(
+              formKey: formKey,
+              icon: Icons.store_mall_directory_rounded,
+              title: captureLocation ? "Update Data Toko" : "Update Email Toko",
+              infoTitle: "Data Belum Lengkap",
+              infoText: infoText,
+              errorMessage: errorMessage,
+              isLoading: isLoading,
+              confirmLabel: "Simpan & Lanjut",
+              onCancel: () => Navigator.pop(dialogContext),
+              onConfirm: () async {
+                if (!formKey.currentState!.validate()) return;
 
-                                        await _callUpdateApi(
-                                          widget.userData['user_id']!,
-                                          suggestion.customerCode,
-                                          finalEmail,
-                                          pos.latitude,
-                                          pos.longitude,
-                                        );
+                setStateDialog(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                try {
+                  // Koordinat hanya diambil bila titik lokasi memang belum ada.
+                  final pos = captureLocation ? await _getCurrentLocation() : null;
+                  final rawUsername =
+                      emailController.text.trim().toUpperCase();
+                  final finalEmail = "$rawUsername$dynamicDomain";
 
-                                        if (mounted) {
-                                          Navigator.pop(dialogContext);
-                                          _navigateToDetail(suggestion);
-                                        }
-                                      } catch (e) {
-                                        setStateDialog(() => errorMessage =
-                                            "Gagal update: ${e.toString()}");
-                                      } finally {
-                                        if (mounted) {
-                                          setStateDialog(
-                                              () => isLoading = false);
-                                        }
-                                      }
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue.shade700,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8))),
-                                  child: const Text("Simpan & Lanjut"),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
+                  await _callUpdateApi(
+                    updatedBy: widget.userData['user_id']!,
+                    customerCode: suggestion.customerCode,
+                    email: finalEmail,
+                    latitude: pos?.latitude,
+                    longitude: pos?.longitude,
+                  );
+
+                  if (mounted) {
+                    Navigator.pop(dialogContext);
+                    _navigateToDetail(suggestion);
+                  }
+                } catch (e) {
+                  setStateDialog(
+                      () => errorMessage = "Gagal update: ${_readableError(e)}");
+                } finally {
+                  if (mounted) {
+                    setStateDialog(() => isLoading = false);
+                  }
+                }
+              },
+              field: TextFormField(
+                controller: emailController,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  TextInputFormatter.withFunction((oldValue, newValue) =>
+                      newValue.copyWith(
+                          text: newValue.text.toUpperCase(),
+                          selection: newValue.selection)),
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
+                keyboardType: TextInputType.text,
+                decoration: InputDecoration(
+                  labelText: 'Username Email Toko',
+                  hintText: 'CONTOH: SATBABAKAN.MLG',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  suffixText: dynamicDomain,
+                  suffixStyle: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.bold),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
                 ),
+                validator: (val) {
+                  if (val == null || val.isEmpty) {
+                    return 'Username email wajib diisi';
+                  }
+                  if (val.contains('@')) {
+                    return 'Cukup masukkan username, hapus tanda @';
+                  }
+                  return null;
+                },
               ),
             );
           },
@@ -786,12 +714,230 @@ class _TaskMaintenanceBodyMobileState extends State<TaskMaintenanceBodyMobile> {
     );
   }
 
-  Future<Position> _getCurrentLocation() async {
-    return await Geolocator.getCurrentPosition();
+  /// Dialog pengkinian TITIK LOKASI toko (email toko sudah terdaftar).
+  /// Tidak ada input yang perlu diisi — teknisi cukup memastikan dirinya
+  /// sedang berada di toko, koordinat diambil dari GPS saat tombol ditekan.
+  Future<void> _showUpdateLocationDialog(
+      TransactionSuggestion suggestion) async {
+    bool isLoading = false;
+    String? errorMessage;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return _buildUpdateDialogShell(
+              icon: Icons.location_on_rounded,
+              title: "Update Titik Lokasi Toko",
+              infoTitle: "Titik Lokasi Belum Terdaftar",
+              infoText:
+                  "Titik lokasi untuk toko \"${suggestion.customerName}\" belum terdaftar. Email toko sudah terdaftar sebelumnya.\n\nTitik lokasi akan diambil dari posisi Anda saat ini. PASTIKAN ANDA BERADA DI DALAM/DEPAN TOKO dan GPS aktif sebelum menekan tombol di bawah.",
+              errorMessage: errorMessage,
+              isLoading: isLoading,
+              confirmLabel: "Ambil Titik & Lanjut",
+              onCancel: () => Navigator.pop(dialogContext),
+              onConfirm: () async {
+                setStateDialog(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                try {
+                  final pos = await _getCurrentLocation();
+
+                  // Email tidak dikirim (null) supaya email lama tidak tertimpa.
+                  await _callUpdateApi(
+                    updatedBy: widget.userData['user_id']!,
+                    customerCode: suggestion.customerCode,
+                    latitude: pos.latitude,
+                    longitude: pos.longitude,
+                  );
+
+                  if (mounted) {
+                    Navigator.pop(dialogContext);
+                    _navigateToDetail(suggestion);
+                  }
+                } catch (e) {
+                  setStateDialog(
+                      () => errorMessage = "Gagal update: ${_readableError(e)}");
+                } finally {
+                  if (mounted) {
+                    setStateDialog(() => isLoading = false);
+                  }
+                }
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
-  Future<void> _callUpdateApi(String updatedBy, String customerCode,
-      String email, double latitude, double longitude) async {
+  /// Kerangka visual bersama dialog pengkinian data toko (email & titik lokasi),
+  /// supaya kedua dialog tampil konsisten. [field] opsional — dialog titik
+  /// lokasi tidak punya input apa pun.
+  Widget _buildUpdateDialogShell({
+    GlobalKey<FormState>? formKey,
+    required IconData icon,
+    required String title,
+    required String infoTitle,
+    required String infoText,
+    required String? errorMessage,
+    required bool isLoading,
+    required String confirmLabel,
+    required VoidCallback onCancel,
+    required Future<void> Function() onConfirm,
+    Widget? field,
+  }) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                color: Colors.blue.shade50, shape: BoxShape.circle),
+            child: Icon(icon, size: 40, color: Colors.blue.shade700),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87)),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade200)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 20, color: Colors.orange.shade800),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(infoTitle,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade900,
+                            fontSize: 13)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                infoText,
+                style: const TextStyle(
+                    fontSize: 13, color: Colors.black87, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        if (field != null) ...[
+          const SizedBox(height: 20),
+          field,
+        ],
+        if (errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(errorMessage,
+                          style: const TextStyle(
+                              color: Colors.red, fontSize: 12))),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 24),
+        if (isLoading)
+          const Center(child: CircularProgressIndicator())
+        else
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onCancel,
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))),
+                  child: const Text("Batal"),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onConfirm,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))),
+                  child: Text(confirmLabel),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 5,
+      backgroundColor: Colors.white,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: formKey == null
+              ? content
+              : Form(key: formKey, child: content),
+        ),
+      ),
+    );
+  }
+
+  /// Buang prefix "Exception: " supaya pesan error enak dibaca teknisi.
+  String _readableError(Object e) =>
+      e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+
+  Future<Position> _getCurrentLocation() async {
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(const Duration(seconds: 15));
+    } catch (_) {
+      throw Exception(
+          'Gagal mendeteksi lokasi. Pastikan GPS aktif, lalu coba lagi di area terbuka.');
+    }
+  }
+
+  Future<void> _callUpdateApi({
+    required String updatedBy,
+    required String customerCode,
+    String? email,
+    double? latitude,
+    double? longitude,
+  }) async {
     final repository = TaskMaintenanceRepository();
     await repository.updateStoreInfo(
         updatedBy: updatedBy,

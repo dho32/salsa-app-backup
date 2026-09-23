@@ -567,11 +567,10 @@ class InstallationBloc extends Bloc<InstallationEvent, InstallationState> {
       final userId = user['user_id'] ?? '';
       final vendorCode = user['maintenance_by'] ?? '';
       final deviceName = user['device_model'] ?? '';
-      // PIC final: aktif HANYA bila surat tugas mengizinkan PIC (header.isPic)
-      // DAN teknisi menyalakan toggle "Ada PIC di Lokasi?" (draft.isPicActive).
-      // Default toggle OFF → PIC opsional (kebalikan RRO Cut Off).
-      final bool finalIsPic =
-          (state.taskDetail?.header.isPic ?? true) && draft.isPicActive;
+      // PIC final: mengikuti surat tugas (header.isPic) — bila true, data PIC
+      // WAJIB diisi & tidak ada toggle untuk mematikannya (sama seperti RRO
+      // Cut Off).
+      final bool finalIsPic = state.taskDetail?.header.isPic ?? true;
       final apiResult = await repository.submitFinalInstallation(
         createdBy: userId,
         transNo: event.transNo,

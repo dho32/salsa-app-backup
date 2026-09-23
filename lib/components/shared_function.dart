@@ -137,6 +137,16 @@ String getHiveKeyForTransaction(String transNo) {
   return transNo.toUpperCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 }
 
+/// Format nama + kode toko untuk baris watermark, mis. "H.REAN (1MD9)".
+/// Kalau kode kosong hanya nama ("H.REAN"). Kalau nama kosong kembalikan
+/// string kosong (WatermarkService akan skip baris "Toko :").
+String storeTag(String? name, String? code) {
+  final n = (name ?? '').trim();
+  final c = (code ?? '').trim();
+  if (n.isEmpty) return '';
+  return c.isEmpty ? n : '$n ($c)';
+}
+
 class LocationHelper {
   static Future<bool> validateLocation({
     required CapturedImageDetail pic,

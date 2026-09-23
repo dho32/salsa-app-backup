@@ -3,6 +3,7 @@ import 'dart:convert'; // Untuk mengelola JSON
 import 'dart:developer';
 import 'package:http/http.dart' as http;
 
+import '../../components/constants.dart';
 import '../../components/shared_function.dart';
 import '../../models/task_maintenance/task_maintenance_model.dart';
 import '../auth/auth_storage.dart';
@@ -38,9 +39,16 @@ class TaskMaintenanceRepository {
           }
         }
 
-        return results
+        final serverList = results
             .map((json) => TransactionSuggestion.fromJson(json))
             .toList();
+
+        // DEMO: sisipkan task dummy SCF + Cuci Freezer di paling atas.
+        if (kEnableDummyDemoTasks) {
+          await OtpStorage.saveOtpFlag(false); // lewati OTP saat demo
+          return [..._dummyDemoSuggestions(), ...serverList];
+        }
+        return serverList;
       }
 
       // Teruskan pesan asli dari server (status != OK maupun HTTP non-200),
@@ -49,21 +57,62 @@ class TaskMaintenanceRepository {
           ? body['message']
           : 'Gagal memuat data PO. Status Code: ${response.statusCode}');
     } on http.ClientException {
+      // DEMO: walau server tak terjangkau, tetap tampilkan task dummy.
+      if (kEnableDummyDemoTasks) {
+        await OtpStorage.saveOtpFlag(false);
+        return _dummyDemoSuggestions();
+      }
       throw Exception(
           'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
     } catch (e) {
+      if (kEnableDummyDemoTasks) {
+        await OtpStorage.saveOtpFlag(false);
+        return _dummyDemoSuggestions();
+      }
       if (e is Exception) rethrow;
       // Error non-Exception (misal TypeError saat parsing model)
       throw Exception('Terjadi kesalahan saat mencari PO: $e');
     }
   }
 
+  /// Task dummy untuk demo (aktif bila [kEnableDummyDemoTasks]). transNo cocok
+  /// dengan mock detail di ScfDetailRepository & ProofOfServiceFreezerDetailRepository.
+  List<TransactionSuggestion> _dummyDemoSuggestions() => [
+        // Status 'AKTIF' agar lolos cross-check di _handleSearchSuccess.
+        // Kode Toko: T001 → Service Call Freezer, T002 → Cuci Freezer.
+        TransactionSuggestion(
+          transNo: kDummyScfTransNo,
+          customerName: 'Toko Sumber Rejeki (DEMO)',
+          customerCode: 'T001',
+          type: kServiceCallFreezerModuleType, // 'SERVICE_FREEZER'
+          status: 'AKTIF',
+          domainMail: 'toko.sumberrejeki@example.com',
+        ),
+        TransactionSuggestion(
+          transNo: kDummyPosfTransNo,
+          customerName: 'Toko Maju Jaya (DEMO)',
+          customerCode: 'T002',
+          type: kProofOfServiceFreezerModuleType, // 'CUCI_FREEZER'
+          status: 'AKTIF',
+          domainMail: 'toko.majujaya@example.com',
+        ),
+      ];
+
+  /// Update parsial data toko: kirim hanya bagian yang memang sedang diperbarui.
+  ///
+  /// - Update email saja  → [email] diisi, [latitude]/[longitude] dibiarkan null.
+  /// - Update lokasi saja → [latitude]/[longitude] diisi, [email] dibiarkan null.
+  /// - Update dua-duanya  → semua diisi.
+  ///
+  /// NOTE(backend): field yang tidak diperbarui tetap dikirim sebagai string
+  /// kosong (""). Server WAJIB mengabaikan nilai kosong dan tidak menimpa data
+  /// lama, supaya email/koordinat yang sudah terdaftar tidak ikut terhapus.
   Future<void> updateStoreInfo({
     required String updatedBy,
     required String customerCode,
-    required String email,
-    required double latitude,
-    required double longitude,
+    String? email,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       // 1. Tentukan Endpoint
@@ -73,9 +122,9 @@ class TaskMaintenanceRepository {
       final requestBody = {
         'updated_by': updatedBy,
         'customer_code': customerCode,
-        'email': email,
-        'latitude': latitude.toString(),
-        'longitude': longitude.toString(),
+        'email': email ?? '',
+        'latitude': latitude?.toString() ?? '',
+        'longitude': longitude?.toString() ?? '',
       };
 
       JsonEncoder encoder = const JsonEncoder.withIndent('  ');

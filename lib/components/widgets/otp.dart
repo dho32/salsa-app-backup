@@ -21,6 +21,9 @@ import '../shared_widgets.dart';
 class OtpDialog extends StatefulWidget {
   final String transNo;
   final String shipTo;
+
+  /// Nama toko (untuk baris watermark "Toko :"). `shipTo` di atas adalah KODE.
+  final String shipToName;
   final String email;
   final double storeLat;
   final double storeLong;
@@ -32,6 +35,7 @@ class OtpDialog extends StatefulWidget {
     super.key,
     required this.transNo,
     required this.shipTo,
+    this.shipToName = '',
     required this.email,
     required this.storeLat,
     required this.storeLong,
@@ -112,7 +116,12 @@ class _OtpDialogState extends State<OtpDialog> {
           hasPhoto = true;
         }
 
-        final bool shouldShowLocation = _showLocationUI || hasPhoto;
+        // Bila OTP tidak diwajibkan (mis. modul freezer), UI lokasi WAJIB
+        // selalu tampil — jangan pernah jatuh ke UI OTP walau foto PIC dihapus.
+        // (Listener LocationPhotoLoaded sempat men-set _showLocationUI=false saat
+        // foto ada, sehingga tanpa guard ini "Hapus Foto" menjatuhkan ke OTP.)
+        final bool shouldShowLocation =
+            !widget.isOtpRequired || _showLocationUI || hasPhoto;
 
         return MultiBlocListener(
           listeners: [
@@ -405,6 +414,7 @@ class _OtpDialogState extends State<OtpDialog> {
                       widget.transNo,
                       widget.storeLat,
                       widget.storeLong,
+                      storeName: storeTag(widget.shipToName, widget.shipTo),
                     ));
               },
             ),

@@ -16,6 +16,9 @@ import 'full_screen_image_viewer.dart';
 class MeasurementInputWidget extends StatefulWidget {
   final TextEditingController controller;
   final String transNo;
+
+  /// Nama toko untuk baris watermark (menggantikan transNo). Default kosong.
+  final String storeName;
   final String label;
   final TextInputType keyboardType;
   final MeasurementLimits limits;
@@ -45,6 +48,7 @@ class MeasurementInputWidget extends StatefulWidget {
     super.key,
     required this.controller,
     required this.transNo,
+    this.storeName = '',
     required this.label,
     required this.keyboardType,
     required this.limits,
@@ -322,7 +326,7 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: widget.storeName,
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
@@ -590,8 +594,10 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
             child: TextFormField(
               focusNode: _focusNode,
               controller: widget.controller,
-              keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
+              // Pakai keyboardType dari pemanggil (mis. signed:true untuk suhu
+              // freezer yang bernilai minus) — sebelumnya di-hardcode unsigned
+              // sehingga tombol minus tak muncul & nilai negatif tak bisa diketik.
+              keyboardType: widget.keyboardType,
               textAlign: TextAlign.right,
               onChanged: (val) {
                 // Mengetik nilai baru → tandai belum terkonfirmasi supaya
@@ -608,11 +614,48 @@ class _MeasurementInputWidgetState extends State<MeasurementInputWidget> {
               ),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d*')),
+                // Rentang sah seluruhnya negatif (suhu freezer: -30 s/d -1) →
+                // tanda minus ditambahkan otomatis, teknisi cukup ketik angka.
+                if (widget.limits.max < 0) const _AutoNegativeFormatter(),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Memaksa angka yang diketik jadi negatif.
+///
+/// Dipasang HANYA bila seluruh rentang sah pengukuran negatif
+/// (`limits.max < 0`) — saat ini hanya suhu freezer (POSF & SCF, -30 s/d -1),
+/// jadi tidak ada nilai sah yang bisa ditolak tanda minus ini. Teknisi cukup
+/// mengetik "18" dan field langsung berisi "-18"; mengetik "-18" tetap "-18"
+/// (tidak jadi "--18").
+///
+/// Teks kosong dan teks yang sudah diawali "-" dibiarkan apa adanya supaya
+/// menghapus isi field & mengetik minus manual tetap normal.
+class _AutoNegativeFormatter extends TextInputFormatter {
+  const _AutoNegativeFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+    if (text.isEmpty || text.startsWith('-')) return newValue;
+
+    // Kursor ikut bergeser 1 karakter karena minus disisipkan di depan.
+    int shift(int offset) => offset < 0 ? offset : offset + 1;
+    return TextEditingValue(
+      text: '-$text',
+      selection: newValue.selection.copyWith(
+        baseOffset: shift(newValue.selection.baseOffset),
+        extentOffset: shift(newValue.selection.extentOffset),
+      ),
+      composing: TextRange.empty,
     );
   }
 }

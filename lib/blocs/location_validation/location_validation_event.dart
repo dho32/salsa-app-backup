@@ -23,10 +23,14 @@ class TakeLocationPhoto extends LocationValidationEvent {
   final double tokoLat;
   final double tokoLng;
 
-  const TakeLocationPhoto(this.transNo, this.tokoLat, this.tokoLng);
+  /// Nama toko untuk baris watermark (menggantikan transNo).
+  final String storeName;
+
+  const TakeLocationPhoto(this.transNo, this.tokoLat, this.tokoLng,
+      {this.storeName = ''});
 
   @override
-  List<Object?> get props => [transNo, tokoLat, tokoLng];
+  List<Object?> get props => [transNo, tokoLat, tokoLng, storeName];
 }
 
 class RemoveLocationPhoto extends LocationValidationEvent {

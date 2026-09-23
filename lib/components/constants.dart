@@ -50,6 +50,30 @@ const String kProofOfServiceFreezerInfoBox = 'proof_of_service_freezer_info_box'
 const String kProofOfServiceFreezerEntryBox = 'proof_of_service_freezer_entry_box'; // data wizard per-freezer
 const String kProofOfServiceFreezerPartialBox = 'proof_of_service_freezer_partial_cache'; // retry upload offline
 const String kProofOfServiceFreezerModuleType = 'CUCI_FREEZER'; // identitas modul untuk routing Schedule
+const String kProofOfServiceFreezerClosedPartialBox = 'proof_of_service_freezer_closed_partial_cache'; // retry upload foto bukti close (Tidak Bisa Diservis)
+const String kProofOfServiceFreezerClosedModuleType = 'CUCI_FREEZER_CLOSED'; // identitas partial close di failed_uploads
+
+// Service Call Freezer (SCF) — service call / repair unit freezer
+const String kServiceCallFreezerDetailBox = 'service_call_freezer_detail_box'; // data tugas dari server (JSON cache)
+const String kServiceCallFreezerInfoBox = 'service_call_freezer_info_box'; // info transaksi: PIC + teknisi
+const String kServiceCallFreezerEntryBox = 'service_call_freezer_entry_box'; // data wizard per-freezer
+const String kServiceCallFreezerPartialBox = 'service_call_freezer_partial_cache'; // retry upload offline
+const String kServiceCallFreezerModuleType = 'SERVICE_FREEZER'; // identitas modul untuk routing Task Maintenance
+
+// ===== DEMO / DATA DUMMY =====
+// Bila true: daftar Task Maintenance selalu menampilkan 1 task Service Call
+// Freezer + 1 task Cuci Freezer (walau backend mati/kosong), OTP dilewati, dan
+// detail memakai data mock. MATIKAN (set false) sebelum rilis produksi.
+const bool kEnableDummyDemoTasks = false;
+const String kDummyScfTransNo = 'DEMO-SCF-001'; // task dummy Service Call Freezer
+const String kDummyPosfTransNo = 'DEMO-CF-001'; // task dummy Cuci Freezer
+
+// ===== GATE "UNIT BERMASALAH TERDETEKSI" =====
+// Bila true: submit POS/POSF diblokir saat ada unit bermasalah (AC rusak yang
+// suhunya di-skip / freezer "Ada Keluhan") tapi toko belum punya tiket Service
+// Call aktif — teknisi diminta koordinasi dengan PIC toko dulu.
+// Set false untuk mematikan sementara pengecekan ini.
+const bool kEnableUnitProblemScGate = true;
 
 ///string
 const kStringDialogUnitProblem = """
@@ -63,6 +87,19 @@ Masukkan alamat email toko.
 Lokasi toko akan diambil secara otomatis dari lokasi anda saat ini.""";
 
 const List<String> kJabatanOptions = ["COS", "ACOS", "CREW"];
+
+// ===== STATUS DATA TOKO BELUM LENGKAP (task_maintenance/v4) =====
+// NOTE(backend): server mengirim salah satu status di bawah pada field
+// `status` tiap suggestion ketika data toko belum lengkap. Pencocokan di
+// aplikasi dilakukan case-insensitive & berbasis kata kunci
+// (lihat `_classifyMissingStoreData` di task_maintenance_body_mobile.dart),
+// jadi variasi kecil penulisan tetap terbaca.
+const String kStatusEmailDanLokasiBelumTerdaftar =
+    'Email & Lokasi Toko Belum Terdaftar'; // dua-duanya kosong
+const String kStatusEmailBelumTerdaftar =
+    'Email Toko Belum Terdaftar'; // lokasi sudah ada, email kosong
+const String kStatusLokasiBelumTerdaftar =
+    'Titik Lokasi Toko Belum Terdaftar'; // email sudah ada, koordinat kosong
 
 ///const
 const kDistance = 500.0;

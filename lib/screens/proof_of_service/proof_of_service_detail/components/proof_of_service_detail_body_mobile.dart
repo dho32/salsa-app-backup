@@ -92,10 +92,23 @@ class _ProofOfServiceDetailBodyMobileState
   late final TextEditingController _picPhoneController;
   late final TextEditingController _picNikController;
 
+  // Nama toko untuk watermark foto (menggantikan transNo)
+  String _storeName = '';
+
   @override
   void initState() {
     super.initState();
     final configBox = Hive.box(kAppConfigBox);
+
+    // Ambil nama toko dari cache detail untuk watermark foto
+    try {
+      if (Hive.isBoxOpen(kPosDetailCacheBox)) {
+        final detailBox =
+            Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
+        final header = detailBox.get(widget.transNo)?.header;
+        _storeName = storeTag(header?.shipToName, header?.shipToCode);
+      }
+    } catch (_) {}
     final Map<String, MeasurementLimits> headerLimits =
     Map<String, MeasurementLimits>.from(
         configBox.get('limits_temp_header') ?? {});
@@ -173,6 +186,9 @@ class _ProofOfServiceDetailBodyMobileState
         BlocListener<ProofOfServiceDetailBloc, ProofOfServiceDetailState>(
           listener: (context, detailState) {
             if (detailState is ProofOfServiceDetailLoaded) {
+              // Segarkan nama toko untuk watermark dari state bloc (sumber paling andal)
+              _storeName = storeTag(detailState.data.header.shipToName,
+                  detailState.data.header.shipToCode);
               final allUnitsValidated = detailState.data.detail.every((detail) {
                 final mapKey = detail.isGeneric
                     ? '${detail.unitType}_${detail.unitIndex}'
@@ -491,6 +507,7 @@ class _ProofOfServiceDetailBodyMobileState
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             limits: _outdoorLimits,
             transNo: widget.transNo,
+            storeName: _storeName,
             initialImage: formState.temperatureOutImage,
             enableConfirmDialog: true,
             onConfirmedChanged: (c) =>
@@ -548,6 +565,7 @@ class _ProofOfServiceDetailBodyMobileState
                             decimal: true),
                         limits: _indoorLimits,
                         transNo: widget.transNo,
+                        storeName: _storeName,
                         initialImage: formState.temperatureInImage,
                         enableConfirmDialog: true,
                         onConfirmedChanged: (c) =>
@@ -742,7 +760,7 @@ class _ProofOfServiceDetailBodyMobileState
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: _storeName,
           formattedDate: formattedDate,
           technicianName: userData['name'] ?? 'Unknown',
           deviceModel: userData['device_model'] ?? 'Unknown Device',
@@ -806,6 +824,7 @@ class _ProofOfServiceDetailBodyMobileState
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             limits: finalTempLimits,
             transNo: widget.transNo,
+            storeName: _storeName,
             initialImage: formState.finalTempInImage,
             enableConfirmDialog: true,
             onConfirmedChanged: (c) =>
@@ -1142,7 +1161,7 @@ class _ProofOfServiceDetailBodyMobileState
               Expanded(
                 child: _buildCustomTextField(
                   controller: _picNikController,
-                  hintText: 'NIK',
+                  hintText: 'NIK Karyawan',
                   icon: Icons.badge_outlined,
                   onChanged: (value) {
                     formCubit.picNikChanged(value);

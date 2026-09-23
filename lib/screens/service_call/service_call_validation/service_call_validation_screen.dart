@@ -7,6 +7,7 @@ import '../../../blocs/service_call/validation_dropdown/validation_dropdown_bloc
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_event.dart';
 import '../../../blocs/service_call/validation_dropdown/validation_dropdown_state.dart';
 import '../../../components/constants.dart';
+import '../../../components/shared_function.dart';
 import '../../../models/common/measurement_entry.dart';
 import '../../../models/common/note_option.dart';
 import '../../../models/service_call/problem_source_model.dart';
@@ -270,6 +271,8 @@ class _ServiceCallValidationScreenState
                         initialData: widget.initialData,
                         complaintDetails: widget.complaintDetails,
                         imageFile: widget.imageFile,
+                        storeName: storeTag(widget.detailData.header.storeName,
+                            widget.detailData.header.storeId),
                       ),
                     ),
                   ),

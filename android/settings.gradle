@@ -18,11 +18,18 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.6.1" apply false
+    // AGP 8.9.1 wajib sejak mobile_scanner 7.4.x: dependensi androidx.camera
+    // 1.6.1 yang dibawanya menolak AGP < 8.9.1 (checkReleaseAarMetadata gagal).
+    // Butuh Gradle >= 8.11 — wrapper project ini sudah 8.14.3.
+    id "com.android.application" version "8.9.1" apply false
     // START: FlutterFire Configuration
     id "com.google.gms.google-services" version "4.3.15" apply false
     // END: FlutterFire Configuration
-    id "org.jetbrains.kotlin.android" version "1.8.22" apply false
+    // Kotlin 2.x wajib sejak firebase_core 4.15.0: build.gradle plugin tersebut
+    // memakai DSL `kotlin { compilerOptions { ... } }` yang baru ada di KGP 2.0+.
+    // Dengan KGP 1.8.22 build gagal "Could not find method compilerOptions()".
+    // Versi 2.1.20 dipilih karena itu yang resmi mendukung AGP 8.9.x di atas.
+    id "org.jetbrains.kotlin.android" version "2.1.20" apply false
 }
 
 include ":app"

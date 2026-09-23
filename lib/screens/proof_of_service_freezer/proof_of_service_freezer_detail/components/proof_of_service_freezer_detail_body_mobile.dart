@@ -262,7 +262,7 @@ class _ProofOfServiceFreezerDetailBodyMobileState
                   Expanded(
                     child: _buildTextField(
                       controller: _picNikController,
-                      label: 'NIK',
+                      label: 'NIK Karyawan',
                       icon: Icons.badge_outlined,
                       keyboardType: TextInputType.number,
                       onChanged: (v) {
@@ -463,7 +463,7 @@ class _ProofOfServiceFreezerDetailBodyMobileState
       ),
       child: ListTile(
         leading: Icon(icon, color: color),
-        title: Text(item.articleDesc,
+        title: Text(item.unitDesc,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
         subtitle: Text(item.serialNo, style: const TextStyle(fontSize: 12)),
         trailing: Column(
@@ -491,12 +491,17 @@ class _ProofOfServiceFreezerDetailBodyMobileState
               BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6),
             ],
           ),
-          child: SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: state.isFormReadyToSubmit ? _onSubmit : null,
-              child: const Text('Selesai'),
+          // SafeArea bawah: cegah tombol tertutup navigation bar / gesture bar
+          // pada HP yang punya area sistem di bawah layar.
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: state.isFormReadyToSubmit ? _onSubmit : null,
+                child: const Text('Selesai'),
+              ),
             ),
           ),
         );
@@ -661,6 +666,12 @@ class _ProofOfServiceFreezerDetailBodyMobileState
   // ---------------------------------------------------------------------------
 
   Future<void> _openWizard(ProofOfServiceFreezerItem item) async {
+    // Config wizard dari server (skip reasons/require_remark, opsi keluhan,
+    // range pengukuran). Null bila detail belum loaded → wizard fallback konstanta.
+    final detailState = context.read<ProofOfServiceFreezerDetailBloc>().state;
+    final config = detailState is ProofOfServiceFreezerDetailLoaded
+        ? detailState.data.config
+        : null;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -670,7 +681,8 @@ class _ProofOfServiceFreezerDetailBodyMobileState
           isGeneric: item.isGeneric,
           unitIndex: item.unitIndex,
           articleNo: item.articleNo,
-          articleDesc: item.articleDesc,
+          articleDesc: item.unitDesc,
+          config: config,
         ),
       ),
     );
@@ -722,7 +734,9 @@ class _ProofOfServiceFreezerDetailBodyMobileState
     if (!mounted || blokirKarenaSc) return;
 
     final isPhotoReady = formCubit.state.picImageDetail != null;
-    final wajibOtp = await OtpStorage.isOtpRequired();
+    // Freezer (Cuci Freezer) tidak memakai OTP — gerbang submit cukup validasi
+    // lokasi via foto PIC toko (geofence). Paksa isOtpRequired=false agar
+    // menghapus foto PIC tidak pernah jatuh ke UI OTP.
     if (!mounted) return;
 
     showDialog<void>(
@@ -736,11 +750,12 @@ class _ProofOfServiceFreezerDetailBodyMobileState
         child: OtpDialog(
           transNo: header.transNo,
           shipTo: header.shipTo,
+          shipToName: header.shipToName,
           email: header.shipToMail,
           storeLat: header.latitude,
           storeLong: header.longitude,
           isPhotoExisting: isPhotoReady,
-          isOtpRequired: wajibOtp,
+          isOtpRequired: false,
           onVerified: () async {
             Navigator.pop(context); // tutup OTP dialog
             final user = await AuthStorage.getUser();
@@ -763,12 +778,15 @@ class _ProofOfServiceFreezerDetailBodyMobileState
   /// aktif, tampilkan dialog info (pola POS) & kembalikan `true` untuk memblokir
   /// submit. Mengembalikan `false` bila tidak ada keluhan atau SC sudah ada.
   Future<bool> _checkServiceCallBlocking(String transNo) async {
+    // Gate SC unit bermasalah bisa dimatikan via kEnableUnitProblemScGate.
+    if (!kEnableUnitProblemScGate) return false;
+
     final tx = transNo.trim().toUpperCase();
     final entryBox =
         Hive.box<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox);
     final adaKeluhan = entryBox.values.any((e) =>
         e.transNo.trim().toUpperCase() == tx &&
-        e.generalCondition == kPosfConditionComplaint);
+        posfIsComplaint(e.generalCondition));
     if (!adaKeluhan) return false;
 
     final hasActiveSc =

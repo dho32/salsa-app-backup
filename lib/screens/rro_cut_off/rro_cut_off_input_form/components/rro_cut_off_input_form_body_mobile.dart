@@ -48,12 +48,14 @@ class RROCutOffInputFormBodyMobile extends StatefulWidget {
   final String transNo;
   final RROCutOffDetailItem unitData;
   final List<RROCutOffSerialNumber> availableSerialNumbers;
+  final String storeName;
 
   const RROCutOffInputFormBodyMobile({
     super.key,
     required this.transNo,
     required this.unitData,
     required this.availableSerialNumbers,
+    required this.storeName,
   });
 
   @override
@@ -265,7 +267,7 @@ class _RROCutOffInputFormBodyMobileState
         final req = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: widget.storeName,
           formattedDate: formattedDate,
           technicianName: techName,
           deviceModel: deviceModel,

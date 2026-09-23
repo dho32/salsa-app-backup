@@ -8,12 +8,14 @@ class RROCutOffInputFormScreen extends StatelessWidget {
   final String transNo;
   final RROCutOffDetailItem unitData;
   final List<RROCutOffSerialNumber> availableSerialNumbers;
+  final String storeName;
 
   const RROCutOffInputFormScreen({
     super.key,
     required this.transNo,
     required this.unitData,
     required this.availableSerialNumbers,
+    required this.storeName,
   });
 
   @override
@@ -47,6 +49,7 @@ class RROCutOffInputFormScreen extends StatelessWidget {
             transNo: transNo,
             unitData: unitData,
             availableSerialNumbers: availableSerialNumbers,
+            storeName: storeName,
           ),
         ),
       ),

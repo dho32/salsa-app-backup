@@ -16,6 +16,9 @@ import '../service/service_repository.dart';
 import 'failed_uploads_repository.dart';
 import '../../../models/rro_cut_off/rro_cut_off_entry_model.dart';
 import 'package:salsa/models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
+import 'package:salsa/models/proof_of_service_freezer/proof_of_service_freezer_info_model.dart';
+import 'package:salsa/models/service_call_freezer/scf_info_model.dart';
+import 'package:salsa/models/service_call_freezer/scf_validation_entry_model.dart';
 
 part 'failed_uploads_event.dart';
 
@@ -88,6 +91,10 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
       await loadFromBox(kPosUnserviceablePartialBox, 'POS_UNSERVICEABLE');
       await loadFromBox(kScUnserviceablePartialBox, 'SC_UNSERVICEABLE');
       await loadFromBox(kProofOfServiceFreezerPartialBox, kProofOfServiceFreezerModuleType);
+      await loadFromBox(kProofOfServiceFreezerClosedPartialBox,
+          kProofOfServiceFreezerClosedModuleType);
+      await loadFromBox(
+          kServiceCallFreezerPartialBox, kServiceCallFreezerModuleType);
       await loadFromBox(
           kFailedUploadsBox, 'INSTALLATION'); // RRO otomatis nebeng di sini
 
@@ -216,6 +223,18 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         result = await uploadProofOfServiceFreezerImagesToS3(
             event.transNo, presignedDetail,
             progressCubit: progressCubit, filter: originalFailedFiles);
+      } else if (moduleType == kProofOfServiceFreezerClosedModuleType) {
+        // Foto bukti close: rekonstruksi dari path yang dipersist di partial box.
+        final proofPaths =
+            (transactionData['proofImagePaths'] as List<dynamic>?)
+                    ?.cast<String>() ??
+                [];
+        result = await uploadProofOfServiceFreezerClosedFilesByPath(
+            proofPaths, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
+      } else if (moduleType == kServiceCallFreezerModuleType) {
+        result = await uploadScfImagesToS3(event.transNo, presignedDetail,
+            progressCubit: progressCubit, filter: originalFailedFiles);
       } else {
         throw Exception('Modul tidak dikenal.');
       }
@@ -284,6 +303,34 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
                   .where((k) => cfEntryBox.get(k)?.transNo == event.transNo)
                   .toList();
               await cfEntryBox.deleteAll(cfKeys);
+            }
+            // CLEANUP DRAFT CUCI FREEZER (CLOSE): bersihkan entry + info karena
+            // saat partial, draft belum sempat dihapus oleh PosfClosedBloc.
+            else if (moduleType == kProofOfServiceFreezerClosedModuleType) {
+              final cfEntryBox =
+                  await Hive.openBox<ProofOfServiceFreezerEntryModel>(
+                      kProofOfServiceFreezerEntryBox);
+              final cfKeys = cfEntryBox.keys
+                  .where((k) => cfEntryBox.get(k)?.transNo == event.transNo)
+                  .toList();
+              await cfEntryBox.deleteAll(cfKeys);
+              final cfInfoBox =
+                  await Hive.openBox<ProofOfServiceFreezerInfoModel>(
+                      kProofOfServiceFreezerInfoBox);
+              await cfInfoBox.delete(getHiveKeyForTransaction(event.transNo));
+            }
+            // CLEANUP DRAFT SERVICE CALL FREEZER: entry per-freezer + info
+            // transaksi (PIC/teknisi), pola sama dengan Cuci Freezer.
+            else if (moduleType == kServiceCallFreezerModuleType) {
+              final scfEntryBox = await Hive.openBox<ScfValidationEntryModel>(
+                  kServiceCallFreezerEntryBox);
+              final scfKeys = scfEntryBox.keys
+                  .where((k) => scfEntryBox.get(k)?.transNo == event.transNo)
+                  .toList();
+              await scfEntryBox.deleteAll(scfKeys);
+              final scfInfoBox =
+                  await Hive.openBox<ScfInfoModel>(kServiceCallFreezerInfoBox);
+              await scfInfoBox.delete(getHiveKeyForTransaction(event.transNo));
             }
 
             await clearTransactionData(event.transNo);
@@ -418,6 +465,10 @@ class FailedUploadsBloc extends Bloc<FailedUploadsEvent, FailedUploadsState> {
         return kFailedUploadsBox;
       case kProofOfServiceFreezerModuleType:
         return kProofOfServiceFreezerPartialBox;
+      case kProofOfServiceFreezerClosedModuleType:
+        return kProofOfServiceFreezerClosedPartialBox;
+      case kServiceCallFreezerModuleType:
+        return kServiceCallFreezerPartialBox;
       default:
         return null;
     }

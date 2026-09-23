@@ -6,6 +6,7 @@ import '../../../components/constants.dart';
 import '../../../models/common/captured_image_detail.dart';
 import '../../../models/common/measurement_entry.dart';
 import '../../../models/proof_of_service_freezer/proof_of_service_freezer_constants.dart';
+import '../../../models/proof_of_service_freezer/proof_of_service_freezer_detail_model.dart';
 import '../../../models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
 import '../proof_of_service_freezer_detail/proof_of_service_freezer_detail_bloc.dart' show freezerEntryKey;
 import 'posf_validation_state.dart';
@@ -20,6 +21,11 @@ class PosfValidationCubit extends Cubit<PosfValidationState> {
   final int unitIndex;
   final String articleNo;
   final String articleDesc;
+
+  /// Config wizard dari server (opsional). Dipakai menentukan alasan skip yang
+  /// wajib keterangan+foto (require_remark) — fallback konstanta bila null.
+  final PosfWizardConfig? config;
+
   final Box<ProofOfServiceFreezerEntryModel> _box;
 
   String get _key => freezerEntryKey(transNo, serialNo, isGeneric, unitIndex);
@@ -32,12 +38,25 @@ class PosfValidationCubit extends Cubit<PosfValidationState> {
     required this.unitIndex,
     required this.articleNo,
     required this.articleDesc,
+    this.config,
   })  : _box = Hive.box<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox),
         super(const PosfValidationState()) {
     _load();
   }
 
+  // Set alasan skip yang mewajibkan keterangan + foto bukti: dari config server
+  // (require_remark per opsi) bila ada, else konstanta dummy. Konsisten dengan
+  // _skipReasonRequiresRemark di validation body (sumber UI).
+  Set<String> _resolveRequireRemark() {
+    final cfg = config?.skipReasonOptions;
+    if (cfg != null && cfg.isNotEmpty) {
+      return cfg.where((o) => o.requireRemark).map((o) => o.label).toSet();
+    }
+    return kPosfSkipReasonsRequireRemark;
+  }
+
   void _load() {
+    final requireRemark = _resolveRequireRemark();
     final e = _box.get(_key);
     if (e != null) {
       emit(PosfValidationState(
@@ -48,25 +67,29 @@ class PosfValidationCubit extends Cubit<PosfValidationState> {
         arrivalTempReason: e.arrivalTempReason,
         generalCondition: e.generalCondition,
         complaint: e.complaint,
+        unusedReason: e.unusedReason,
         frostThickness: e.frostThickness,
         initialPhotos: Map.of(e.initialPhotos),
         initialNote: e.initialNote ?? '',
         conditionNote: e.conditionNote ?? '',
         conditionPhotos: List.of(e.conditionPhotos ?? const []),
-        measurements:
-            e.measurements.isNotEmpty ? List.of(e.measurements) : _freshMeasurements(),
+        measurements: _reconcileMeasurements(e.measurements),
         afterPhotos: Map.of(e.afterPhotos),
         arrivalTempSkipRemark: e.arrivalTempSkipRemark ?? '',
         arrivalTempSkipPhotos: e.arrivalTempSkipPhotos ?? const [],
         tempSkipRemark: e.tempSkipRemark ?? '',
         tempSkipPhotos: e.tempSkipPhotos ?? const [],
-        elecSkipRemark: e.elecSkipRemark ?? '',
-        elecSkipPhotos: e.elecSkipPhotos ?? const [],
+        // Grup listrik (Arus & Tegangan) sudah tidak ada di wizard — buang
+        // bukti skip lamanya supaya tidak ikut terkirim sebagai data hantu.
+        elecSkipRemark: '',
+        elecSkipPhotos: const [],
+        skipReasonsRequireRemark: requireRemark,
       ));
     } else {
       emit(PosfValidationState(
         isLoaded: true,
         measurements: _freshMeasurements(),
+        skipReasonsRequireRemark: requireRemark,
       ));
     }
   }
@@ -75,6 +98,23 @@ class PosfValidationCubit extends Cubit<PosfValidationState> {
       .map((l) => MeasurementEntry(
           measurementId: l.id, value: 0, unit: l.unit, isSkipped: false))
       .toList();
+
+  /// Selaraskan pengukuran draft dengan daftar pengukuran wizard saat ini.
+  ///
+  /// Sejak Arus & Tegangan dihapus, draft lama masih menyimpan entri
+  /// 'ampere'/'volt'. Tanpa rekonsiliasi, gerbang [PosfValidationState
+  /// .isStepAfterValid] (yang membandingkan jumlah pengukuran dengan
+  /// [kPosfMeasurements]) tidak akan pernah terpenuhi dan tombol Selesai
+  /// terkunci selamanya. Entri asing dibuang, entri yang hilang ditambahkan.
+  List<MeasurementEntry> _reconcileMeasurements(List<MeasurementEntry> saved) {
+    if (saved.isEmpty) return _freshMeasurements();
+    return _freshMeasurements()
+        .map((fresh) => saved.firstWhere(
+              (e) => e.measurementId == fresh.measurementId,
+              orElse: () => fresh,
+            ))
+        .toList();
+  }
 
   // --- Navigasi step ---
   void nextStep() {
@@ -160,26 +200,57 @@ class PosfValidationCubit extends Cubit<PosfValidationState> {
     _scheduleSave();
   }
 
-  void generalConditionChanged(String v) {
-    // Tap ulang chip yang sudah terpilih = no-op (jangan hapus reason/note/foto).
-    if (v == state.generalCondition) return;
-    // Ganti kondisi → reset detail (reason + note + foto) karena tiap kondisi
-    // punya daftar alasan sendiri.
+  /// Dropdown 1 — dimensi FUNGSI (Normal / Ada Keluhan / Freezer Tidak Bisa
+  /// Dicuci).
+  ///
+  /// Pindah ke "Freezer Tidak Bisa Dicuci" mengosongkan dimensi pemakaian
+  /// (kondisi itu berdiri sendiri, `usage_condition` dikirim kosong); pindah
+  /// Normal ↔ Ada Keluhan MEMPERTAHANKAN pilihan pemakaian supaya teknisi
+  /// tidak perlu memilih ulang.
+  void functionConditionChanged(String? v) {
+    // Pilih ulang nilai yang sama = no-op (jangan hapus reason/note/foto).
+    if (v == state.functionCondition) return;
+    final usage = v == kPosfCondUnwashable ? null : state.usageCondition;
+    _setCondition(posfComposeCondition(v, usage));
+  }
+
+  /// Dropdown 2 — dimensi PEMAKAIAN (Terpakai / Tidak Terpakai).
+  void usageConditionChanged(String? v) {
+    if (v == state.usageCondition) return;
+    _setCondition(posfComposeCondition(state.functionCondition, v));
+  }
+
+  /// Simpan kondisi gabungan + reset detailnya (alasan, keterangan, foto
+  /// bukti): tiap kondisi punya daftar alasan sendiri, jadi nilai lama tidak
+  /// boleh menempel saat salah satu dimensi berubah.
+  void _setCondition(String? composed) {
     emit(state.copyWith(
-      generalCondition: v,
+      generalCondition: composed,
+      clearGeneralCondition: composed == null,
       clearComplaint: true,
+      clearUnusedReason: true,
       conditionNote: '',
       conditionPhotos: const [],
     ));
     _scheduleSave();
   }
 
-  // Alasan terpilih untuk kondisi non-Normal (keluhan / tidak terpakai).
+  // Alasan dimensi fungsi "Ada Keluhan" (jenis keluhan).
   void complaintChanged(String? v) {
     if (v == null || v.isEmpty) {
       emit(state.copyWith(clearComplaint: true));
     } else {
       emit(state.copyWith(complaint: v));
+    }
+    _scheduleSave();
+  }
+
+  // Alasan dimensi pemakaian "Tidak Terpakai".
+  void unusedReasonChanged(String? v) {
+    if (v == null || v.isEmpty) {
+      emit(state.copyWith(clearUnusedReason: true));
+    } else {
+      emit(state.copyWith(unusedReason: v));
     }
     _scheduleSave();
   }
@@ -367,13 +438,16 @@ class PosfValidationCubit extends Cubit<PosfValidationState> {
     entry.arrivalTempReason = state.arrivalTempReason;
     entry.generalCondition = state.generalCondition;
     entry.complaint = state.complaint;
+    entry.unusedReason = state.unusedReason;
     entry.conditionNote = state.conditionNote;
     entry.conditionPhotos = List.of(state.conditionPhotos);
 
-    if (state.hasUnused) {
-      // "Tidak terpakai": freezer tidak dikerjakan. Jangan simpan data
-      // Sebelum/Sesudah (suhu, ketebalan, foto standar, pengukuran) walaupun
-      // sempat terisi lalu kondisi diganti — cegah data hantu terkirim.
+    if (state.isUnitSkipped) {
+      // "Tidak terpakai" / "Freezer Tidak Bisa Dicuci": freezer tidak
+      // dikerjakan. Jangan simpan data Sebelum/Sesudah (suhu, ketebalan, foto
+      // standar, pengukuran) walaupun sempat terisi lalu kondisi diganti —
+      // cegah data hantu terkirim. Alasan (unusedReason), catatan, dan foto
+      // bukti kondisi diset di luar cabang ini, jadi tetap tersimpan.
       entry.arrivalTemp = null;
       entry.arrivalTempImage = null;
       entry.arrivalTempSkipped = false;

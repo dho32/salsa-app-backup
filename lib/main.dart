@@ -35,6 +35,8 @@ import 'models/rro_cut_off/rro_cut_off_entry_model.dart';
 import 'models/proof_of_service_freezer/proof_of_service_freezer_detail_model.dart';
 import 'models/proof_of_service_freezer/proof_of_service_freezer_info_model.dart';
 import 'models/proof_of_service_freezer/proof_of_service_freezer_entry_model.dart';
+import 'models/service_call_freezer/scf_info_model.dart';
+import 'models/service_call_freezer/scf_validation_entry_model.dart';
 import 'models/schedule/proof_of_service/proof_of_service_detail_data.dart';
 import 'models/service_call/service_call_validation_entry_model.dart';
 import 'models/task_maintenance/confirmation_task_queue.dart';
@@ -160,6 +162,11 @@ class _AppInitializerState extends State<AppInitializer> {
     reg(ProofOfServiceFreezerItemAdapter());
     reg(ProofOfServiceFreezerInfoModelAdapter());
     reg(ProofOfServiceFreezerEntryModelAdapter());
+
+    // Register Adapters Service Call Freezer (SCF)
+    reg(ScfInfoModelAdapter());
+    reg(ScfValidationEntryModelAdapter());
+    reg(ScfValidationProblemAdapter());
   }
 
   // Fungsi yang bisa di-retry (TETAP SAMA)
@@ -182,6 +189,10 @@ class _AppInitializerState extends State<AppInitializer> {
       await _openBoxSafely<ProofOfServiceFreezerDetailModel>(kProofOfServiceFreezerDetailBox);
       await _openBoxSafely<ProofOfServiceFreezerInfoModel>(kProofOfServiceFreezerInfoBox);
       await _openBoxSafely<ProofOfServiceFreezerEntryModel>(kProofOfServiceFreezerEntryBox);
+      // Service Call Freezer (SCF): info + entry Hive-typed, detail cache JSON (untyped)
+      await _openBoxSafely<ScfInfoModel>(kServiceCallFreezerInfoBox);
+      await _openBoxSafely<ScfValidationEntryModel>(kServiceCallFreezerEntryBox);
+      await _openBoxSafely(null, boxName: kServiceCallFreezerDetailBox);
     } catch (e) {
       // Jika error sangat fatal (Disk Penuh Total / Permission Error)
       print("💀 Fatal Init Error: $e");

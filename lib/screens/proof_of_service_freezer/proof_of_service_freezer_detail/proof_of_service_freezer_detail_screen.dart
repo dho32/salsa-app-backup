@@ -77,6 +77,12 @@ class _ProofOfServiceFreezerDetailView extends StatelessWidget {
           foregroundColor: Colors.white,
           systemOverlayStyle: SystemUiOverlayStyle.light,
           title: const Text('Cuci Freezer'),
+          // CATATAN: tombol "Freezer Tidak Bisa Dicuci" (flow close) dihapus dari
+          // header atas permintaan bisnis. Layar & bloc-nya SENGAJA dipertahankan
+          // (posf_report_issue_screen.dart, PosfClosedBloc, kPosfClosedReasons)
+          // agar mudah dipasang kembali: kembalikan `actions` di sini yang membuka
+          // PosfReportIssueScreen lewat MultiBlocProvider.value(PosfClosedBloc +
+          // UploadProgressCubit), alasan dari detail.config.closedReasons.
         ),
         body: MultiBlocListener(
           listeners: [

@@ -187,10 +187,15 @@ class PosUnserviceableBloc
           imagesDir.path, 'WM_ISSUE_${timestamp.millisecondsSinceEpoch}.jpg');
 
       // 4. PROSES WATERMARK
+      final _hdr =
+          (await Hive.openBox<ProofOfServiceDetailModel>(kPosDetailCacheBox))
+              .get(transNo)
+              ?.header;
+      final storeName = storeTag(_hdr?.shipToName, _hdr?.shipToCode);
       final request = WatermarkRequest(
         originalPath: pickedFile.path,
         targetPath: targetPath,
-        transNo: transNo,
+        storeName: storeName,
         formattedDate: formattedDate,
         technicianName: technicianName,
         deviceModel: deviceModel,

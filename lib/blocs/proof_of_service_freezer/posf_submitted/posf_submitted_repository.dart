@@ -1,22 +1,19 @@
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:http/http.dart' as http;
+import 'package:salsa/components/shared_function.dart';
+
 import '../../../models/proof_of_service_freezer/proof_of_service_freezer_info_model.dart';
+// Ekstensi CapturedImageDetail.toJson() (nama file + timestamp + lat/long +
+// device) — foto PIC dikirim lengkap, bukan hanya nama file.
+import '../../../models/service_call/service_call_validation_entry_model_ext.dart';
 
 /// Repository submit Cuci Freezer.
 ///
-/// NOTE(backend): endpoint submit BELUM tersedia. [submit] merakit [requestBody]
-/// (header PIC + teknisi, lalu items) dan me-log-nya, lalu mengembalikan response
-/// mock `{status: OK, result: {detail: []}}` sehingga alur submit selesai secara
-/// lokal (tanpa file presigned -> upload di-skip otomatis).
-///
-/// Saat endpoint siap, ganti `return mock` di bawah menjadi:
-///   final uri = getUrl(pathUrl: 'proof_of_service_freezer/submitted');
-///   final res = await http.post(uri,
-///       headers: {'Content-Type': 'application/json'},
-///       body: jsonEncode(requestBody));
-///   return jsonDecode(res.body);
-/// di mana response asli berisi presigned URL di result.detail[].uploads[].
+/// Merakit [requestBody] (header PIC + teknisi, lalu items) dan POST ke
+/// `proof_of_service_freezer/submitted`. Response asli berisi presigned URL di
+/// `result.detail[].uploads[]` (dicocokkan berdasarkan filename saat upload S3).
 class PosfSubmittedRepository {
   Future<Map<String, dynamic>> submit({
     required String transNo,
@@ -35,7 +32,7 @@ class PosfSubmittedRepository {
       'created_by_ip': createdByIp,
       'pic_nik': info?.picNik ?? '',
       'pic_name': info?.picName ?? '',
-      'pic_posision': info?.picPosition ?? '',
+      'pic_position': info?.picPosition ?? '',
       'pic_phone': info?.picPhone ?? '',
       'technician_1_name': info?.technician1 ?? '',
       'technician_2_name': info?.technician2 ?? '',
@@ -43,32 +40,55 @@ class PosfSubmittedRepository {
       'technician_1_nik': info?.technician1Nik ?? '',
       'technician_2_nik': info?.technician2Nik ?? '',
       'technician_3_nik': info?.technician3Nik ?? '',
-      'pic_image_detail': info?.picImageDetail?.imagePath.split('/').last,
+      'pic_image_detail': info?.picImageDetail?.toJson(),
       'items': items,
     };
 
-    final prettyJson = const JsonEncoder.withIndent('  ').convert(requestBody);
-    log('====== BODY REQUEST LENGKAP (FREEZER) ======');
-    log(prettyJson);
-    log('============================================');
+    try {
+      final prettyJson = const JsonEncoder.withIndent('  ').convert(requestBody);
+      log('====== BODY REQUEST LENGKAP (FREEZER) ======');
+      log(prettyJson);
+      log('============================================');
 
-    await Future.delayed(const Duration(milliseconds: 400)); // simulasi network
-    return {
-      'status': 'OK',
-      'result': {'detail': <dynamic>[]},
-    };
+      final uri = getUrl(pathUrl: 'proof_of_service_freezer/submitted');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'status': 'ERROR', 'message': e.toString()};
+    }
   }
 
   /// Cek apakah toko ini sudah punya tiket Service Call (SC) aktif untuk
   /// freezer bermasalah. Pola POS: `checkActiveServiceCall`.
   ///
-  /// NOTE(backend): endpoint BELUM tersedia. MOCK selalu mengembalikan `false`
-  /// (anggap belum ada SC) sehingga dialog "buat tiket SC" selalu muncul saat
-  /// ada freezer "Ada Keluhan". Saat endpoint siap, ganti dengan HTTP call ke
-  /// mis. `/proof_of_service_freezer/sc_check_active?trans_no=...` dan baca
-  /// `result.has_active_sc`.
+  /// GET `proof_of_service_freezer/sc_check_active?trans_no=...` lalu baca
+  /// `result.has_active_sc`. Bila gagal/koneksi error, anggap `false` (belum
+  /// ada SC) sehingga dialog "buat tiket SC" tetap muncul saat ada keluhan.
   Future<bool> checkActiveServiceCall(String transNo) async {
-    await Future.delayed(const Duration(milliseconds: 300)); // simulasi network
-    return false;
+    try {
+      final uri = getUrl(
+        pathUrl: 'proof_of_service_freezer/sc_check_active',
+        params: {'trans_no': transNo},
+      );
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['status'] == 'OK' && body['result'] != null) {
+          final result = body['result'] as Map<String, dynamic>;
+          return result['has_active_sc'] ?? false;
+        }
+      }
+      return false;
+    } catch (e) {
+      log('Error checking active SC (freezer): $e');
+      return false;
+    }
   }
 }

@@ -479,7 +479,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
       final req = WatermarkRequest(
         originalPath: image.path,
         targetPath: targetPath,
-        transNo: widget.transNo,
+        storeName: storeTag(context.read<InstallationBloc>().state.taskDetail?.header.shipToName, context.read<InstallationBloc>().state.taskDetail?.header.shipTo),
         formattedDate: formattedDate,
         technicianName: techName,
         deviceModel: deviceModel,
@@ -695,6 +695,7 @@ class _IndoorInputFormBodyMobileState extends State<IndoorInputFormBodyMobile> {
                   const SizedBox(height: 24),
                   GenericMeasurementInputSection(
                     transNo: widget.transNo,
+                    storeName: storeTag(context.read<InstallationBloc>().state.taskDetail?.header.shipToName, context.read<InstallationBloc>().state.taskDetail?.header.shipTo),
                     measurements: _measurementEntries,
                     controllers: _measurementControllers,
                     limitsMap: _limitsMap,

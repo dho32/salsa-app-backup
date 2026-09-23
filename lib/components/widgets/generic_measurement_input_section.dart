@@ -5,6 +5,9 @@ import 'package:salsa/models/common/measurement_limits.dart';
 
 class GenericMeasurementInputSection extends StatefulWidget {
   final String transNo;
+
+  /// Nama toko untuk baris watermark (diteruskan ke MeasurementInputWidget).
+  final String storeName;
   final List<MeasurementEntry> measurements;
   final Map<String, TextEditingController> controllers;
   final Map<String, MeasurementLimits> limitsMap;
@@ -22,6 +25,7 @@ class GenericMeasurementInputSection extends StatefulWidget {
   const GenericMeasurementInputSection({
     super.key,
     required this.transNo,
+    this.storeName = '',
     required this.measurements,
     required this.controllers,
     required this.limitsMap,
@@ -126,6 +130,7 @@ class _GenericMeasurementInputSectionState
       child: MeasurementInputWidget(
         controller: controller,
         transNo: widget.transNo,
+        storeName: widget.storeName,
         label: limitsToUse.label,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         limits: limitsToUse,

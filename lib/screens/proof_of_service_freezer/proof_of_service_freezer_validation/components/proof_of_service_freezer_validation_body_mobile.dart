@@ -3,25 +3,35 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
 
+import '../../../../components/constants.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_validation/posf_validation_cubit.dart';
 import '../../../../blocs/proof_of_service_freezer/posf_validation/posf_validation_state.dart';
 import '../../../../components/services/photo_capture_service.dart';
+import '../../../../components/shared_function.dart';
 import '../../../../components/widgets/full_screen_image_viewer.dart';
 import '../../../../components/widgets/measurement_input_widget.dart';
+import '../../../../components/widgets/planogram_guide_button.dart';
 import '../../../../components/widgets/remark_photo_picker.dart';
 import '../../../../models/common/captured_image_detail.dart';
 import '../../../../models/common/measurement_entry.dart';
+import '../../../../models/common/measurement_limits.dart';
 import '../../../../models/proof_of_service_freezer/proof_of_service_freezer_constants.dart';
+import '../../../../models/proof_of_service_freezer/proof_of_service_freezer_detail_model.dart';
 
 class ProofOfServiceFreezerValidationBodyMobile extends StatefulWidget {
   final String serialNo;
   final String articleDesc;
 
+  /// Config wizard dari server (opsional). Null/kosong → fallback konstanta.
+  final PosfWizardConfig? config;
+
   const ProofOfServiceFreezerValidationBodyMobile({
     super.key,
     required this.serialNo,
     required this.articleDesc,
+    this.config,
   });
 
   @override
@@ -65,7 +75,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   // Semua pengukuran non-skip pada step ini sudah dikonfirmasi?
   bool _measurementsConfirmedForStep(PosfValidationState s, int step) {
     if (step == 0) {
-      if (s.hasUnused) return true; // tidak ada pengukuran
+      if (s.isUnitSkipped) return true; // unit tak dikerjakan, tanpa pengukuran
       return s.arrivalTempSkipped || _confirmedIds.contains('arrival_temp');
     }
     if (step == 1) {
@@ -80,6 +90,30 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   // Grup foto bukti skip yang sedang mengambil foto
   // ('arrival' / 'temperature' / 'elec'), null bila tidak ada.
   String? _capturingSkipGroup;
+
+  // Nama toko (shipToName) untuk watermark foto — dibaca sekali dari box detail.
+  String _storeName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _storeName = _loadStoreName();
+  }
+
+  // Baca shipToName + shipTo dari box detail (read-only) via transNo cubit;
+  // watermark tampil "Toko : <nama> (<kode>)". Fallback ''.
+  String _loadStoreName() {
+    try {
+      if (Hive.isBoxOpen(kProofOfServiceFreezerDetailBox)) {
+        final hdr = Hive.box<ProofOfServiceFreezerDetailModel>(
+                kProofOfServiceFreezerDetailBox)
+            .get(_cubit.transNo.trim().toUpperCase())
+            ?.header;
+        return storeTag(hdr?.shipToName, hdr?.shipTo);
+      }
+    } catch (_) {}
+    return '';
+  }
 
   @override
   void dispose() {
@@ -110,10 +144,48 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     _controllersReady = true;
   }
 
-  // Jumlah step efektif: "Tidak terpakai" cukup 1 step (Sebelum).
-  int _effectiveStepCount(PosfValidationState s) => s.hasUnused ? 1 : _stepCount;
+  // Jumlah step efektif: unit yang tidak dikerjakan ("Tidak terpakai" /
+  // "Freezer Tidak Bisa Dicuci") cukup 1 step (Sebelum).
+  int _effectiveStepCount(PosfValidationState s) =>
+      s.isUnitSkipped ? 1 : _stepCount;
 
   PosfValidationCubit get _cubit => context.read<PosfValidationCubit>();
+
+  // --- Config wizard dari server (fallback ke konstanta bila null/kosong) ---
+  // Disaring [posfFilterMeasurements] supaya Arus & Tegangan tetap hilang
+  // walaupun backend masih mengirim range-nya di config.
+  List<MeasurementLimits> get _measurements {
+    final cfg = widget.config?.measurements;
+    final src = (cfg != null && cfg.isNotEmpty) ? cfg : kPosfMeasurements;
+    final filtered = posfFilterMeasurements(src);
+    return filtered.isNotEmpty ? filtered : kPosfMeasurements;
+  }
+
+  List<String> get _skipReasons {
+    final cfg = widget.config?.skipReasonOptions;
+    return (cfg != null && cfg.isNotEmpty)
+        ? cfg.map((e) => e.label).toList()
+        : kPosfSkipReasons;
+  }
+
+  bool _skipReasonRequiresRemark(String reason) {
+    final cfg = widget.config?.skipReasonOptions;
+    if (cfg != null && cfg.isNotEmpty) {
+      for (final o in cfg) {
+        if (o.label == reason) return o.requireRemark;
+      }
+      return false; // alasan tak ada di master server → tidak wajib remark
+    }
+    return kPosfSkipReasonsRequireRemark.contains(reason);
+  }
+
+  List<String> _conditionOptions(bool unused) {
+    final cfg =
+        unused ? widget.config?.unusedOptions : widget.config?.complaintOptions;
+    return (cfg != null && cfg.isNotEmpty)
+        ? cfg
+        : (unused ? kPosfUnusedOptions : kPosfComplaintOptions);
+  }
 
   Future<void> _onExit() async {
     final cubit = _cubit;
@@ -156,6 +228,12 @@ class _ProofOfServiceFreezerValidationBodyMobileState
           return const Scaffold(
               body: Center(child: CircularProgressIndicator()));
         }
+        // Seed controller dari draft juga di sini (bukan hanya lewat listener):
+        // cubit memuat draft secara sinkron di konstruktor sehingga state
+        // 'isLoaded' sudah aktif sebelum listener ter-subscribe — listener tak
+        // pernah menyala untuk state awal, jadi tanpa ini nilai suhu (Sebelum)
+        // & pengukuran (Sesudah) tidak terisi ulang saat wizard dibuka kembali.
+        _initControllers(state);
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) {
@@ -270,37 +348,68 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   // Step Sebelum — Kondisi Awal
   // ---------------------------------------------------------------------------
   Widget _buildStepBefore(PosfValidationState s) {
-    // "Tidak terpakai": cukup dokumentasi kondisi (alasan + note + foto),
-    // sisanya (suhu, ketebalan, foto standar, catatan, step Sesudah) disembunyikan.
-    final bool unused = s.hasUnused;
+    // "Tidak terpakai" / "Freezer Tidak Bisa Dicuci": cukup dokumentasi
+    // kondisi (alasan + foto, note sesuai kondisi), sisanya (suhu, ketebalan,
+    // foto standar, catatan, step Sesudah) disembunyikan.
+    final bool unused = s.isUnitSkipped;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // --- Kondisi fungsi Freezer (selalu tampil) ---
+        // --- Kondisi Freezer (selalu tampil) ---
         _card(
-          'Kondisi fungsi Freezer saat teknisi tiba di toko',
+          'Kondisi Freezer saat teknisi tiba di toko',
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _chipGroup(kPosfGeneralConditions, s.generalCondition, (v) {
-                // Ganti kondisi = reset detail; kosongkan juga controller note.
-                _conditionNoteController.clear();
-                _cubit.generalConditionChanged(v);
-              }),
-              // Detail wajib saat "Ada Keluhan" / "Tidak terpakai":
-              // alasan + keterangan tambahan + foto bukti.
-              if (s.needsConditionDetail) ...[
+              // Dropdown 1 — dimensi fungsi.
+              _buildFunctionConditionDropdown(s),
+              // Dropdown 2 — dimensi pemakaian. Baru muncul setelah dropdown 1
+              // diisi, dan TIDAK berlaku untuk "Freezer Tidak Bisa Dicuci"
+              // (kondisi berdiri sendiri; usage_condition dikirim kosong).
+              if (s.functionCondition != null && !s.hasUnwashable) ...[
                 const SizedBox(height: 12),
-                _buildConditionReasonDropdown(s),
+                _buildUsageConditionDropdown(s),
+              ],
+              // Detail wajib saat "Ada Keluhan" / "Tidak Terpakai" / "Tidak
+              // Bisa Dicuci": alasan + keterangan tambahan + foto bukti. Baru
+              // dibuka setelah kondisi lengkap dipilih.
+              if (s.isConditionSelected && s.needsConditionDetail) ...[
                 const SizedBox(height: 12),
+                // "Ada Keluhan" → dropdown jenis keluhan.
+                if (s.hasComplaint) ...[
+                  _buildComplaintDropdown(s),
+                  const SizedBox(height: 12),
+                ],
+                // "Tidak Terpakai" → dropdown alasan tidak terpakai (bisa
+                // muncul bersamaan dengan keluhan pada "Ada Keluhan Tidak
+                // Terpakai").
+                if (s.hasUnused) ...[
+                  _buildUnusedReasonDropdown(s),
+                  const SizedBox(height: 12),
+                ],
+                // "Freezer Tidak Bisa Dicuci" → dropdown alasan close.
+                if (s.hasUnwashable) ...[
+                  _buildUnwashableReasonDropdown(s),
+                  const SizedBox(height: 12),
+                ],
                 TextField(
                   controller: _conditionNoteController,
                   maxLines: 3,
                   onChanged: _cubit.conditionNoteChanged,
-                  decoration:
-                      _inputDecoration('Keterangan tambahan (*Wajib)'),
+                  // Mengikuti form laporan close: catatan tambahan OPSIONAL
+                  // untuk "Tidak Bisa Dicuci", wajib untuk kondisi lain.
+                  decoration: _inputDecoration(s.hasUnwashable
+                      ? 'Catatan Tambahan (Opsional)'
+                      : 'Keterangan tambahan (*Wajib)'),
                 ),
                 const SizedBox(height: 12),
+                if (s.hasUnwashable)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 6),
+                    child: Text('Foto Bukti (*Wajib, maks. 3 foto)',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
                 RemarkPhotoPicker(
                   photos: s.conditionPhotos,
                   isLoading: _capturingCondition,
@@ -312,10 +421,13 @@ class _ProofOfServiceFreezerValidationBodyMobileState
             ],
           ),
         ),
-        if (!unused) ...[
+        // Sisa form step Sebelum baru terbuka setelah kedua dimensi kondisi
+        // dipilih.
+        if (s.isConditionSelected && !unused) ...[
           MeasurementInputWidget(
             controller: _arrivalTempController,
             transNo: _cubit.transNo,
+            storeName: _storeName,
             label: 'Suhu sebelum pembersihan (°C)',
             keyboardType: const TextInputType.numberWithOptions(
                 decimal: true, signed: true),
@@ -361,8 +473,15 @@ class _ProofOfServiceFreezerValidationBodyMobileState
           const SizedBox(height: 12),
           _card(
             'Ketebalan bunga es',
-            _chipGroup(kPosfFrostThickness, s.frostThickness,
-                _cubit.frostThicknessChanged),
+            _dropdown(
+              label: 'Ketebalan bunga es (*Wajib)',
+              hint: 'Pilih ketebalan',
+              value: s.frostThickness,
+              options: kPosfFrostThickness,
+              onChanged: (v) {
+                if (v != null) _cubit.frostThicknessChanged(v);
+              },
+            ),
           ),
           _card(
             'Foto Kondisi Awal',
@@ -383,15 +502,19 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   }
 
   Future<void> _captureConditionPhoto() async {
-    if (_cubit.state.conditionPhotos.length >= 5) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Maksimal 5 foto.')));
+    // "Tidak Bisa Dicuci" mengikuti form laporan close: maksimal 3 foto.
+    final int maxPhotos =
+        _cubit.state.hasUnwashable ? kPosfUnwashableMaxPhotos : 5;
+    if (_cubit.state.conditionPhotos.length >= maxPhotos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Maksimal $maxPhotos foto.')));
       return;
     }
     setState(() => _capturingCondition = true);
     try {
       final img = await captureWatermarkedPhoto(_cubit.transNo,
-          photoLabel: 'Kondisi Freezer - ${_cubit.state.generalCondition ?? ''}');
+          photoLabel: 'Kondisi Freezer - ${_cubit.state.generalCondition ?? ''}',
+          storeName: _storeName);
       if (img != null) _cubit.addConditionPhoto(img);
     } finally {
       if (mounted) setState(() => _capturingCondition = false);
@@ -402,13 +525,13 @@ class _ProofOfServiceFreezerValidationBodyMobileState
   Widget _buildSkipReasonDropdown(
       String? selected, ValueChanged<String?> onChanged,
       {String label = 'Alasan tidak bisa diukur'}) {
-    final value = kPosfSkipReasons.contains(selected) ? selected : null;
+    final value = _skipReasons.contains(selected) ? selected : null;
     return DropdownButtonFormField<String>(
       value: value,
       isExpanded: true,
       decoration: _inputDecoration(label),
       hint: const Text('Pilih alasan', style: TextStyle(fontSize: 14)),
-      items: kPosfSkipReasons
+      items: _skipReasons
           .map((o) => DropdownMenuItem(
                 value: o,
                 child: Text(o,
@@ -435,7 +558,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     String label = 'Alasan tidak bisa diukur',
   }) {
     final bool requireRemark =
-        reason != null && kPosfSkipReasonsRequireRemark.contains(reason);
+        reason != null && _skipReasonRequiresRemark(reason);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -495,25 +618,52 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     setState(() => _capturingSkipGroup = group);
     try {
       final img = await captureWatermarkedPhoto(_cubit.transNo,
-          photoLabel: photoLabel);
+          photoLabel: photoLabel, storeName: _storeName);
       if (img != null) onCaptured(img);
     } finally {
       if (mounted) setState(() => _capturingSkipGroup = null);
     }
   }
 
-  // Dropdown alasan kondisi: opsi keluhan (Ada Keluhan) atau opsi tidak
-  // terpakai (Tidak terpakai), tergantung kondisi terpilih.
-  Widget _buildConditionReasonDropdown(PosfValidationState s) {
-    final bool unused = s.hasUnused;
-    final options = unused ? kPosfUnusedOptions : kPosfComplaintOptions;
-    final hint = unused ? 'Pilih alasan' : 'Pilih keluhan';
+  /// Dropdown 1 — dimensi FUNGSI (Normal / Ada Keluhan / Freezer Tidak Bisa
+  /// Dicuci). Mengganti nilainya mereset detail kondisi di cubit, jadi
+  /// controller keterangan ikut dikosongkan di sini.
+  Widget _buildFunctionConditionDropdown(PosfValidationState s) {
+    return _dropdown(
+      label: 'Kondisi fungsi Freezer (*Wajib)',
+      hint: 'Pilih kondisi fungsi',
+      value: s.functionCondition,
+      options: kPosfFunctionConditions,
+      onChanged: (v) {
+        _conditionNoteController.clear();
+        _cubit.functionConditionChanged(v);
+      },
+    );
+  }
+
+  /// Dropdown 2 — dimensi PEMAKAIAN (Terpakai / Tidak Terpakai).
+  Widget _buildUsageConditionDropdown(PosfValidationState s) {
+    return _dropdown(
+      label: 'Kondisi pemakaian Freezer (*Wajib)',
+      hint: 'Pilih kondisi pemakaian',
+      value: s.usageCondition,
+      options: kPosfUsageConditions,
+      onChanged: (v) {
+        _conditionNoteController.clear();
+        _cubit.usageConditionChanged(v);
+      },
+    );
+  }
+
+  // Dropdown jenis keluhan (dimensi "Ada Keluhan").
+  Widget _buildComplaintDropdown(PosfValidationState s) {
+    final options = _conditionOptions(false);
     final value = options.contains(s.complaint) ? s.complaint : null;
     return DropdownButtonFormField<String>(
       value: value,
       isExpanded: true,
-      decoration: _inputDecoration(hint),
-      hint: Text(hint, style: const TextStyle(fontSize: 14)),
+      decoration: _inputDecoration('Pilih keluhan'),
+      hint: const Text('Pilih keluhan', style: TextStyle(fontSize: 14)),
       items: options
           .map((o) => DropdownMenuItem(
                 value: o,
@@ -526,6 +676,55 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     );
   }
 
+  // Dropdown alasan tidak terpakai (dimensi "Tidak Terpakai").
+  Widget _buildUnusedReasonDropdown(PosfValidationState s) {
+    final options = _conditionOptions(true);
+    final value = options.contains(s.unusedReason) ? s.unusedReason : null;
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: _inputDecoration('Pilih alasan tidak terpakai'),
+      hint: const Text('Pilih alasan tidak terpakai',
+          style: TextStyle(fontSize: 14)),
+      items: options
+          .map((o) => DropdownMenuItem(
+                value: o,
+                child: Text(o,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14)),
+              ))
+          .toList(),
+      onChanged: _cubit.unusedReasonChanged,
+    );
+  }
+
+  /// Dropdown "Alasan Tidak Bisa Dicuci" — kondisi "Freezer Tidak Bisa Dicuci".
+  /// Master alasan sama dengan halaman laporan close: dari server
+  /// (`config.closedReasons`) bila ada, fallback [kPosfClosedReasons].
+  /// Nilainya disimpan di slot yang sama dengan alasan tidak terpakai
+  /// (`unusedReason`) sehingga tidak perlu HiveField baru.
+  Widget _buildUnwashableReasonDropdown(PosfValidationState s) {
+    final serverReasons = widget.config?.closedReasons ?? const <String>[];
+    final options =
+        serverReasons.isNotEmpty ? serverReasons : kPosfClosedReasons;
+    final value = options.contains(s.unusedReason) ? s.unusedReason : null;
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: _inputDecoration('Alasan Tidak Bisa Dicuci (*Wajib)'),
+      hint: const Text('Pilih alasan', style: TextStyle(fontSize: 14)),
+      items: options
+          .map((o) => DropdownMenuItem(
+                value: o,
+                child: Text(o,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14)),
+              ))
+          .toList(),
+      onChanged: _cubit.unusedReasonChanged,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Step Sesudah — Pengukuran Aktual & Foto Setelah Cuci
   // ---------------------------------------------------------------------------
@@ -535,13 +734,22 @@ class _ProofOfServiceFreezerValidationBodyMobileState
       children: [
         _card(
           'Foto Setelah Cuci',
-          _buildAfterPhotoSlots(s),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Panduan susunan display produk — dibuka full-screen (bisa
+              // di-zoom) sebelum teknisi menata & memfoto Display Produk.
+              PlanogramGuideButton(url: widget.config?.planogramUrl),
+              const SizedBox(height: 12),
+              _buildAfterPhotoSlots(s),
+            ],
+          ),
         ),
         _card(
           'Pengukuran Aktual',
           Column(
             children: [
-              for (final limit in kPosfMeasurements)
+              for (final limit in _measurements)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Column(
@@ -549,6 +757,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
                       MeasurementInputWidget(
                         controller: _measurementControllers[limit.id]!,
                         transNo: _cubit.transNo,
+                        storeName: _storeName,
                         label: limit.label,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true, signed: true),
@@ -656,53 +865,168 @@ class _ProofOfServiceFreezerValidationBodyMobileState
           BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6),
         ],
       ),
-      child: Row(
-        children: [
-          if (s.currentStep > 0) ...[
-            SizedBox(
-              height: 48,
-              width: 52,
-              child: ElevatedButton(
-                onPressed: _cubit.prevStep,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  elevation: 0,
-                  backgroundColor: Colors.grey.shade200,
-                  foregroundColor: Colors.black87,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+      // SafeArea bawah: cegah tombol tertutup navigation bar / gesture bar
+      // pada HP yang punya area sistem di bawah layar.
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            if (s.currentStep > 0) ...[
+              SizedBox(
+                height: 48,
+                width: 52,
+                child: ElevatedButton(
+                  onPressed: _cubit.prevStep,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    elevation: 0,
+                    backgroundColor: Colors.grey.shade200,
+                    foregroundColor: Colors.black87,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Icon(Icons.arrow_back),
                 ),
-                child: const Icon(Icons.arrow_back),
               ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: SizedBox(
-              height: 48,
-              child: ElevatedButton(
-                onPressed:
-                    canProceed ? (isLast ? _onFinish : _cubit.nextStep) : null,
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(isLast ? 'Selesai' : 'Lanjut'),
-                    if (!isLast) ...[
-                      const SizedBox(width: 6),
-                      const Icon(Icons.arrow_forward, size: 18),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  // Tetap bisa ditekan walau belum lengkap: alih-alih diam,
+                  // tekan memunculkan toast yang menyebut data wajib yang
+                  // belum diisi.
+                  onPressed: canProceed
+                      ? (isLast ? _onFinish : _cubit.nextStep)
+                      : () => _showMissingToast(s),
+                  style: ElevatedButton.styleFrom(
+                    // Saat belum lengkap tampil seperti nonaktif (abu-abu)
+                    // namun tetap menerima tap untuk menampilkan alasan.
+                    backgroundColor: canProceed ? null : Colors.grey.shade300,
+                    foregroundColor: canProceed ? null : Colors.grey.shade600,
+                    elevation: canProceed ? null : 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(isLast ? 'Selesai' : 'Lanjut'),
+                      if (!isLast) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_forward, size: 18),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  // Tampilkan toast berisi data wajib pertama yang belum lengkap pada step ini.
+  void _showMissingToast(PosfValidationState s) {
+    final msg = _missingReason(s, s.currentStep) ??
+        'Lengkapi semua data wajib terlebih dahulu.';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.red.shade600,
+        duration: const Duration(seconds: 2),
+      ));
+  }
+
+  // Alasan pertama step belum boleh lanjut (null bila sebenarnya sudah lengkap).
+  // Mengikuti urutan gerbang di [PosfValidationState] + konfirmasi "sesuai foto".
+  String? _missingReason(PosfValidationState s, int step) {
+    if (step == 0) {
+      if (s.functionCondition == null) {
+        return 'Kondisi fungsi freezer wajib dipilih.';
+      }
+      // "Freezer Tidak Bisa Dicuci" tidak punya dimensi pemakaian.
+      if (!s.hasUnwashable && s.usageCondition == null) {
+        return 'Kondisi pemakaian freezer wajib dipilih.';
+      }
+      // "Freezer Tidak Bisa Dicuci" mengikuti form laporan close: alasan +
+      // foto bukti wajib, catatan tambahan opsional.
+      if (s.hasUnwashable) {
+        if (s.unusedReason == null || s.unusedReason!.isEmpty) {
+          return 'Pilih alasan tidak bisa dicuci terlebih dahulu.';
+        }
+        if (s.conditionPhotos.isEmpty) {
+          return 'Ambil minimal 1 foto bukti.';
+        }
+        return null;
+      }
+      if (s.needsConditionDetail) {
+        if (s.hasComplaint && (s.complaint == null || s.complaint!.isEmpty)) {
+          return 'Pilih jenis keluhan terlebih dahulu.';
+        }
+        if (s.hasUnused &&
+            (s.unusedReason == null || s.unusedReason!.isEmpty)) {
+          return 'Pilih alasan tidak terpakai terlebih dahulu.';
+        }
+        if (s.conditionNote.trim().isEmpty) {
+          return 'Keterangan tambahan kondisi wajib diisi.';
+        }
+        if (s.conditionPhotos.isEmpty) {
+          return 'Ambil minimal 1 foto bukti kondisi.';
+        }
+      }
+      if (s.hasUnused) return null; // "Tidak terpakai" cukup sampai sini.
+      if (!s.isArrivalTempValid) {
+        return s.arrivalTempSkipped
+            ? 'Lengkapi alasan & bukti suhu sebelum pembersihan.'
+            : 'Isi suhu sebelum pembersihan beserta fotonya.';
+      }
+      if (s.frostThickness == null) {
+        return 'Pilih ketebalan bunga es.';
+      }
+      if (!kPosfPhotoSlots.every((p) => s.initialPhotos.containsKey(p.id))) {
+        return 'Lengkapi semua Foto Kondisi Awal.';
+      }
+      if (!s.arrivalTempSkipped && !_confirmedIds.contains('arrival_temp')) {
+        return 'Konfirmasi suhu sebelum pembersihan "sesuai foto".';
+      }
+      return null;
+    }
+    if (step == 1) {
+      if (!kPosfPhotoSlots.every((p) => s.afterPhotos.containsKey(p.id))) {
+        return 'Lengkapi semua Foto Setelah Cuci.';
+      }
+      for (final limit in _measurements) {
+        final m = _measurementFor(s, limit.id);
+        if (m == null || (!(m.isSkipped ?? false) && m.capturedImage == null)) {
+          return 'Ambil foto pengukuran ${limit.label}.';
+        }
+        if ((m.isSkipped ?? false) &&
+            !s.isSkipReasonComplete(m.remark, s.skipRemarkFor(limit.id),
+                s.skipPhotosFor(limit.id))) {
+          return 'Lengkapi alasan & bukti pengukuran ${limit.label}.';
+        }
+      }
+      for (final m in s.measurements) {
+        if (m.isSkipped ?? false) continue;
+        if (!_confirmedIds.contains(m.measurementId)) {
+          return 'Konfirmasi ${_labelFor(m.measurementId)} "sesuai foto".';
+        }
+      }
+      return null;
+    }
+    return null;
+  }
+
+  String _labelFor(String id) {
+    for (final m in _measurements) {
+      if (m.id == id) return m.label;
+    }
+    return id;
   }
 
   Future<void> _onFinish() async {
@@ -730,7 +1054,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     setState(() => _capturingInitial = true);
     try {
       final img = await captureWatermarkedPhoto(_cubit.transNo,
-          photoLabel: '${_slotLabel(slotId)} - Before');
+          photoLabel: '${_slotLabel(slotId)} - Before', storeName: _storeName);
       if (img != null) _cubit.setInitialPhoto(slotId, img);
     } finally {
       if (mounted) setState(() => _capturingInitial = false);
@@ -741,7 +1065,7 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     setState(() => _capturingAfter = true);
     try {
       final img = await captureWatermarkedPhoto(_cubit.transNo,
-          photoLabel: '${_slotLabel(slotId)} - After');
+          photoLabel: '${_slotLabel(slotId)} - After', storeName: _storeName);
       if (img != null) _cubit.setAfterPhoto(slotId, img);
     } finally {
       if (mounted) setState(() => _capturingAfter = false);
@@ -880,7 +1204,8 @@ class _ProofOfServiceFreezerValidationBodyMobileState
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.add_a_photo_outlined,
-                        color: Colors.grey.shade600, size: 26),
+                        color: Colors.grey.shade600,
+                        size: slot.hint == null ? 26 : 22),
                     const SizedBox(height: 6),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -889,6 +1214,20 @@ class _ProofOfServiceFreezerValidationBodyMobileState
                           style: TextStyle(
                               fontSize: 11, color: Colors.grey.shade700)),
                     ),
+                    // Keterangan objek yang wajib terlihat (mis. Ruang Mesin =
+                    // Kipas & Kompressor).
+                    if (slot.hint != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2, left: 3, right: 3),
+                        child: Text(slot.hint!,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).primaryColor)),
+                      ),
                   ],
                 ),
               if (filled) ...[
@@ -900,10 +1239,22 @@ class _ProofOfServiceFreezerValidationBodyMobileState
                     color: Colors.black54,
                     padding:
                         const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-                    child: Text(slot.label,
-                        textAlign: TextAlign.center,
-                        style:
-                            const TextStyle(fontSize: 11, color: Colors.white)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(slot.label,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.white)),
+                        if (slot.hint != null)
+                          Text(slot.hint!,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 9, color: Colors.white70)),
+                      ],
+                    ),
                   ),
                 ),
                 const Positioned(
@@ -941,18 +1292,31 @@ class _ProofOfServiceFreezerValidationBodyMobileState
     );
   }
 
-  Widget _chipGroup(
-      List<String> options, String? selected, ValueChanged<String> onSelect) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: options
-          .map((o) => ChoiceChip(
-                label: Text(o, style: const TextStyle(fontSize: 13)),
-                selected: selected == o,
-                onSelected: (_) => onSelect(o),
+  /// Dropdown pilihan tunggal — bentuk seragam untuk seluruh pilihan di step
+  /// Sebelum (kondisi fungsi, kondisi pemakaian, ketebalan bunga es).
+  /// [value] yang tidak ada di [options] ditampilkan sebagai belum terpilih —
+  /// melindungi draft lama yang menyimpan nilai di luar daftar sekarang.
+  Widget _dropdown({
+    required String label,
+    required String hint,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: options.contains(value) ? value : null,
+      isExpanded: true,
+      decoration: _inputDecoration(label),
+      hint: Text(hint, style: const TextStyle(fontSize: 14)),
+      items: options
+          .map((o) => DropdownMenuItem(
+                value: o,
+                child: Text(o,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14)),
               ))
           .toList(),
+      onChanged: onChanged,
     );
   }
 

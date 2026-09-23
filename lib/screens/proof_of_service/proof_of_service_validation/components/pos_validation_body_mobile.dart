@@ -76,6 +76,9 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
   // Variable Limit Dinamis
   late final Map<String, MeasurementLimits> _limitsPosAfter;
 
+  // Nama toko untuk watermark foto (menggantikan transNo)
+  String _storeName = '';
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +110,10 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final detailBox =
             Hive.box<ProofOfServiceDetailModel>(kPosDetailCacheBox);
         final detailData = detailBox.get(widget.transNo.trim().toUpperCase());
+
+        // Ambil nama toko untuk watermark foto
+        _storeName =
+            storeTag(detailData?.header.shipToName, detailData?.header.shipToCode);
 
         // Jika di API ada limit khusus, timpa limit global
         if (detailData != null && detailData.customLimitsAfter != null) {
@@ -234,7 +241,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: _storeName,
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
@@ -307,7 +314,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: _storeName,
           formattedDate: formattedDate,
           technicianName: userData['name'] ?? 'Unknown',
           deviceModel: userData['device_model'] ?? 'Unknown Device',
@@ -458,6 +465,7 @@ class _PosValidationBodyMobileState extends State<PosValidationBodyMobile> {
               key: ValueKey(widget.unitType),
               controllers: _controllers,
               transNo: widget.transNo,
+              storeName: _storeName,
               measurements: state.measurementsAfter,
               indoorTemp: widget.indoorTemp,
               enableConfirmDialog: true,

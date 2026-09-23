@@ -52,7 +52,7 @@ class ProofOfServiceFreezerEntryModel extends HiveObject {
   String? arrivalTempReason; // alasan bila arrivalTempSkipped
 
   @HiveField(9)
-  String? generalCondition; // Normal / Ada Keluhan / Tidak Beroperasi
+  String? generalCondition; // gabungan 2 dimensi, mis. "Ada Keluhan Tidak Terpakai"
 
   @HiveField(10)
   String? frostThickness; // Tipis <1cm / Sedang 1-3cm / Tebal >3cm
@@ -63,10 +63,14 @@ class ProofOfServiceFreezerEntryModel extends HiveObject {
   @HiveField(12)
   String? initialNote;
 
-  // Alasan terpilih untuk kondisi non-Normal: jenis keluhan (Ada Keluhan) atau
-  // alasan tidak terpakai (Tidak terpakai). Dipakai ulang lintas kedua kondisi.
+  // Alasan dimensi fungsi "Ada Keluhan": jenis keluhan yang dipilih.
   @HiveField(18)
   String? complaint;
+
+  // Alasan dimensi pemakaian "Tidak Terpakai": terpisah dari keluhan. Untuk
+  // "Ada Keluhan Tidak Terpakai" kedua field (complaint + unusedReason) terisi.
+  @HiveField(29)
+  String? unusedReason;
 
   // Keterangan tambahan (wajib) untuk kondisi "Ada Keluhan" / "Tidak terpakai".
   // CATATAN: indeks 27/28 (BUKAN 13/14) — field 13/14 pernah dipakai tipe lain
@@ -122,6 +126,7 @@ class ProofOfServiceFreezerEntryModel extends HiveObject {
     Map<String, CapturedImageDetail>? initialPhotos,
     this.initialNote,
     this.complaint,
+    this.unusedReason,
     this.conditionNote,
     this.conditionPhotos,
     List<MeasurementEntry>? measurements,

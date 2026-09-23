@@ -254,7 +254,7 @@ class _MaterialEvidenceBodyMobileState
         final req = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: storeTag(context.read<InstallationBloc>().state.taskDetail?.header.shipToName, context.read<InstallationBloc>().state.taskDetail?.header.shipTo),
           formattedDate: formattedDate,
           technicianName: techName,
           deviceModel: user['device_model'] ?? 'Unknown Device',

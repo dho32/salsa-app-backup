@@ -20,6 +20,8 @@ import '../models/proof_of_service/pos_validation_entry_model.dart';
 import '../models/rro_cut_off/rro_cut_off_entry_model.dart';
 import '../models/service_call/sc_unserviceable_model.dart';
 import '../models/service_call/transaction_info_model.dart';
+import '../models/service_call_freezer/scf_info_model.dart';
+import '../models/service_call_freezer/scf_validation_entry_model.dart';
 
 class UploadResult {
   final int successCount;
@@ -613,6 +615,60 @@ Future<UploadResult> uploadRROCutOffFiles({
       failedFiles: failedFiles);
 }
 
+// --- CUCI FREEZER CLOSED (Tidak Bisa Diservis) ---
+// Foto bukti close TIDAK tersimpan di Hive box entry/info (beda dengan submit),
+// melainkan di-hold di state PosfClosedBloc. Fungsi ini mencocokkan daftar foto
+// in-memory [proofImages] dengan presigned URL (result.detail[].uploads[]) dari
+// respons /proof_of_service_freezer/closed, lalu eksekusi upload.
+Future<UploadResult> uploadProofOfServiceFreezerClosedImagesToS3(
+  List<CapturedImageDetail> proofImages,
+  List<dynamic> presignedDetail, {
+  UploadProgressCubit? progressCubit,
+  List<String>? filter,
+}) {
+  return uploadProofOfServiceFreezerClosedFilesByPath(
+    proofImages.map((e) => e.imagePath).toList(),
+    presignedDetail,
+    progressCubit: progressCubit,
+    filter: filter,
+  );
+}
+
+// Varian berbasis PATH untuk retry background (failed_uploads_bloc): foto bukti
+// close TIDAK tersimpan di Hive box entry/info; hanya path-nya yang dipersist di
+// partial box, jadi retry setelah app restart merekonstruksi dari path.
+Future<UploadResult> uploadProofOfServiceFreezerClosedFilesByPath(
+  List<String> imagePaths,
+  List<dynamic> presignedDetail, {
+  UploadProgressCubit? progressCubit,
+  List<String>? filter,
+}) async {
+  final Map<String, String> localFileMap = {};
+  for (final path in imagePaths) {
+    localFileMap[path.split('/').last] = path;
+  }
+
+  final List<_UploadTask> allPossibleTasks = [];
+  for (var serialData in presignedDetail) {
+    final serialNo = serialData['serial_no']?.toString() ?? 'HEADER';
+    final uploads = serialData['uploads'] as List<dynamic>? ?? [];
+    for (var uploadInfo in uploads) {
+      final filename = uploadInfo['filename']?.toString();
+      if (filename != null &&
+          filename.isNotEmpty &&
+          localFileMap.containsKey(filename)) {
+        final filePath = localFileMap[filename]!;
+        final fileKey = '$serialNo - $filename';
+        allPossibleTasks.add(_UploadTask(
+            url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
+      }
+    }
+  }
+
+  final tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
+}
+
 // --- CUCI FREEZER ---
 // Pola identik uploadPosImagesToS3: kumpulkan foto lokal (foto PIC/lokasi +
 // foto per-freezer: kondisi awal, sesudah, foto pengukuran), cocokkan dengan
@@ -676,5 +732,76 @@ Future<UploadResult> uploadProofOfServiceFreezerImagesToS3(
   }
 
   final tasksToExecute = _filterTasks(allPossibleTasks, filter);
+  return _executeUploadTasks(tasksToExecute, progressCubit);
+}
+
+// --- SERVICE CALL FREEZER (repair freezer) ---
+// Pola identik uploadProofOfServiceFreezerImagesToS3 + logika Sebelum/Sesudah SC:
+// kumpulkan foto lokal (foto PIC/lokasi + foto per-freezer: kondisi awal, suhu
+// tiba, foto pengukuran Sebelum & Sesudah, foto setelah, foto bukti skip
+// temp/elec Sebelum & Sesudah + foto bukti kondisi), cocokkan dengan presigned
+// URL dari server (result.detail[].uploads[]) by filename, lalu eksekusi upload.
+Future<UploadResult> uploadScfImagesToS3(
+  String transNo,
+  List<dynamic> presignedDetail, {
+  UploadProgressCubit? progressCubit,
+  List<String>? filter,
+}) async {
+  final entryBox =
+      await Hive.openBox<ScfValidationEntryModel>(kServiceCallFreezerEntryBox);
+  final infoBox = await Hive.openBox<ScfInfoModel>(kServiceCallFreezerInfoBox);
+  final Map<String, String> localFileMap = {};
+
+  // Foto level-transaksi (foto PIC / lokasi saat OTP).
+  final info = infoBox.get(getHiveKeyForTransaction(transNo));
+  if (info?.picImageDetail != null) {
+    localFileMap[info!.picImageDetail!.imagePath.split('/').last] =
+        info.picImageDetail!.imagePath;
+  }
+
+  // Foto per-freezer.
+  final entries = entryBox.values.where((e) => e.transNo == transNo);
+  for (final entry in entries) {
+    final List<CapturedImageDetail> imgs = [
+      if (entry.arrivalTempImage != null) entry.arrivalTempImage!,
+      ...entry.arrivalTempSkipPhotos ?? const [],
+      ...entry.conditionPhotos ?? const [],
+      ...entry.initialPhotos.values,
+      ...entry.afterPhotos.values,
+      ...entry.measurementsBefore
+          .map((m) => m.capturedImage)
+          .whereType<CapturedImageDetail>(),
+      ...entry.measurementsAfter
+          .map((m) => m.capturedImage)
+          .whereType<CapturedImageDetail>(),
+      // Foto bukti kendala skip pengukuran (temp/elec) Sebelum & Sesudah.
+      ...entry.tempSkipPhotosBefore ?? const [],
+      ...entry.elecSkipPhotosBefore ?? const [],
+      ...entry.tempSkipPhotosAfter ?? const [],
+      ...entry.elecSkipPhotosAfter ?? const [],
+    ];
+    for (final img in imgs) {
+      localFileMap[img.imagePath.split('/').last] = img.imagePath;
+    }
+  }
+
+  final List<_UploadTask> scfTasks = [];
+  for (var serialData in presignedDetail) {
+    final serialNo = serialData['serial_no']?.toString() ?? 'HEADER';
+    final uploads = serialData['uploads'] as List<dynamic>? ?? [];
+    for (var uploadInfo in uploads) {
+      final filename = uploadInfo['filename']?.toString();
+      if (filename != null &&
+          filename.isNotEmpty &&
+          localFileMap.containsKey(filename)) {
+        final filePath = localFileMap[filename]!;
+        final fileKey = '$serialNo - $filename';
+        scfTasks.add(_UploadTask(
+            url: uploadInfo['url'], filePath: filePath, fileKey: fileKey));
+      }
+    }
+  }
+
+  final tasksToExecute = _filterTasks(scfTasks, filter);
   return _executeUploadTasks(tasksToExecute, progressCubit);
 }

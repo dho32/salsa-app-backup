@@ -203,7 +203,7 @@ class _InstallationDetailBodyMobileState
         final req = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: header.transNo,
+          storeName: storeTag(header.shipToName, header.shipTo),
           formattedDate: formattedDate,
           technicianName: user['name'] ?? 'Teknisi',
           deviceModel: deviceModel,
@@ -366,12 +366,11 @@ class _InstallationDetailBodyMobileState
 
         bool isStorePhotoFilled = draft?.storeFrontPhoto != null;
 
-        // PIC wajib HANYA bila toggle "Ada PIC di Lokasi?" menyala (opsional
-        // secara default, kebalikan RRO). Dihitung di sini juga supaya tombol
-        // "Ready" konsisten dengan validasi tap di bawah — sebelumnya tombol
-        // bisa tampil hijau/siap walau Nama/No HP PIC belum diisi.
-        final bool picRequired =
-            detail.header.isPic && (draft?.isPicActive ?? false);
+        // PIC WAJIB bila surat tugas mengizinkan PIC (header.isPic == true) —
+        // tanpa toggle, sama seperti RRO Cut Off. Dihitung di sini juga supaya
+        // tombol "Ready" konsisten dengan validasi tap di bawah — sebelumnya
+        // tombol bisa tampil hijau/siap walau Nama/No HP PIC belum diisi.
+        final bool picRequired = detail.header.isPic;
         bool isPicComplete = !picRequired ||
             ((draft?.picName.trim().isNotEmpty ?? false) &&
                 (draft?.picPhone.trim().isNotEmpty ?? false));
@@ -510,9 +509,8 @@ class _InstallationDetailBodyMobileState
                         context, "⚠️ Foto Tampak Depan Toko wajib diambil!");
                     return;
                   }
-                  // Validasi PIC: wajib HANYA bila teknisi menyalakan toggle
-                  // "Ada PIC di Lokasi?" (untuk surat tugas yang mengizinkan
-                  // PIC). Default toggle OFF → PIC opsional (kebalikan RRO).
+                  // Validasi PIC: wajib bila surat tugas mengizinkan PIC
+                  // (header.isPic == true). Tidak ada toggle untuk melewatkan.
                   if (!isPicComplete) {
                     _showErrorSnack(context,
                         "⚠️ Harap lengkapi Nama dan No HP PIC.");
@@ -743,41 +741,25 @@ class _InstallationDetailBodyMobileState
     );
   }
 
-  // --- PIC TOKO (kebalikan RRO Cut Off) ---
-  // Toggle "Ada PIC di Lokasi?" hanya muncul bila surat tugas MENGIZINKAN PIC
-  // (header.isPic == true), dengan DEFAULT OFF → PIC bersifat opsional. Panel
-  // field PIC + verifikasi OTP baru aktif bila teknisi menyalakan toggle
-  // (draft.isPicActive). Bila header.isPic == false → tidak ada toggle &
-  // PIC tidak diminta sama sekali (section disembunyikan).
+  // --- PIC TOKO (sama seperti RRO Cut Off) ---
+  // Bila surat tugas MENGIZINKAN PIC (header.isPic == true) → data PIC WAJIB
+  // diisi: panel field PIC + verifikasi OTP langsung tampil TANPA toggle.
+  // Bila header.isPic == false → PIC tidak diminta sama sekali (section
+  // disembunyikan).
   List<Widget> _buildPicSection(BuildContext context,
       InstallationHeaderDetailModel header, InstallationEntryModel draft) {
     if (!header.isPic) return const <Widget>[];
-    final bool showPanel = draft.isPicActive;
     return [
       _buildSection(
         title: "PIC Toko",
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SwitchListTile(
-              title: const Text("Ada PIC di Lokasi?",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              subtitle: const Text(
-                  "Nyalakan bila ada PIC toko yang bisa dimintai verifikasi.",
-                  style: TextStyle(fontSize: 12)),
-              value: draft.isPicActive,
-              activeColor: Colors.green.shade700,
-              contentPadding: EdgeInsets.zero,
-              onChanged: (val) {
-                context
-                    .read<InstallationBloc>()
-                    .add(UpdatePicInfo(isPicActive: val));
-              },
-            ),
-            if (showPanel) ...[
-              const Divider(height: 16),
-              _buildPicPanel(context, draft),
-            ],
+            const Text(
+                "Data PIC toko wajib diisi untuk surat tugas ini (Nama & Nomor Telepon).",
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 12),
+            _buildPicPanel(context, draft),
           ],
         ),
       ),
@@ -812,7 +794,7 @@ class _InstallationDetailBodyMobileState
             Expanded(
               child: _buildCustomTextField(
                 initialValue: draft.picNik,
-                hintText: 'NIK',
+                hintText: 'NIK Karyawan',
                 icon: Icons.badge_outlined,
                 keyboardType: TextInputType.number,
                 onChanged: (v) => context

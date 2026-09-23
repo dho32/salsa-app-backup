@@ -274,6 +274,7 @@ class _RROCutOffSummaryBodyMobileState
                       child: OtpDialog(
                         transNo: widget.transNo,
                         shipTo: widget.header.shipTo,
+                        shipToName: widget.header.shipToName,
                         email: widget.header.shipToMail,
                         storeLat: double.tryParse(widget.header.latitude.toString()) ?? 0.0,
                         storeLong: double.tryParse(widget.header.longitude.toString()) ?? 0.0,

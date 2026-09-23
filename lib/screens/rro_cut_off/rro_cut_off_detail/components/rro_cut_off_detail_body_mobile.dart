@@ -176,6 +176,15 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
   }
 
   Future<void> _handleTakeStoreFrontPhoto() async {
+    // Nama toko diambil SEBELUM kamera dibuka: setelah await pickImage/GPS,
+    // state bloc bisa sudah bukan Loaded lagi (refresh) dan context bisa tak
+    // valid, sehingga cast paksa di titik itu berisiko melempar TypeError.
+    final rroState = context.read<RROCutOffDetailBloc>().state;
+    final String storeName = rroState is RROCutOffDetailLoaded
+        ? storeTag(
+            rroState.data.header?.shipToName, rroState.data.header?.shipTo)
+        : '';
+
     setState(() => _isTakingPhoto = true);
     try {
       final picker = ImagePicker();
@@ -217,7 +226,7 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
         final req = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: storeName,
           formattedDate: formattedDate,
           technicianName: techName,
           deviceModel: deviceModel,
@@ -653,7 +662,7 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
               Expanded(
                 child: _buildCustomTextField(
                   controller: _picNikController,
-                  hintText: 'NIK',
+                  hintText: 'NIK Karyawan',
                   icon: Icons.badge_outlined,
                   onChanged: (value) => formCubit.picNikChanged(value),
                 ),
@@ -949,12 +958,14 @@ class _RROCutOffDetailBodyMobileState extends State<RROCutOffDetailBodyMobile> {
                               ? Icon(Icons.pending, size: 20, color: Colors.orange.shade700)
                               : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                       onTap: () async {
-                        final serialNumbers = (context.read<RROCutOffDetailBloc>().state as RROCutOffDetailLoaded).data.serialNumber;
+                        final loadedState = context.read<RROCutOffDetailBloc>().state as RROCutOffDetailLoaded;
+                        final serialNumbers = loadedState.data.serialNumber;
+                        final storeName = storeTag(loadedState.data.header?.shipToName, loadedState.data.header?.shipTo);
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
                               builder: (context) => RROCutOffInputFormScreen(
-                                  transNo: widget.transNo, unitData: units[i], availableSerialNumbers: serialNumbers)),
+                                  transNo: widget.transNo, unitData: units[i], availableSerialNumbers: serialNumbers, storeName: storeName)),
                         );
                         // Refresh selalu — draft auto-save juga harus terlihat
                         // di list meski user keluar lewat tombol back.

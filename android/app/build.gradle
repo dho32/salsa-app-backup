@@ -18,7 +18,11 @@ android {
     // default ke 35, jadi compileSdk/targetSdk di-override manual ke 36 di sini.
     // Setelah upgrade Flutter ke versi yang default 36, override ini bisa dihapus.
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // Dipatok manual (bukan flutter.ndkVersion yang masih 26.3.11579264) karena
+    // 18 plugin — firebase_*, mobile_scanner, geolocator_android, dll —
+    // mendeklarasikan butuh NDK 27.0.12077973. NDK backward compatible, jadi
+    // memakai versi tertinggi yang diminta adalah cara yang disarankan Flutter.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

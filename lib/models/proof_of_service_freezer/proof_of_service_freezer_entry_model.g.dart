@@ -34,6 +34,7 @@ class ProofOfServiceFreezerEntryModelAdapter
       initialPhotos: (fields[11] as Map?)?.cast<String, CapturedImageDetail>(),
       initialNote: fields[12] as String?,
       complaint: fields[18] as String?,
+      unusedReason: fields[29] as String?,
       conditionNote: fields[27] as String?,
       conditionPhotos: (fields[28] as List?)?.cast<CapturedImageDetail>(),
       measurements: (fields[16] as List?)?.cast<MeasurementEntry>(),
@@ -50,7 +51,7 @@ class ProofOfServiceFreezerEntryModelAdapter
   @override
   void write(BinaryWriter writer, ProofOfServiceFreezerEntryModel obj) {
     writer
-      ..writeByte(26)
+      ..writeByte(27)
       ..writeByte(0)
       ..write(obj.transNo)
       ..writeByte(1)
@@ -83,6 +84,8 @@ class ProofOfServiceFreezerEntryModelAdapter
       ..write(obj.initialNote)
       ..writeByte(18)
       ..write(obj.complaint)
+      ..writeByte(29)
+      ..write(obj.unusedReason)
       ..writeByte(27)
       ..write(obj.conditionNote)
       ..writeByte(28)

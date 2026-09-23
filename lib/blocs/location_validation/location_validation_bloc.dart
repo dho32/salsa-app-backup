@@ -132,7 +132,7 @@ class LocationValidationBloc
       final request = WatermarkRequest(
         originalPath: image.path,
         targetPath: targetPath,
-        transNo: event.transNo,
+        storeName: event.storeName,
         formattedDate: formattedDate,
         technicianName: technicianName,
         deviceModel: deviceModel,

@@ -203,6 +203,7 @@ class _ProofOfServiceDetailBodyMobileState
           child: MeasurementInputWidget(
             controller: _tempCtrl,
             transNo: '',
+            storeName: '',
             label: 'Suhu',
             keyboardType: TextInputType.number,
             limits: kMeasurementLimits['temperature']!,
@@ -239,6 +240,7 @@ class _ProofOfServiceDetailBodyMobileState
               MeasurementInputWidget(
                 controller: _voltCtrl,
                 transNo: '',
+                storeName: '',
                 label: 'Volt',
                 keyboardType: TextInputType.number,
                 limits: kMeasurementLimits['volt']!,
@@ -248,6 +250,7 @@ class _ProofOfServiceDetailBodyMobileState
               MeasurementInputWidget(
                 controller: _ampereCtrl,
                 transNo: '',
+                storeName: '',
                 label: 'Ampere',
                 keyboardType: TextInputType.number,
                 limits: kMeasurementLimits['ampere']!,
@@ -256,6 +259,7 @@ class _ProofOfServiceDetailBodyMobileState
               const SizedBox(height: 16),
               MeasurementInputWidget(
                 transNo: '',
+                storeName: '',
                 controller: _psiCtrl,
                 label: 'PSI',
                 keyboardType: TextInputType.number,

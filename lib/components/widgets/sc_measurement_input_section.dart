@@ -23,6 +23,9 @@ import '../shared_function.dart';
 
 class ScMeasurementInputSection extends StatefulWidget {
   final String transNo;
+
+  /// Nama toko untuk baris watermark (menggantikan transNo).
+  final String storeName;
   final List<MeasurementEntry> measurements;
   final bool isBefore;
   final Map<String, MeasurementLimits> limitsMap;
@@ -30,6 +33,7 @@ class ScMeasurementInputSection extends StatefulWidget {
   const ScMeasurementInputSection({
     super.key,
     required this.transNo,
+    this.storeName = '',
     required this.measurements,
     required this.isBefore,
     required this.limitsMap,
@@ -173,7 +177,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
         final request = WatermarkRequest(
           originalPath: image.path,
           targetPath: targetPath,
-          transNo: widget.transNo,
+          storeName: widget.storeName,
           formattedDate: formattedDate,
           technicianName: technicianName,
           deviceModel: deviceModel,
@@ -248,6 +252,7 @@ class _ScMeasurementInputSectionState extends State<ScMeasurementInputSection> {
       child: MeasurementInputWidget(
         controller: controller,
         transNo: widget.transNo,
+        storeName: widget.storeName,
         label: limits.label,
         photoLabel: '${limits.label} - ${widget.isBefore ? "Before" : "After"}',
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

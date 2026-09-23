@@ -528,6 +528,7 @@ class _ServiceCallDetailBodyMobileState
                                     child: OtpDialog(
                                       transNo: widget.transNo,
                                       shipTo: header.storeId,
+                                      shipToName: header.storeName,
                                       email: header.storeEmail,
                                       storeLat: storeLat,
                                       storeLong: storeLong,
@@ -810,7 +811,7 @@ class _ServiceCallDetailBodyMobileState
               Expanded(
                 child: _buildCustomTextField(
                   controller: _picNikController,
-                  hintText: 'NIK',
+                  hintText: 'NIK Karyawan',
                   icon: Icons.badge_outlined,
                 ),
               ),
@@ -1255,6 +1256,11 @@ class _ServiceCallDetailBodyMobileState
   Widget _buildFinalTempSection(BuildContext context, ScFormState formState,
       List<NoteOption> noteOptions) {
     final formCubit = context.read<ScFormCubit>();
+    final _scDetailState = context.read<ServiceCallDetailBloc>().state;
+    final String storeName = _scDetailState is ServiceCallDetailLoaded
+        ? storeTag(_scDetailState.data.header.storeName,
+            _scDetailState.data.header.storeId)
+        : '';
     final baseLimits = _scFinalTempBaseLimits;
     final String label = baseLimits.label;
     final finalTempLimits = MeasurementLimits(
@@ -1277,6 +1283,7 @@ class _ServiceCallDetailBodyMobileState
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             limits: finalTempLimits,
             transNo: widget.transNo,
+            storeName: storeName,
             initialImage: formState.finalTempInImage,
             enableConfirmDialog: true,
             onConfirmedChanged: (c) => setState(() => _finalTempConfirmed = c),
@@ -1361,9 +1368,14 @@ class _ServiceCallDetailBodyMobileState
       return;
     }
     setState(() => _capturingFinalTempSkipPhoto = true);
+    final _scDetailState = context.read<ServiceCallDetailBloc>().state;
+    final String storeName = _scDetailState is ServiceCallDetailLoaded
+        ? storeTag(_scDetailState.data.header.storeName,
+            _scDetailState.data.header.storeId)
+        : '';
     try {
       final img = await captureWatermarkedPhoto(widget.transNo,
-          photoLabel: 'Bukti Kendala Suhu Akhir');
+          photoLabel: 'Bukti Kendala Suhu Akhir', storeName: storeName);
       if (img != null) formCubit.addFinalTempSkipPhoto(img);
     } finally {
       if (mounted) setState(() => _capturingFinalTempSkipPhoto = false);

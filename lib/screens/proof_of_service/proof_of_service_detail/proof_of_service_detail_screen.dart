@@ -267,6 +267,7 @@ class _ProofOfServiceDetailScreenState
                             child: OtpDialog(
                               transNo: header.transNo,
                               shipTo: header.shipToCode,
+                              shipToName: header.shipToName,
                               email: header.storeEmail,
                               storeLat: double.tryParse(header.latitude) ?? 0.0,
                               storeLong: double.tryParse(header.longitude) ?? 0.0,
